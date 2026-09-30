@@ -8,6 +8,10 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ## [Sin publicar]
 
+### Añadido
+
+- Política de seguridad (`SECURITY.md`) con el procedimiento para informar de vulnerabilidades de forma privada.
+
 ## [0.9.0] - 2026-09-30
 
 Primera versión pública.

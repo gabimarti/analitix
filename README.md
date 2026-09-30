@@ -157,7 +157,8 @@ plantilla de partida.
 ## Licencia
 
 Software libre bajo los términos de la [GNU General Public License v3.0](LICENSE).
-Ver también el [aviso legal y exención de responsabilidad](DISCLAIMER.md).
+Ver también el [aviso legal y exención de responsabilidad](DISCLAIMER.md) y la
+[política de seguridad](SECURITY.md) para informar de vulnerabilidades.
 
 ## Desarrollo
 
