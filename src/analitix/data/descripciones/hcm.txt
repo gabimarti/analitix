@@ -1,0 +1,1 @@
+Cantidad media de hemoglobina que contiene cada glóbulo rojo. Ayuda, junto con el VCM, a clasificar los distintos tipos de anemia.

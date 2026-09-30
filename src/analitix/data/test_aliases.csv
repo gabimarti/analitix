@@ -1,0 +1,116 @@
+alias_normalizado,canonical_id
+alanina aminotransferasa,alanina_aminotransferasa_alt_serum
+alanina aminotransferasa alt gpt,alanina_aminotransferasa_alt_serum
+albumina,albumina_g_l
+albumina pct,albumina
+alfa 1 globulina pct,alfa_1
+alfa 2 globulina pct,alfa_2
+alt gpt suero,alanina_aminotransferasa_alt_serum
+aspartat aminotranferasa,aspartat_aminotranferasa_ast_serum
+aspartato aminotransferasa ast got,aspartat_aminotranferasa_ast_serum
+ast got suero,aspartat_aminotranferasa_ast_serum
+basofilos,basofils_total
+basofilos pct,basofils
+basofilos v absoluto,basofils_total
+beta 1 globulinas pct,beta_1_globulinas_pct
+beta 2 globulinas pct,beta_2_globulinas_pct
+beta 2 microglobulina,beta_2_microglobulina_serum
+beta globulina pct,beta
+bilirrubina total,bilirubina_total_serum
+bilirubina total,bilirubina_total_serum
+calci serum,calci
+calcio total,calci
+cloruro,clor
+colesterol,colesterol_serum
+colesterol hdl serum,colesterol_hdl
+colesterol total,colesterol_serum
+colesterol total suero,colesterol_serum
+conc de hgb corpuscular media chcm,chcm
+creatinina,creatinina_serum
+creatinina suero,creatinina_serum
+eosinofilos,eosinofils_total
+eosinofilos pct,eosinofils
+eosinofilos v absoluto,eosinofils_total
+ferritina,ferritina_serum
+ferro,ferro_serum
+filtrat glomerular estimat serum,filtrat_glomerular_estimat
+folat,folat_serum
+fosfat serum,srm_fosfat_c_subst
+fosfatasa alcalina,fosfatasa_alcalina_serum
+gamma globulinas pct,gamma
+gamma glutamil transferasa ggt,gamma_glutamil_transferasa_ggt_serum
+gammaglobulina pct,gamma
+globulines totals pct,globulines_totals_pct
+glucosa,glucosa_serum
+glucosa plasma,glucosa_serum
+glucosa suero plasma,glucosa_serum
+hematocrito,hematocrit
+hemoglobina a1c ngsp,hb_glicosilada_hba1c_sang
+hemoglobina corpuscular media hcm,hcm
+hierro,ferro_serum
+hormona estimulante del tiroides tsh,tirotropina_tsh_serum
+immunoglobulina a iga,immunoglobulina_a_iga_serum
+immunoglobulina e ige serum,immunoglobulina_e_ige
+indice de anisocitosis rdw,rdw_cv
+leucocitos,leucocits
+limfocits total,linfocits_total
+linfocitos,linfocits_total
+linfocitos pct,limfocits
+linfocitos v absoluto,linfocits_total
+linfocits,limfocits
+monocitos,monocits_total
+monocitos pct,monocits
+monocitos v absoluto,monocits_total
+neutrofilos,neutrofils_total
+neutrofilos pct,neutrofils
+neutrofilos v absoluto,neutrofils_total
+pla bilirrubina c subst,bilirubina_total_serum
+pla creatinini c subst,creatinina_serum
+pla glucosa c subst,glucosa_serum
+pla io potassi c subst,potassi
+pla io sodi c subst,sodi
+pla urea c subst,urea_serum
+plaquetas,plaquetes
+potasio,potassi
+rdw,rdw_cv
+san ample distribucio eritrocits,rdw_cv
+san basofils c nom,basofils_total
+san eosinofils c nom,eosinofils_total
+san hematies c nom,hematies
+san hematocrit fr vol,hematocrit
+san hemoglobina c massa,hemoglobina
+san leucocits c nom,leucocits
+san limfocits c nom,linfocits_total
+san monocits c nom,monocits_total
+san neutrofils c nom,neutrofils_total
+san plaquetes c nom,plaquetes
+san volum corpuscular mig vol,vcm
+seroalbumina pct,seroalbumina_pct
+sodio,sodi
+srm alanina aminotransferasa c cat,alanina_aminotransferasa_alt_serum
+srm aspartat aminotransferasa c cat,aspartat_aminotranferasa_ast_serum
+srm bilirubina c subst,bilirubina_total_serum
+srm calci ii c subst,calci
+srm colesterol c subst,colesterol_serum
+srm creatinini c subst,creatinina_serum
+srm ferritina c subst,ferritina_serum
+srm ferro c subst,ferro_serum
+srm fosfatasa alcalina c cat,fosfatasa_alcalina_serum
+srm glucosa c subst,glucosa_serum
+srm io potassi c subst,potassi
+srm io sodi c subst,sodi
+srm urat c subst,urat_serum
+srm urea c subst,urea_serum
+tirotropina tsh,tirotropina_tsh_serum
+tiroxina libre t4l,tiroxina_lliure_t4l
+transferrina,transferrina_serum
+trigliceridos,triglicerids_serum
+trigliceridos suero,triglicerids_serum
+triglicerids,triglicerids_serum
+urato,urat_serum
+urea,urea_serum
+vitamina b12,vitamina_b12_serum
+volumen corpuscular medio vcm,vcm
+volumen plaquetar medio vpm,vpm
+volumen plaquetario medio vpm,vpm
+vsg velocitat de sedimentacio globular sang,vsg_velocitat_de_sedimentacio_globular

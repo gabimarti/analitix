@@ -1,0 +1,20 @@
+# Entorno virtual / caché de Python
+venv/
+venv-tests/
+venv-build/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Datos personales y ejecución local: base de datos cifrada, log, exportaciones
+# y los PDF reales de informes de laboratorio.
+# Ancladas a la raíz (con "/" inicial) para no afectar a src/analitix/data/
+# (el CSV de alias del catálogo, que sí forma parte del código).
+/data/
+/export/
+/informes_analiticas/*
+!/informes_analiticas/.gitkeep
+
+# Compilación del ejecutable/instalador de Windows (scripts/build_windows.bat).
+/build/
+/dist/

@@ -1,0 +1,178 @@
+# Hospital Universitari Germans Trias i Pujol (HUGTIP). Detectado por
+# primera vez el 2026-09-17 en un informe de urgencias de cardiología, con
+# una estructura incompatible con el motor de parseo del Consorci Sanitari
+# del Maresme: sin marcador "(n)" ni rango entre paréntesis (las filas de
+# resultado terminan en un rango suelto, `bare_range_is_result`), fuera de
+# rango marcado con "*" sin indicar dirección (`strip_trailing_flags` — se
+# recorta, `compute_flag` ya recalcula alto/bajo del propio rango numérico),
+# fecha con el mes en catalán y la hora pegada sin separador
+# ("13 de nov. 202411:23:16", ver `_parse_date` en `pdf_parser.py`), y sin
+# fecha de nacimiento en la cabecera (solo "Edat: NN anys" en años, no una
+# fecha exacta) — con un único PDF de muestra (2026-09-17) no hay forma de
+# saber si esto es constante en todos los informes de este centro o varía
+# igual que las plantillas del Maresme a lo largo del tiempo.
+#
+# Ampliado el 2026-09-23 con 3 informes reales más (abril 2025, noviembre
+# 2025, marzo 2026): mismo laboratorio (mismo nº de acreditación ENAC,
+# 1460/LE2690, en las 4 muestras), pero con DOS variantes de plantilla —
+# el motor evalúa todos los patrones a la vez, así que un único perfil basta:
+#   - Variante "HUGTIP compacta" (la de 2026-09-17 y la de abril 2025):
+#     etiquetas cortas en catalán ("Nom:", "Petició:", "Nº Historia:"...),
+#     sin fecha de nacimiento en la cabecera.
+#   - Variante "Laboratori Clínic Metropolitana Nord" (noviembre 2025 y
+#     marzo 2026): etiquetas bilingües catalán/castellano tipo Maresme
+#     ("Nom i cognoms / Nombre y apellidos:", "NHC / Nº Historia Clínica:"),
+#     SÍ trae fecha de nacimiento ("Data naixement / Fecha de nacimiento:",
+#     mismo texto que en `consorci_sanitari_maresme.toml`, reutilizado tal
+#     cual) y DNI ("NIF / DNI:", ídem). HUGTIP es el centro solicitante
+#     (aparece en "Centre de Salut/Centro de Salud:"/"Unitat sol·licitant:"),
+#     el laboratorio que emite el informe es otro — de ahí la señal de
+#     `[signature]` siendo "HUGTIP" en vez del nombre del laboratorio, que
+#     no es estable entre las dos variantes.
+#   - Bug real encontrado en la variante compacta: la fecha "17 d'abr. 2025"
+#     eufoniza "de" en "d'" delante de mes que empieza por vocal — con
+#     apóstrofo tipográfico (’, U+2019) en esta muestra, recto (') en las
+#     etiquetas de cabecera de la otra variante. Corregido en el motor
+#     (`_CATALAN_DATE_RE`, `pdf_parser.py`), no en este perfil: es una regla
+#     gramatical del catalán, no algo específico de HUGTIP.
+#   - Problema real de gramática en la variante bilingüe: cada resultado
+#     puede ir seguido de una línea de método con la misma magnitud en una
+#     unidad secundaria (p. ej. "Mètode enzimàtic(AE) 6.4 mmol/L 2.8 - 7.1"
+#     justo después de "Srm-Urea; c. subst. 38.7 mg/dL 17.0 - 43.0"), que
+#     con `bare_range_is_result` se colaba como una determinación fantasma
+#     aparte. Todas estas líneas de método/unidad secundaria llevan la
+#     marca de acreditación ENAC "(AE)" — `bare_range_skip_if_contains`
+#     las descarta sin más (ver `pdf_parser.py`).
+#   - Limitación conocida, no corregida: algunos resultados (Glucosa,
+#     Colesterol total en la variante bilingüe) no llevan ningún rango en
+#     su propia línea — el rango de referencia viene como categorías de
+#     texto narrativo en líneas siguientes ("< 70 mg/dl: Hipoglucèmia"...).
+#     Sin un rango que reconocer, esa fila se descarta, igual que en
+#     cualquier otro perfil cuando falta el rango.
+#
+# Ver la nota de orden en `consorci_sanitari_maresme.toml`: las listas de
+# nivel raíz van antes de `[signature]`/`[[header_labels]]`.
+id = "hugtip"
+name = "Hospital Universitari Germans Trias i Pujol (HUGTIP)"
+# Nombre corto para leyendas y listados (p. ej. la forma del punto por
+# laboratorio en Evolución).
+short_name = "HUGTIP"
+
+priority = 10
+bare_range_is_result = true
+bare_range_skip_if_contains = ["(AE)"]
+strip_trailing_flags = ["*"]
+# Algunas determinaciones no traen rango en su fila ("Srm-Colesterol; c.
+# subst. 205 mg/dL"); el valor recomendado va unas líneas más abajo, tras
+# "Valors recomanats:" ("<200 ( 5.2 mmol/L )").
+unranged_result_re = '^Srm-[^;]+; c\. subst\. -?[\d.]+ \S+$'
+following_range_labels = ["Valors recomanats:"]
+# Los títulos de sección van en minúscula/mixta ("Hematimetria", "Bioquímica
+# d'Urgències"), así que `_is_heading` (pensada para MAYÚSCULAS tipo
+# Maresme) no los reconoce de todos modos — mejor desactivarla del todo que
+# dejar que capte como "grupo" líneas de ruido en mayúsculas ("SDF", "DDD").
+detect_headings = false
+
+# Etiquetas de otros campos de cabecera que no interesa guardar, pero que
+# comparten línea con alguna que sí se captura más abajo. "CIP autonòmic"/
+# "CIP SNS" son de la variante bilingüe (comparten línea con NHC/DNI); el
+# resto ya estaba desde la variante compacta. Sin fecha de nacimiento en la
+# variante compacta, "Edat" tampoco se guarda ahí (no hay campo de edad en
+# el esquema; "Sexe" sí, ver `[[header_labels]]` más abajo; ver el aviso de posible duplicado en `ingest.py`
+# cuando un paciente se vincula por nombre sin fecha de nacimiento) — en la
+# variante bilingüe sí llega `birth_date`, ver más abajo.
+boundary_terms = [
+    "Nº Petició externa", "Petició externa",
+    "Edat", "Sexe", "Àrea d'assistència", "Servei", "Centre", "Sol·licitant",
+    "CIP autonòmic", "CIP SNS",
+]
+
+known_text_values = [
+    "Mostra no rebuda", "Mostra insuficient", "No es procedente",
+]
+
+[signature]
+requires_any = ["HUGTIP", "Germans Trias i Pujol"]
+
+[[header_labels]]
+key = "full_name"
+# "Nom:" en la variante compacta; "Nom i cognoms / Nombre y apellidos:" (o
+# "apellido:", sin la "s" final, visto en una repetición de la misma
+# etiqueta dentro del mismo PDF) en la variante bilingüe. No debe confundirse
+# con "Nom del professional / Nombre del profesional:" (el médico
+# solicitante): tras "Nom" ahí viene " del", que no encaja con ninguna de
+# las dos alternativas siguientes.
+pattern = 'Nom(?:\s+i\s+cognoms)?(?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:'
+
+[[header_labels]]
+key = "report_number"
+# "Petició:" en la variante compacta. En la bilingüe, "Número de petició /
+# Número de petición[ SAP o ECAP]:" — con un patrón estricto a propósito:
+# hay una etiqueta señuelo antes en el mismo informe, "Número de petició
+# del laboratori / Número de petición del laboratorio:" (con el valor en la
+# línea SIGUIENTE, no capturable), que un patrón más genérico ("Petici[oó]"
+# a secas) capturaría primero con un valor vacío y bloquearía para siempre
+# la etiqueta real vía `header.setdefault`.
+pattern = 'N[uú]mero\s+de\s+petici[oó]\s*/\s*N[uú]mero\s+de\s+petici[oó]n(?:\s+SAP\s+o\s+ECAP)?\s*:|Petici[oó]\s*:'
+
+[[header_labels]]
+key = "nhc"
+# "Nº Historia:" en la variante compacta; "NHC / Nº Historia Clínica:" en
+# la bilingüe.
+pattern = 'NHC(?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:|N[ºo]\s*Hist[oò]ria(?:\s*Cl[ií]nica)?\s*:'
+
+[[header_labels]]
+key = "cip"
+# CIP autonómico: "CIP:" (compacta), "CIP autonòmic:" (bilingüe). No el
+# "CIP SNS:" estatal.
+pattern = '\bCIP(?:\s+auton[oò]mic)?\s*:'
+
+[[header_labels]]
+key = "sex"
+pattern = 'Sexe(?:\s*/\s*Sexo)?\s*:'
+
+[[header_labels]]
+key = "birth_date"
+# Solo en la variante bilingüe (mismo texto que
+# `consorci_sanitari_maresme.toml`, reutilizado tal cual); la variante
+# compacta no trae fecha de nacimiento en la cabecera.
+pattern = 'Data naixement(?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:'
+
+[[header_labels]]
+key = "dni"
+# Solo en la variante bilingüe (mismo texto que
+# `consorci_sanitari_maresme.toml`, reutilizado tal cual) — en la muestra
+# vista el valor viene vacío (seguido directamente de "CIP SNS:"), pero la
+# etiqueta en sí es real y puede traer valor en otro informe.
+pattern = '(?:NIF\s*/\s*DNI|DNI\s*/\s*NIE|DNI/Passaport|DNI)\s*:'
+
+[[header_labels]]
+key = "request_date"
+# "Sol·licitud:" en la variante compacta. En la bilingüe, "Data
+# d'activació petició / Fecha y hora d'activación de petición:" — el
+# apóstrofo cambia de glifo entre plantillas (recto/tipográfico, ver nota
+# de cabecera de este fichero), de ahí `d.?` en vez de literal; el mismo
+# comodín hace falta en la traducción castellana ("d'activación"), así que
+# el sufijo de traducción aquí admite apóstrofo además de letras/espacio.
+# Se ignora a propósito la etiqueta señuelo "Data d'integració de
+# petició..." (presente en algún informe, ausente en otros): solo
+# "activació" es estable en las dos muestras bilingües vistas.
+pattern = "Sol·licitud\\s*:|Data\\s+d.?activaci[oó]\\s+petici[oó](?:\\s*/\\s*[A-Za-zÀ-ÿ.º'’ ]+)?\\s*:"
+
+[[header_labels]]
+key = "validation_date"
+# "Finalització:" en la variante compacta. En la bilingüe, "Data signatura
+# d'informe/ Fecha y hora de firma[ de informe]:" (la traducción castellana
+# no lleva apóstrofo, "de" no se eufoniza en castellano). No debe
+# confundirse con "Data i hora de signatura/Fecha y hora de la firma:",
+# repetida muchas veces a lo largo del informe (una por sección/subinforme)
+# — esa lleva "i hora de" entre "Data" y "signatura", que no encaja aquí.
+pattern = 'Finalitzaci[oó]\s*:|Data\s+signatura\s+d.?informe(?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:'
+
+[sample_date_label]
+key = "sample_date"
+# "Recepció:" en la variante compacta. En la bilingüe, "Data i hora
+# recepció / Fecha y hora [de ]recepció[n]:" — la redacción castellana
+# varía incluso entre dos informes del mismo laboratorio ("recepción" vs
+# "de recepción"), cubierto por el sufijo de traducción genérico.
+pattern = 'Recepci[oó]\s*:|Data\s+i\s+hora\s+recepci[oó](?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:'

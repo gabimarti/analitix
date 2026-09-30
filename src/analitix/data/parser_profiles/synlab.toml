@@ -1,0 +1,108 @@
+# Synlab Diagnósticos Globales. Gramática de resultado con rango entre
+# corchetes en vez de paréntesis o sin delimitar ("Hematíes 3,89 x106/mm³
+# [ 3,9 - 5,2 ]") — `BRACKET_RANGE_RE` en `pdf_parser.py`, tratada como
+# resultado sin necesitar ningún interruptor de perfil (igual que el rango
+# entre paréntesis de Maresme, un delimitador así de inequívoco no hace
+# falta activarlo caso a caso).
+#
+# Dos ruidos de extracción propios de este PDF, ambos resueltos con
+# `strip_mid_tokens` (quita el token completo con los espacios que lo
+# rodean, en cualquier punto de la línea, no solo al final):
+#   - Un glifo "ü" delante del valor en toda determinación acreditada ENAC
+#     ("Tiempo de protrombina ü 9,8 * seg [ 10 - 13 ]") — sin relación con
+#     ninguna palabra real, solo ruido de fuente/codificación del PDF.
+#   - Un "*" de fuera de rango entre el valor y la unidad, no al final de
+#     línea como en HUGTIP ("Hematíes 3,89 * x106/mm³ [...]") —
+#     `compute_flag` recalcula alto/bajo del propio rango numérico de
+#     todos modos, así que no hace falta capturar la dirección del "*".
+#
+# Limitación conocida, no resuelta: algunos valores llevan el símbolo "<"
+# o ">" pegado directamente al número sin espacio ("<100 UI/mL",
+# "ü >60 mL/min/1,73m2") — no reconocido como valor numérico por el motor
+# (que sí reconoce "<"/">" pegado en un LÍMITE de rango, pero no en el
+# valor medido) y esa fila se descarta en vez de guardar un valor
+# equivocado. El rango de referencia de esa misma fila (que sí incluye el
+# límite) no se pierde, solo el valor medido concreto de ese informe.
+#
+# Fechas: la de la analítica es "Fecha Recepción" (`sample_date_label`).
+# "Fecha Informe" es la fecha en que se descargó el PDF de la web del
+# laboratorio — puede ser meses posterior — así que no se guarda (solo es
+# frontera).
+#
+# "D.N.I.:" comparte línea con "Doctor:" pero es el DNI del paciente, no
+# del médico: coincide con el DNI de la misma persona en informes de otros
+# laboratorios, y en un informe con "Doctor:" vacío el mismo número va
+# también dentro de "NºHistoria".
+#
+# "NºHistoria:" NO se guarda como NHC: es un código de cliente propio del
+# laboratorio ("GSME" + DNI, "MATARO" + número...), no el NHC de un
+# hospital, y en alguna maquetación trae incluso la dirección del paciente.
+# Solo es frontera.
+#
+# Los PDF descargados hoy de la web del laboratorio salen firmados como
+# "SNB Diagnósticos Globales" (integrado en Eurofins Clinical Testing
+# Spain) en vez de "Synlab", incluso los de analíticas antiguas, con la
+# misma plantilla — se reconocen ambas firmas con este mismo perfil.
+id = "synlab"
+name = "Synlab / SNB (Eurofins) Diagnósticos Globales"
+# Nombre corto para leyendas y listados (p. ej. la forma del punto por
+# laboratorio en Evolución).
+short_name = "Synlab/Eurofins"
+
+priority = 100
+strip_mid_tokens = ["ü", "*"]
+# Filas acreditadas (marca " ü ") sin rango entre corchetes ("Tiroxina libre
+# (T4L) ü 0,95 ng/dL", INR, PSA libre): son resultados igualmente. El rango de
+# T4L va debajo por franjas de edad ("Valores de referencia" / ">19 años
+# (0.61-1.12 ng/dL)"); se elige la de la edad del paciente.
+unranged_result_re = ' ü -?[\d.,]+(?: \S+)?$'
+following_range_labels = ["Valores de referencia"]
+# Los títulos de sección van con mayúscula solo en la primera letra
+# ("Hemograma", "Metabolismo lipídico (suero)"), así que `_is_heading`
+# (pensada para MAYÚSCULAS tipo Maresme) no los reconocería de todos modos.
+detect_headings = false
+
+# Etiquetas de otros campos de cabecera que no interesa guardar, pero que
+# comparten línea con alguna que sí se captura más abajo.
+boundary_terms = [
+    "Cargo", "Doctor", "Origen", "Cama",
+    "NºReferencia", "Fecha Informe", "Nº Laboratorio", "NºHistoria",
+]
+
+[signature]
+requires_any = ["Synlab Diagnósticos Globales", "SNB Diagnósticos Globales"]
+
+[[header_labels]]
+key = "full_name"
+pattern = 'Nombre\s*:'
+
+[[header_labels]]
+key = "report_number"
+# "Nº Lab.:" en vez de "Nº Laboratorio:": este último lleva la fecha pegada
+# detrás ("V1234567 - 03/11/2025"), que no forma parte del número.
+pattern = 'N[ºo]\s*Lab\.\s*:'
+
+[[header_labels]]
+key = "dni"
+pattern = 'D\.N\.I\.\s*:'
+
+[[header_labels]]
+key = "sex"
+pattern = 'Sexo\s*:'
+
+
+[[header_labels]]
+key = "birth_date"
+pattern = 'F\.\s*Nac\.\s*:'
+
+[[header_labels]]
+key = "request_date"
+pattern = 'Fecha\s+petici[oó]n\s*:'
+
+[[header_labels]]
+key = "validation_date"
+pattern = 'Fecha\s+Validaci[oó]n\s*:'
+
+[sample_date_label]
+key = "sample_date"
+pattern = 'Fecha\s+Recepci[oó]n\s*:'

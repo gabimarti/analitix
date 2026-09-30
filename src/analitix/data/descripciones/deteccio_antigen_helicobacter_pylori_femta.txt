@@ -1,0 +1,1 @@
+Detecta la presencia de la bacteria Helicobacter pylori, relacionada con la gastritis y la úlcera péptica, a partir de una muestra de heces.

@@ -1,0 +1,8 @@
+pdfplumber>=0.11
+sqlcipher3>=0.6
+pandas>=2.2
+openpyxl>=3.1
+matplotlib>=3.8
+mplcursors>=0.5
+ttkbootstrap>=1.10
+Pillow>=10

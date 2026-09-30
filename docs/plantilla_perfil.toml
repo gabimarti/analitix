@@ -1,0 +1,177 @@
+# ---------------------------------------------------------------------------
+# PLANTILLA de perfil de reconocimiento para un centro/laboratorio nuevo.
+# Ver la guía completa: docs/GUIA_NUEVO_PERFIL_PARSER.md
+#
+# Cómo usar este fichero:
+#   1. Copia este fichero a src/analitix/data/parser_profiles/tu_centro.toml
+#      (nombre corto, sin espacios ni acentos, todo minúsculas).
+#   2. Sustituye cada valor de ejemplo por lo que hayas identificado en tu
+#      propio informe (nunca dejes el texto de este ejemplo tal cual).
+#   3. Borra las secciones marcadas "ELIGE UNA" que no apliquen a tu centro.
+#   4. Prueba el resultado contra tu PDF real (paso 5 de la guía) antes de
+#      darlo por bueno.
+#
+# NOTA DE ORDEN TOML: una vez abierta una tabla con `[nombre]` o
+# `[[nombre]]`, cualquier `clave = valor` suelto que venga después se
+# considera parte de esa tabla, no de la raíz del documento — por eso las
+# listas de nivel raíz (`boundary_terms`, `known_sections`,
+# `known_text_values`) van todas ANTES de `[signature]`/`[[header_labels]]`,
+# y no se pueden mover después sin romper el fichero.
+# ---------------------------------------------------------------------------
+
+# Identificador interno, corto y estable (no lo cambies una vez tengas datos
+# importados con este perfil: queda guardado junto a esos informes). Mismo
+# texto que el nombre del fichero, sin ".toml".
+id = "tu_centro"
+
+# Nombre legible, el que se muestra en la documentación.
+name = "Nombre completo de tu Hospital o Laboratorio"
+
+# Orden en que se prueban los perfiles cuando hay varios — más bajo se
+# prueba antes. Déjalo en 100 salvo que tengas un motivo para cambiarlo (ver
+# la guía, paso 4).
+priority = 100
+
+# ---------------------------------------------------------------------------
+# Etiquetas de OTROS campos de cabecera que no interesa guardar, pero que
+# pueden compartir línea con alguno de los que sí capturas en
+# [[header_labels]] más abajo — sin esto, el valor capturado se "comería"
+# el texto de la siguiente etiqueta. Ver el paso 2 de la guía ("Ojo con las
+# líneas que comparten varias etiquetas").
+#
+# Cada término admite automáticamente una traducción opcional detrás con
+# "/" (p. ej. si pones aquí "Sexo", también reconoce "Sexo / Sexe:"), así
+# que no hace falta enumerar cada idioma.
+# ---------------------------------------------------------------------------
+boundary_terms = [
+    "Sexo", "Edad", "Domicilio", "Teléfono", "Médico solicitante",
+]
+
+# Encabezados de sección (p. ej. "BIOQUÍMICA", "HEMATOLOGÍA") reconocidos
+# como tal cuando aparece una línea íntegramente en MAYÚSCULAS sin ":" —
+# solo hace falta si tu centro organiza los resultados en secciones así. Si
+# no estás seguro, déjalo vacío (`known_sections = []`) y usa
+# `detect_headings = false` más abajo.
+known_sections = [
+    "BIOQUIMICA", "HEMATOLOGIA",
+]
+
+# Resultados de texto (no numéricos) que puedas ver en tu informe, p. ej.
+# "Negativo", "No detectado". Solo hace falta si tu centro tiene resultados
+# así, sin ningún rango de referencia que los delimite.
+known_text_values = [
+    "Negativo", "No detectable",
+]
+
+# ---------------------------------------------------------------------------
+# ELIGE UNA (o ninguna): interruptores para el estilo "HUGTIP" — fila de
+# resultado sin marcador "(n)" ni paréntesis, ver el paso 0 de la guía. Si
+# tu centro es estilo "Maresme" (con marcador "(n)" o con el rango entre
+# paréntesis), BORRA estas 3 líneas enteras: el motor ya las asume
+# desactivadas por defecto y no hacen falta.
+# ---------------------------------------------------------------------------
+bare_range_is_result = true
+# Caracteres que se recortan del final de cada línea antes de analizarla
+# (p. ej. un "*" que marca fuera de rango sin decir si es alto o bajo — la
+# app ya recalcula alto/bajo a partir del propio rango numérico, así que
+# basta con quitarlo). Déjalo vacío (`strip_trailing_flags = []`) si tu
+# centro no hace esto.
+strip_trailing_flags = ["*"]
+# Si los títulos de sección van en minúscula/mixta en vez de en MAYÚSCULAS,
+# desactiva la detección automática de encabezados — si no, cualquier línea
+# suelta en mayúsculas (ruido de la extracción del PDF) se confunde con un
+# título de sección.
+detect_headings = false
+
+# ---------------------------------------------------------------------------
+# OPCIONALES: solo si tu centro tiene filas de resultado SIN rango en la
+# misma línea. Bórralas si no las necesitas.
+# ---------------------------------------------------------------------------
+# Regex que reconoce una fila de resultado aunque no lleve rango (sin esto
+# se descarta). Se busca en la línea antes de quitar `strip_mid_tokens`.
+# Ejemplos reales: ' ü -?[\d.,]+(?: \S+)?$' (Synlab),
+# '^Srm-[^;]+; c\. subst\. -?[\d.]+ \S+$' (HUGTIP).
+unranged_result_re = '^Nombre de prueba \d+ mg/dL$'
+# Etiquetas tras las que el rango de ese resultado llega en las líneas
+# siguientes: un rango suelto al inicio ("<200 ( 5.2 mmol/L )") o franjas
+# por edad (">19 años (0.61-1.12 ng/dL)"; se elige la de la edad del
+# paciente).
+following_range_labels = ["Valores de referencia"]
+
+# ---------------------------------------------------------------------------
+# La FIRMA: cómo se reconoce que un PDF es de tu centro sin haberlo abierto
+# todavía. Ver el paso 3 de la guía. Usa SOLO UNA de las dos formas
+# siguientes (borra la que no uses).
+# ---------------------------------------------------------------------------
+
+# ELIGE UNA — opción A: por texto de marca (la más simple; úsala si el
+# nombre del centro aparece siempre igual en el PDF).
+[signature]
+requires_any = ["Nombre de tu Hospital", "Sigla o abreviatura si la tiene"]
+
+# ELIGE UNA — opción B: por etiqueta de cabecera propia (mejor que la
+# opción A si el nombre del centro no es fiable — p. ej. llega con la
+# codificación rota en algún PDF antiguo, ver el paso 3). Para usar esta en
+# vez de la opción A, borra el bloque [signature] de arriba entero y
+# descomenta este:
+# [signature]
+# header_label_any = ["full_name", "birth_date"]
+
+# ---------------------------------------------------------------------------
+# Etiquetas de cabecera que SÍ interesa guardar (ver el paso 2 de la guía).
+# Puedes borrar cualquiera de estos bloques [[header_labels]] que tu centro
+# no tenga — con "full_name" y una fecha cualquiera ya es utilizable.
+#
+# `pattern` es una expresión regular que busca la etiqueta EN LA LÍNEA (no
+# en el documento entero), hasta los ":" inclusive; el valor guardado es lo
+# que venga justo después. `\s*` significa "cero o más espacios", `[oó]`
+# significa "la letra 'o' o la letra 'ó'" (una u otra). Si no conoces
+# regex, la forma más segura es copiar el patrón de un campo parecido de
+# `consorci_sanitari_maresme.toml` o `hugtip.toml` (misma carpeta que este
+# fichero) y cambiar solo las palabras entre comillas.
+# ---------------------------------------------------------------------------
+
+[[header_labels]]
+key = "full_name"
+pattern = 'Nombre\s*:'
+
+[[header_labels]]
+key = "report_number"
+pattern = 'N[uú]mero\s+de\s+petici[oó]n\s*:'
+
+[[header_labels]]
+key = "birth_date"
+pattern = 'Fecha\s+de\s+nacimiento\s*:'
+
+[[header_labels]]
+key = "dni"
+pattern = 'DNI\s*:'
+
+[[header_labels]]
+key = "nhc"
+pattern = 'NHC\s*:'
+
+[[header_labels]]
+key = "request_date"
+pattern = 'Fecha\s+de\s+petici[oó]n\s*:'
+
+[[header_labels]]
+key = "validation_date"
+pattern = 'Fecha\s+de\s+validaci[oó]n\s*:'
+
+# La fecha de la muestra es un caso especial: en vez de otro
+# [[header_labels]], va en su propia tabla [sample_date_label] — el motor
+# la trata de forma distinta porque puede cambiar varias veces a lo largo
+# de un mismo informe (si trae resultados de más de una muestra/extracción).
+[sample_date_label]
+key = "sample_date"
+pattern = 'Fecha\s+de\s+extracci[oó]n\s*:'
+
+# ---------------------------------------------------------------------------
+# OPCIONAL: si tu centro usa el MISMO nombre de prueba en sangre y en orina
+# (p. ej. "Glucosa" también en la sección de orina), añade al nombre de las
+# pruebas de esa sección una palabra que las distinga. La clave es el nombre
+# EXACTO de la sección tal como sale en el PDF. Bórralo si no hace falta.
+# ---------------------------------------------------------------------------
+[section_name_suffixes]
+"NOMBRE EXACTO DE LA SECCIÓN DE ORINA" = "orina"

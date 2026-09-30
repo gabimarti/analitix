@@ -1,0 +1,92 @@
+name: Release
+
+# Publica una versión: al subir una etiqueta "vX.Y.Z" (igual a
+# analitix.__version__), un Windows limpio pasa los tests, compila el
+# instalador con scripts\build_windows.bat, lo prueba (instalar, autocomprobar,
+# desinstalar) y crea la Release de GitHub con el instalador adjunto.
+# "Run workflow" (manual) hace lo mismo sin publicar: deja el instalador como
+# artefacto descargable de la ejecución, para probarlo antes de etiquetar.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    name: Windows installer
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Read app version
+        id: version
+        shell: pwsh
+        run: |
+          $v = python -c "import sys; sys.path.insert(0, 'src'); import analitix; print(analitix.__version__)"
+          "version=$v" >> $env:GITHUB_OUTPUT
+          if ("${{ github.ref_type }}" -eq "tag" -and "${{ github.ref_name }}" -ne "v$v") {
+            throw "La etiqueta ${{ github.ref_name }} no coincide con analitix.__version__ ($v)"
+          }
+
+      - name: Run test suite
+        run: |
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+          python -m pytest -q
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: cmd
+        run: scripts\build_windows.bat
+
+      - name: Test installer (install, self-test, uninstall)
+        shell: pwsh
+        run: |
+          $setup = "dist\Analitix-Setup-${{ steps.version.outputs.version }}.exe"
+          $root = Join-Path $env:RUNNER_TEMP "axt"
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=`"$root\prog`"","/DATADIR=`"$root\data`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Instalación fallida ($($p.ExitCode))" }
+          if (-not (Test-Path "$root\data\Analitix\informes_analiticas")) { throw "No se creó la carpeta de datos" }
+          $t = Start-Process "$root\prog\Analitix.exe" -ArgumentList '--self-test' -Wait -PassThru
+          if ($t.ExitCode -ne 0) { Get-Content "$root\data\Analitix\data\analitix.log"; throw "Autocomprobación fallida" }
+          $u = Start-Process "$root\prog\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES' -Wait -PassThru
+          if ($u.ExitCode -ne 0) { throw "Desinstalación fallida ($($u.ExitCode))" }
+          if (-not (Test-Path "$root\data\Analitix\data")) { throw "La desinstalación borró los datos" }
+
+      - name: Upload installer (manual runs)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Analitix-Setup-${{ steps.version.outputs.version }}
+          path: dist/Analitix-Setup-*.exe
+
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Notas de la Release = la sección "## [X.Y.Z]" de CHANGELOG.md (hasta
+          # el siguiente título "## "). Sin esa sección no se publica: obliga a
+          # actualizar el registro de cambios antes de etiquetar.
+          $v = "${{ steps.version.outputs.version }}"
+          $lines = [string[]](Get-Content CHANGELOG.md -Encoding utf8)
+          $start = [array]::FindIndex($lines, [Predicate[string]]{ param($l) $l -like "## ``[$v``]*" })
+          if ($start -lt 0) { throw "CHANGELOG.md no tiene la sección ## [$v]" }
+          $end = [array]::FindIndex($lines, $start + 1, [Predicate[string]]{ param($l) $l -like "## *" })
+          if ($end -lt 0) { $end = $lines.Count }
+          $lines[($start + 1)..($end - 1)] | Set-Content release-notes.md -Encoding utf8
+          $ghArgs = @("${{ github.ref_name }}", "dist\Analitix-Setup-$v.exe",
+                    "--title", "Analitix $v", "--notes-file", "release-notes.md")
+          if ("${{ steps.version.outputs.version }}".StartsWith("0.")) { $ghArgs += "--prerelease" }
+          gh release create @ghArgs

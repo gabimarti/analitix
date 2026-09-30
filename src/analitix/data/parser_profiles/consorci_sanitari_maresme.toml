@@ -1,0 +1,159 @@
+# Perfil de reconocimiento del Consorci Sanitari del Maresme (Hospital de
+# Mataró / H. St. Jaume de Calella). Cubre las 4 variantes de plantilla que
+# ha usado este laboratorio entre 2014 y 2026 (ver docs/DOCUMENTACION_TECNICA.md
+# §5): el motor de parseo evalúa cada línea contra todos los patrones a la
+# vez sin elegir variante de antemano, así que este único perfil basta para
+# las cuatro sin necesidad de subdividirlo.
+#
+# NOTA sobre el orden de este fichero: en TOML, una vez abierta una tabla con
+# `[nombre]` o `[[nombre]]`, cualquier `clave = valor` suelto que venga
+# después se considera parte de esa tabla, no de la raíz del documento — por
+# eso las listas de nivel raíz (`boundary_terms`, `known_sections`,
+# `known_text_values`) van todas ANTES de `[signature]`/`[[header_labels]]`/
+# `[sample_date_label]`, y no se puede reordenar libremente.
+id = "consorci_sanitari_maresme"
+name = "Consorci Sanitari del Maresme"
+# Nombre corto para leyendas y listados (p. ej. la forma del punto por
+# laboratorio en Evolución).
+short_name = "H. Mataró"
+
+priority = 100
+# Plantilla antigua: "LDH sèrum 199 UI/L 37 ºC ( 135 - 225 )" — sin quitar la
+# temperatura del ensayo, se tomaba el 37 como valor de la LDH.
+strip_mid_tokens = ["37 ºC"]
+
+# Etiquetas de otros campos de cabecera que no interesa guardar, pero que hay
+# que reconocer para no arrastrar su valor dentro del campo anterior cuando
+# ambas etiquetas comparten línea (los informes son muy densos). Si se añade
+# un campo de cabecera nuevo en `[[header_labels]]` más abajo, hay que añadir
+# también su etiqueta aquí si puede compartir línea con un campo que sí se
+# guarda, o el valor se comerá el texto siguiente. La mayoría de etiquetas
+# frontera siguen el patrón bilingüe "Catalán / Traducción:" (aplicado en
+# código a toda la lista), pero "CIP autonòmic" y "CIP SNS" (informes POCT)
+# van sin barra ni traducción en el PDF — el sufijo bilingüe es opcional así
+# que no molesta.
+boundary_terms = [
+    "Centre", "Adreça", "Municipi", "Pais", "País", "Sexe", "CIP-AUT", "NASS", "CIP-SNS", "CIP",
+    "CIP autonòmic", "CIP SNS",
+    "Domicili", "CP", "Codigo postal", "Provincia", "Província", "Telèfon",
+    "Destí Petició", "Destí", "Servei Sol·licitant", "Sol·licitant", "Nº Assistència",
+    "Cat. Professional", "Tipus Petició", "Unitat Sol·licitant", "Ref. Externa",
+    "Referència externa", "Nº de mostra", "Tipus mostra", "Servei Responsable",
+    "Facultatiu Responsable", "Categoria professional", "Versió informe", "Versió Informe",
+    "Origen Petició", "Origen", "Servei", "Núm. targeta sanitària", "H/D/U", "Hab./Llit",
+    "Núm. Assistència", "Comentari", "Data recepció mostra", "Laboratori", "Responsable/s",
+    "Validat per", "Validat", "Programada", "Recepció", "Metge", "R/U", "Observacions",
+]
+
+# Encabezados de sección reconocidos como tal (en vez de como subgrupo de
+# prueba) cuando aparece una línea íntegramente en mayúsculas sin ":".
+known_sections = [
+    "HEMATOLOGIA", "BIOQUIMICA", "IMMUNOLOGIA", "MICROBIOLOGIA", "SEROLOGIA",
+    "COAGULACIO", "ORINA", "HORMONES", "GENETICA", "ENDOCRINOLOGIA",
+    "ANATOMIA PATOLOGICA",
+]
+
+# Resultados textuales (no numéricos) habituales en la plantilla antigua, que
+# no lleva código LOINC para delimitar dónde acaba el nombre de la prueba y
+# empieza el resultado.
+known_text_values = [
+    "No és procedent", "No es procedente", "No detectable", "Mostra insuficient",
+    "Desplaçament electroforètic normal", "Negatiu", "Positiu",
+]
+
+# Se reconoce por una etiqueta de cabecera propia (nombre o fecha de
+# nacimiento) en vez de por texto de marca del laboratorio en el pie de
+# página: se ha comprobado que ese texto a veces llega corrupto por
+# problemas de codificación en los PDF más antiguos (p. ej. "Matar�" en
+# vez de "Mataró" en un informe de 2023), mientras que estas etiquetas de
+# cabecera están presentes en las 4 variantes conocidas.
+[signature]
+header_label_any = ["birth_date", "full_name"]
+
+# Etiquetas de cabecera: en catalán seguidas, opcionalmente, de
+# "/ <traducción>" cuya redacción exacta ha variado a lo largo de los años;
+# el sufijo `(?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?` admite cualquier traducción en vez
+# de enumerarlas todas. Los patrones se buscan sobre la línea sin acentos
+# (ver `strip_accents` en `parser_profiles.py`), así que las variantes con
+# acento en las clases de caracteres (p. ej. `[oò]`) son por compatibilidad
+# pero normalmente no llegan a hacer falta.
+
+[[header_labels]]
+key = "full_name"
+# "Pacient:" en la plantilla habitual; "Nom i cognoms / Nombre y
+# apellido(s):" en los informes de tipo POCT del hospital (mismo
+# laboratorio, plantilla de informe distinta).
+pattern = '(?:Pacient|Nom\s+i\s+cognoms)(?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:'
+
+[[header_labels]]
+key = "report_number"
+pattern = 'N[ºo]\s*Petici[oó](?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:|Petici[oó]\s*:'
+
+[[header_labels]]
+key = "birth_date"
+pattern = 'Data naixement(?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:'
+
+[[header_labels]]
+key = "dni"
+pattern = '(?:NIF\s*/\s*DNI|DNI\s*/\s*NIE|DNI/Passaport|DNI)\s*:'
+
+[[header_labels]]
+key = "nhc"
+# "Número història clinica:" (2024-2025) además de "Num./Núm. Història".
+pattern = 'NHC(?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:|N[uú]m(?:ero)?\.?\s*hist[oò]ria(?:\s*cl[ií]nica)?\s*:'
+
+[[header_labels]]
+key = "cip"
+# CIP autonómico (CatSalut): "CIP :" (2014-2023), "Núm. targeta sanitària:"
+# (2024-2025), "CIP-AUT:" (2025-2026). No el "CIP-SNS:" estatal.
+pattern = '\bCIP(?:-AUT)?\s*:|N[uú]m\.?\s*targeta\s+sanit[aà]ria\s*:'
+
+[[header_labels]]
+key = "sex"
+pattern = 'Sexe(?:\s*/\s*Sexo)?\s*:'
+
+[[header_labels]]
+key = "assistance_number"
+# "Num. Assistència :" (2014-2023), "Núm. Assistència:" (2024-2025), "Nº
+# Assistència / Nº Assistencia:" (2025-2026). Solo se guarda el primer
+# token: la plantilla antigua añade el tipo entre paréntesis detrás
+# ("23H005387 (Hospitalització)").
+pattern = 'N(?:[ºo]|[uú]m)\.?\s*Assist[eè]ncia(?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:'
+
+[[header_labels]]
+key = "request_date"
+# La plantilla 2023-2024 no tiene "Data petició:"; en su lugar trae
+# "Programada: DD/MM/AAAA" (fecha en que se programó/solicitó la prueba).
+# La variante de 2023 del H. St. Jaume de Calella solo trae un "Data/Hora :
+# DD/MM/AAAA (HH:MM)" sin más contexto, única fecha de todo el informe —
+# sin él, el informe quedaba sin ninguna fecha y fuera de los gráficos.
+pattern = 'Data petici[oó](?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:|Programada\s*:|Data/Hora\s*:'
+
+[[header_labels]]
+key = "validation_date"
+pattern = 'Data validaci[oó](?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:'
+
+[sample_date_label]
+key = "sample_date"
+# La plantilla 2023-2024 tampoco tiene "Data de la mostra:"; en su lugar
+# trae "Recepció: DD/MM/AA (HH:MM)" (fecha de recepción de la muestra en el
+# laboratorio) — sin la palabra "mostra", que ya se usa como término
+# frontera aparte ("Data recepció mostra") en la plantilla nueva.
+# La plantilla 2024-2025 trae "Data recepció mostra: DD/MM/AAAA (HH:MM)",
+# a veces en la misma línea que "Data extracció:"; como la última etiqueta
+# de la línea es la que queda, gana la recepción — la fecha que cuenta
+# para la analítica. Sin esta alternativa esa plantilla caía a la fecha de
+# validación, que puede ser días posterior.
+pattern = 'Data de la mostra(?:\s*/\s*[A-Za-zÀ-ÿ.º ]+)?\s*:|Data extracci[oó]\s*:|Data recepci[oó] mostra\s*:|Recepci[oó]\s*:'
+
+# Plantilla antigua: el nombre se solapa con la columna del valor y el texto
+# extraído los pega ("(GGT) sèrum23 U/L", el valor es 23).
+[[line_substitutions]]
+pattern = '(s[èe]rum)(\d)'
+replacement = '\1 \2'
+
+# La sección de orina usa los mismos nombres que en sangre ("Glucosa", "pH",
+# "Hematies", "Densitat"...): se les añade "orina" para que no compartan id
+# con la prueba en sangre (sus códigos LOINC son distintos).
+[section_name_suffixes]
+"ORINA/LÍQUIDS/SECREC." = "orina"

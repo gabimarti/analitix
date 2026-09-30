@@ -1,0 +1,85 @@
+# Quirón. Dos gramáticas de fila conviven en el mismo documento:
+#   - "en casa" (Hemograma, hormonas, índices calculados...): una sola línea
+#     "Nombre valor unidad (mín - máx)[ *]", con rango también en forma
+#     "(Inf. N)" (solo límite superior, "inferior a N") para algunos
+#     índices — sin interruptor de perfil, `PAREN_RANGE_RE` ya la cubre.
+#   - "interfaced" (Bioquímica básica, Enzimas, Metabolismo lipídico): el
+#     valor/unidad/rango va en una línea que empieza por "‡", y el nombre de
+#     la prueba va en la línea siguiente (a veces con una coletilla en
+#     prosa detrás del rango que no forma parte de él) —
+#     `interfaced_result_prefix` combina ambas líneas en un solo resultado.
+#
+# Las secciones no se distinguen por mayúsculas (títulos en frase normal),
+# sino porque preceden a la línea fija "Prueba Resultado Unidades Valores
+# de Normalidad" — `section_after_anchor` toma la línea anterior a esa como
+# título de sección en vez de usar `detect_headings`.
+#
+# La fecha de toma de muestra solo aparece una vez, al final del documento
+# (pie de la última página), después de todos los resultados — cubierto de
+# forma genérica por el preescaneo de `sample_date_label` en
+# `pdf_parser._parse_lines`, no por nada específico de este perfil.
+#
+# Byte NUL en mitad de palabras con el dígrafo "ti" ("Creatinina" ->
+# "Crea\x00nina"): artefacto de la fuente subseteada embebida en el PDF,
+# corregido a nivel de motor en `pdf_parser.extract_lines`.
+#
+# Limitación conocida, no implementada en este perfil (haría falta un
+# segundo PDF real para no adivinar el patrón sobre un único caso, ver
+# CONTRIBUTING.md): los resultados cualitativos de "Sistemático de orina"
+# ("Proteínas orina NEGATIVO NEGATIVO", valor y referencia repitiendo el
+# mismo texto sin ningún delimitador) y las secciones narrativas ("Fórmula
+# manual", "Sedimento orina") no se capturan — no hay marcador ni rango
+# numérico reconocible en esas filas, así que se ignoran en vez de
+# arriesgar una fila mal interpretada. Tampoco se recompone la unidad de un
+# resultado "interfaced" cuando la plantilla la reparte en una tercera
+# línea suelta tras el nombre (p. ej. "m²" tras "Filtrado glomerular
+# (...)"); el valor y el rango sí quedan correctos, solo el texto de
+# unidad puede quedar incompleto en ese caso.
+#
+# Sin NHC: el documento no trae ningún número de historia clínica propio.
+id = "quiron"
+name = "Quirón"
+# Nombre corto para leyendas y listados (p. ej. la forma del punto por
+# laboratorio en Evolución).
+short_name = "Quirón"
+
+priority = 100
+strip_trailing_flags = ["*"]
+detect_headings = false
+interfaced_result_prefix = "‡"
+section_after_anchor = "Prueba Resultado Unidades Valores de Normalidad"
+
+[signature]
+header_label_any = ["dni"]
+
+[[header_labels]]
+key = "full_name"
+pattern = 'Nombre\s*:'
+
+[[header_labels]]
+key = "dni"
+pattern = 'N[ºo]\s*identificaci[oó]n\s*:'
+
+[[header_labels]]
+key = "sex"
+pattern = 'Sexo\s*:'
+
+[[header_labels]]
+key = "birth_date"
+pattern = 'Fecha\s+de\s+nacimiento\s*\(edad\)\s*:'
+
+[[header_labels]]
+key = "request_date"
+pattern = 'Fecha\s+registro\s*:'
+
+[[header_labels]]
+key = "validation_date"
+pattern = 'Fecha\s+edici[oó]n\s*:'
+
+[[header_labels]]
+key = "report_number"
+pattern = 'N[ºo]\s*Laboratorio\s*:'
+
+[sample_date_label]
+key = "sample_date"
+pattern = 'Fecha\s+de\s+toma\s+de\s+la\s+muestra\s*:'

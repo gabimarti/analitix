@@ -1,0 +1,88 @@
+# Laboratorio Echevarne. Plantilla con dos particularidades propias que no
+# comparte ningún otro perfil:
+#
+# - Palabras contiguas sin espacio en gran parte de la cabecera
+#   ("Datanaixement:22/02/1975" en vez de "Data naixement: 22/02/1975") —
+#   artefacto real de extracción de esta fuente concreta, no un error de
+#   `pdfplumber` en general: con la tolerancia de espaciado por defecto
+#   funde palabras contiguas. `extract_x_tolerance` reextrae este PDF con
+#   una tolerancia menor solo para este perfil, una vez detectado (ver
+#   `pdf_parser.extract_lines`/`parse_report`).
+# - La fila de resultado separa nombre y valor con puntos de relleno hasta
+#   una columna fija en vez de marcador "(n)" o rango pegado al final de
+#   línea ("SEROALBÚMINA..................... 39,0 g/L (36,0-54,0)") —
+#   `dot_leader_result`. Cuando una sección solo tiene una determinación,
+#   el nombre de la fila es literalmente la palabra "RESULTAT" en vez del
+#   nombre real; `single_result_name_placeholder` lo sustituye por el
+#   título de la sección actual (cada título detectado es directamente una
+#   sección, sin jerarquía de subgrupo — `known_sections` se deja vacío a
+#   propósito). Cuando el valor queda fuera de rango, la plantilla reparte
+#   la fila en 3 líneas físicas (valor sin unidad ni rango, un marcador de
+#   flecha que la fuente no pudo mapear a texto real, y unidad+rango en la
+#   tercera línea); `pdf_parser._merge_dot_leader_splits` la recompone
+#   antes del análisis línea a línea.
+#
+# El número de análisis se inyecta en medio de la cabecera de columna de la
+# tabla de resultados ("PROVA <nºanàlisi> RESULTAT UNITATS
+# VAL.DE.REFERENCIA"), que se repite en mayúsculas al principio de cada
+# página — sin excluirla con `ignore_line_patterns` se leería como un
+# título de sección nuevo.
+#
+# El número de análisis y las tres fechas (toma de muestra, recepción,
+# edición) van en una fila de valores aparte, sin ninguna etiqueta "Campo:"
+# en la misma línea — la etiqueta de columna ("Nº Anàlisi / Data presa de
+# mostra / Data recepció / Data edició") va en la línea anterior, así que
+# se reconoce la fila de valores directamente por su forma
+# (`metadata_row_re`), sin depender de la etiqueta. Como fecha de la
+# analítica se toma la de recepción (segunda fecha), igual que en el resto
+# de perfiles; la de toma de muestra no se guarda.
+#
+# El nombre del paciente tampoco va detrás de ninguna etiqueta "Nombre:",
+# sino tras un tratamiento ("Sr."/"Sra.") sin más — `full_name_re`. Solo se
+# captura el primer nombre de pila (un único token tras la coma): en la
+# misma línea, separado únicamente por el espacio del hueco entre columnas
+# de la maquetación, va el nombre del centro remitente, indistinguible por
+# el texto de un nombre de pila compuesto ("Maria José") — limitación
+# conocida, un nombre de pila compuesto se guarda truncado a su primera
+# palabra en vez de arriesgarse a colar el nombre del remitente en el
+# campo del paciente.
+#
+# Sin ninguna cadena con el nombre del laboratorio con espacios reales
+# (todas las variantes vistas van pegadas: "LABORATORIOECHEVARNES.A",
+# "LaboratoriEchevarne", "laboratorioechevarne.com"), la firma usa las tres
+# formas de mayúscula/minúscula de la subcadena "echevarne" en vez de un
+# nombre completo.
+#
+# Sin NHC: el documento no trae ningún número de historia clínica propio,
+# solo un identificador tipo DNI ("I.P.F.:").
+id = "echevarne"
+name = "Laboratorio Echevarne"
+# Nombre corto para leyendas y listados (p. ej. la forma del punto por
+# laboratorio en Evolución).
+short_name = "Echevarne"
+
+priority = 100
+extract_x_tolerance = 2
+dot_leader_result = true
+single_result_name_placeholder = "RESULTAT"
+full_name_re = '(?:Sr\.|Sra\.)\s*(?P<name>[^,\n]+,\s*\S+)'
+metadata_row_re = '^(?P<report_number>U\d+)\s+\d{1,2}/\d{1,2}/\d{2,4}\s+(?P<sample_date>\d{1,2}/\d{1,2}/\d{2,4})\s+(?P<validation_date>\d{1,2}/\d{1,2}/\d{2,4})(?:\(\d+\))?\s*$'
+# "Sexe:Dona //Referència:12305 Sra. ..." — sin esta frontera el sexo se
+# comería el resto de la línea.
+boundary_terms = ["Referència"]
+ignore_line_patterns = ['^PROVA\s+\S+\s+RESULTAT\s+UNITATS\s+VAL\.DE\.REFERENCIA$']
+
+[signature]
+requires_any = ["Echevarne", "ECHEVARNE", "echevarne"]
+
+[[header_labels]]
+key = "dni"
+pattern = 'I\.P\.F\.\s*:'
+
+[[header_labels]]
+key = "birth_date"
+pattern = 'Data\s+naixement\s*:'
+
+[[header_labels]]
+key = "sex"
+pattern = 'Sexe\s*:'

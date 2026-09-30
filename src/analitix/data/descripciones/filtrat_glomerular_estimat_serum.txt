@@ -1,0 +1,1 @@
+Estimación de la cantidad de sangre que los riñones filtran por minuto, calculada a partir de la creatinina, la edad y el sexo. Es el indicador principal de la función renal; a diferencia de la mayoría de parámetros, aquí un valor más alto es mejor.
