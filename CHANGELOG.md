@@ -8,7 +8,7 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ## [Sin publicar]
 
-## [0.9.0] - Sin publicar todavía
+## [0.9.0] - 2026-09-30
 
 Primera versión pública.
 
