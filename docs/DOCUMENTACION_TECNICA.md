@@ -2971,8 +2971,10 @@ versión **publicada**, no una a medio hacer:
   directos en `main`; solo recibe la fusión de `develop` al publicar una
   versión (o una corrección urgente, ver abajo).
 - **`develop` = el trabajo en curso.** Todos los cambios, propios y pull
-  requests de colaboradores, van a `develop`, cada uno con su entrada en
-  `## [Sin publicar]` del CHANGELOG. Los tests y los controles de
+  requests de colaboradores, van a `develop`. Los que cambian el programa
+  llevan su entrada en `## [Sin publicar]` del CHANGELOG; los de la
+  operativa de desarrollo o la gestión del repositorio (workflows, reglas,
+  procedimientos) no se anotan en el CHANGELOG. Los tests y los controles de
   privacidad se ejecutan igual en cada push a `develop`.
 - **Corrección urgente de una versión publicada**: rama `hotfix/X.Y.Z`
   desde `main`, PR a `main`, publicar el parche (pasos 3-5) y después

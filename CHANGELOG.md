@@ -1,16 +1,14 @@
 # Registro de cambios
 
-Todos los cambios relevantes de Analitix se documentan en este fichero.
+Todos los cambios relevantes de la aplicación Analitix se documentan en este
+fichero. Solo recoge cambios del programa (lo que nota quien lo usa); los de
+la operativa de desarrollo o la gestión del repositorio no se anotan aquí.
 
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 [`docs/DOCUMENTACION_TECNICA.md`](docs/DOCUMENTACION_TECNICA.md) §8.2).
 
 ## [Sin publicar]
-
-### Corregido
-
-- `SHA256SUMS.txt` de las Releases se genera con saltos de línea LF: con los CRLF de la 0.10.0, `sha256sum -c` fallaba (la huella era correcta; `Get-FileHash` en Windows sí funcionaba).
 
 ## [0.10.0] - 2026-10-01
 
