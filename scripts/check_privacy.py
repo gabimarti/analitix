@@ -23,7 +23,7 @@ EXTENSIONES_PROHIBIDAS = {
     ".xlsx", ".xls", ".xlsm", ".ods", ".csv", ".log",
 }
 # Datos de catálogo que sí forman parte del código (sin datos de pacientes).
-PERMITIDOS = {"src/analitix/data/test_aliases.csv"}
+PERMITIDOS = {"src/analitix/data/test_aliases.csv", "src/analitix/data/biological_variation.csv"}
 
 LETRAS_DNI = "TRWAGMYFPDXBNJZSQVHLCKE"
 _DNI_RE = re.compile(r"\b([XYZ]?)(\d{7,8})([A-Z])\b")

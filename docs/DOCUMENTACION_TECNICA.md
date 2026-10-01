@@ -94,9 +94,11 @@ Analitix/
     calcium_risk.py              calcio corregido por albúmina
     glycemic_risk.py             glucosa media estimada (eAG) desde HbA1c
     thyroid_risk.py               TSH + T4L (solo gráfico combinado)
+    rcv.py                        RCV: ¿cambio probablemente real o variación esperable?
     gui.py                     interfaz Tkinter/ttkbootstrap
     main.py                    punto de entrada (contraseña + arranque)
     data/test_aliases.csv      alias editable de nombres de prueba
+    data/biological_variation.csv  variación biológica (CVI/CVA) citada, para el RCV
     data/descripciones/        una ficha .txt por canonical_id (ver `catalog.get_description`)
     data/parser_profiles/      un .toml por centro/laboratorio (ver `parser_profiles.py`)
 ```
@@ -127,6 +129,13 @@ ejecutable, `catalog.add_aliases` escribe solo en la del usuario, así una
 versión nueva de la app puede corregir sus propios alias sin pisar los
 suyos. La versión de la app es `analitix.__version__` (título de la ventana
 y "Acerca de"); la etiqueta de cada Release de GitHub es `v` + esa versión.
+
+La variación biológica del RCV sigue el mismo esquema de dos capas:
+`config.BUNDLED_BV_PATH` (la de la app, versionada y citada) y
+`config.BV_PATH` (`data/biological_variation.csv` en la carpeta de datos,
+opcional, mismo formato), cuyas filas sustituyen a las de la app. A
+diferencia de los alias, son siempre dos ficheros distintos, también desde
+el repositorio (`data/` está fuera del control de versiones).
 
 ## 4. Modelo de datos
 
@@ -1944,13 +1953,52 @@ Décimo módulo de cálculo clínico. Ver
   ninguna nota de discordancia/patrón** — a diferencia de PCR+VSG, aquí
   cualquier texto interpretativo se acerca demasiado a un diagnóstico.
 
+### `rcv.py` — valor de referencia del cambio (RCV)
+
+Ver [`docs/referencias_medicas/referencias_rcv.md`](referencias_medicas/referencias_rcv.md)
+para las fuentes de cada valor, las discrepancias conocidas y los
+parámetros excluidos a propósito.
+
+- Responde a "¿el cambio entre las dos últimas analíticas es probablemente
+  real o cabe en la variación esperable?". Superarlo = "cambio
+  probablemente real", nunca "patológico".
+- `rcv_limits(cvi, cva)`: modelo **log-normal** (asimétrico): σ =
+  √(ln(CVA²+1) + ln(CVI²+1)), límites exp(±Z·√2·σ) − 1, Z = 1,96
+  (Fokkema 2006; Fraser & Harris 1989 para la fórmula clásica, con la que
+  coincide para CV pequeños). CVA efectivo = máx(CVA del estudio,
+  0,5·CVI) (`CVA_FRACCION_DE_CVI`, especificación deseable de Ricós 2004):
+  el umbral más prudente sin conocer el CVA del laboratorio del usuario.
+- `classify_change(...)` → `None` (sin dato o valores ≤ 0) o un dict con
+  `estado` "real"/"esperable"/"otro_lab" (laboratorios distintos —
+  `reports.lab` de los dos últimos puntos, vía
+  `repository.get_latest_report_summary` — o uno sin laboratorio: no se
+  clasifica), límites, fuente y nota.
+- `VariacionBiologica.cvi_para(sex)`: CVI común o por sexo
+  (`repository.get_patient_sex`); sin sexo, el mayor.
+- `load_table()` (`lru_cache`, se lee una vez por sesión) = capa de la app
+  + capa del usuario. `read_table` ignora las líneas que empiezan por "#".
+- **Solo datos abiertos**: cada fila del CSV cita su artículo (DOI y
+  tabla); ningún valor procede de la web de la EFLM Biological Variation
+  Database, cuyos términos no permiten redistribuirla.
+  `scripts/check_privacy.py` permite este `.csv` de forma explícita
+  (`PERMITIDOS`).
+
 ### `gui.py`
 
 - Pestaña Resumen con dos subpestañas (`ttk.Notebook`): "Tabla" (la de
   siempre) y "Qué ha cambiado" (`_draw_changes`, que se redibuja en
   `_refresh_resumen_panel`, es decir, en cada cambio de paciente; a partir de
   las mismas filas de `_classify_latest_report`, indicando cuántos
-  parámetros se omiten y por qué).
+  parámetros se omiten y por qué). Cada fila lleva además `rcv`
+  (`rcv.classify_change` con el sexo del paciente y los laboratorios de los
+  dos puntos): `charts.changes_figure` atenúa (`RCV_ESPERABLE_ALPHA`) las
+  barras dentro de la variación esperable, conservando su color, y
+  `_rcv_tooltip` añade al tooltip el veredicto, los límites, la fuente y
+  la nota de la fila.
+- Menú Ayuda: `DOC_LINKS` abre en el navegador el manual, la documentación
+  técnica, las referencias científicas y el registro de cambios de la rama
+  principal del repositorio público (`updates.REPO_URL`), es decir, la
+  versión más reciente de la documentación.
 - Pestaña "Mapa de calor" (menú Análisis, requiere paciente):
   `_build_tab_mapa_calor` / `_heatmap_rows` / `_show_heatmap`. Conjuntos:
   alguna vez fuera de rango (por defecto), todos, o uno por panel
@@ -2662,6 +2710,10 @@ sin sobrescribir nada si detecta modificaciones. Los archivos ignorados
 La suite cubre, sin abrir la GUI, las partes con mayor riesgo de regresión:
 
 - normalización de nombres y catálogo de pruebas;
+- RCV (`rcv.py`): límites log-normales contra un cálculo a mano, CVA mínimo
+  0,5·CVI, estados real/esperable/otro laboratorio, CVI por sexo, tabla
+  de la app válida y citada (DOI en cada fila, excluidos ausentes) y capa
+  del usuario;
 - fechas, rangos, unidades, resultados textuales y banderas del parser,
   incluidas las dos variantes de plantilla de HUGTIP (la compacta y la
   bilingüe) y sus arreglos específicos (elisión catalana "d'", líneas de

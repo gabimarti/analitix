@@ -14,6 +14,8 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ### Añadido
 
+- «Qué ha cambiado» indica si cada cambio es probablemente real o cabe en la variación esperable (valor de referencia del cambio, RCV), con variación biológica de estudios publicados citados; no se valora entre laboratorios distintos.
+- Menú Ayuda con enlaces al manual de usuario, la documentación técnica, las referencias científicas y el registro de cambios.
 - Política de seguridad (`SECURITY.md`) con el procedimiento para informar de vulnerabilidades de forma privada.
 - Cada Release incluye `SHA256SUMS.txt` y una atestación de procedencia del instalador para verificar la descarga (ver `SECURITY.md`).
 - Controles automáticos del repositorio: comprobación de datos personales y secretos en cada cambio, auditoría de vulnerabilidades de dependencias (`pip-audit`, también semanal) y actualizaciones con Dependabot.

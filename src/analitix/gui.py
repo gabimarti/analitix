@@ -90,6 +90,7 @@ from analitix.repository import (
     get_all_results,
     get_latest_report_summary,
     get_merged_series,
+    get_patient_sex,
     get_series,
     get_setting,
     get_stats,
@@ -119,9 +120,10 @@ from analitix import (
     thyroid_risk as _thyroid,
     uric_acid_risk as _uric,
 )
+from analitix.rcv import classify_change
 from analitix.textutils import strip_accents
 from analitix.thyroid_risk import get_latest_thyroid_summary, get_thyroid_series
-from analitix.updates import RELEASES_URL, fetch_latest_release, is_newer
+from analitix.updates import RELEASES_URL, REPO_URL, fetch_latest_release, is_newer
 from analitix.uric_acid_risk import (
     INDEX_LABELS as URIC_ACID_INDEX_LABELS,
     URATE_LOWERING_TARGET,
@@ -182,6 +184,30 @@ def _format_range(item: dict) -> str:
     if low is not None:
         return f"> {low:g}"
     return "sin rango"
+
+
+def _rcv_tooltip(rcv: Optional[dict]) -> str:
+    """Líneas del RCV (`rcv.classify_change`) para el tooltip de "Qué ha
+    cambiado"; "" si no hay variación biológica para el parámetro."""
+    if not rcv:
+        return ""
+    limites = f"RCV {rcv['rcv_bajada']:+.0f}% / {rcv['rcv_subida']:+.0f}%"
+    texto = {
+        "real": f"Cambio probablemente real (supera el {limites})",
+        "esperable": f"Dentro de la variación esperable ({limites})",
+        "otro_lab": "⚠ Laboratorios distintos: no se valora con el RCV",
+    }[rcv["estado"]]
+    nota = f"\n{rcv['nota']}" if rcv.get("nota") else ""
+    return f"\n{texto}\nFuente: {rcv['fuente']}{nota}"
+
+
+# Ayuda → documentación (rutas dentro del repositorio público, `REPO_URL`).
+DOC_LINKS = (
+    ("Manual de usuario", "blob/main/docs/MANUAL_USUARIO.md"),
+    ("Documentación técnica", "blob/main/docs/DOCUMENTACION_TECNICA.md"),
+    ("Referencias científicas", "tree/main/docs/referencias_medicas"),
+    ("Registro de cambios", "blob/main/CHANGELOG.md"),
+)
 
 
 def _make_sortable(tree: ttk.Treeview, numeric_columns: set[str] = frozenset()) -> None:
@@ -374,6 +400,11 @@ class AnalitixApp(ttk.Window):
         menubar.add_command(label="Configuración", command=lambda: self._show_page("config"))
 
         ayuda_menu = tk.Menu(menubar, tearoff=0)
+        # Documentación en línea (rama principal del repositorio público):
+        # siempre la versión más reciente, con todas las fuentes citadas.
+        for label, path in DOC_LINKS:
+            ayuda_menu.add_command(label=label, command=lambda p=path: webbrowser.open(f"{REPO_URL}/{p}"))
+        ayuda_menu.add_separator()
         ayuda_menu.add_command(
             label="Buscar actualizaciones...", command=lambda: self._check_updates(manual=True)
         )
@@ -1632,8 +1663,11 @@ class AnalitixApp(ttk.Window):
             text="Cada barra es el cambio de un parámetro respecto al informe anterior, medido en "
             "anchos de su rango de referencia (1 = moverse todo el ancho del rango normal), para "
             "poder comparar parámetros de escalas muy distintas. Rojo ▲ = se aleja del rango o sale "
-            "de él; verde ✓ = se acerca o vuelve; gris = dentro del rango antes y ahora. Pasa el "
-            "ratón por una barra para ver los valores y el % de cambio.",
+            "de él; verde ✓ = se acerca o vuelve; gris = dentro del rango antes y ahora. Barra "
+            "atenuada = el cambio cabe en la variación esperable (RCV: variación biológica de la "
+            "propia persona + imprecisión del análisis, según estudios publicados); no se valora si "
+            "los dos valores son de laboratorios distintos. Pasa el ratón por una barra para ver los "
+            "valores, el % de cambio, el RCV y su fuente.",
             bootstyle="secondary", wraplength=900, justify="left",
         ).pack(anchor="w", pady=(6, 2))
         self.label_resumen_cambios = ttk.Label(cambios, text="", bootstyle="secondary")
@@ -1722,9 +1756,12 @@ class AnalitixApp(ttk.Window):
     def _draw_changes(self, summary: dict) -> None:
         """Gráfico "Qué ha cambiado" (`charts.changes_figure`) del último
         informe frente al anterior de cada parámetro."""
+        sex = get_patient_sex(self.con, self.current_patient_id)
         filas = [
             dict(label=f["raw_name"], value=f["value_num"], previous=f["valor_anterior"], unit=f["unit"],
-                 ref_low=f["ref_low"], ref_high=f["ref_high"], pct=f["pct"])
+                 ref_low=f["ref_low"], ref_high=f["ref_high"], pct=f["pct"],
+                 rcv=classify_change(f["canonical_id"], f["valor_anterior"], f["value_num"], sex,
+                                     f.get("lab_anterior"), f.get("lab")))
             for f in self._classify_latest_report(summary)
         ]
         con_anterior = [f for f in filas if f["previous"] is not None]
@@ -1781,7 +1818,7 @@ class AnalitixApp(ttk.Window):
             pct = f" ({item['pct']:+.1f}%)" if item.get("pct") is not None else ""
             annot.set_text(
                 f"{item['label']}\n{item['previous']:g} → {item['value']:g} {unit}{pct}\n"
-                f"Rango: {_format_range(item)} · {estados[item['estado']]}"
+                f"Rango: {_format_range(item)} · {estados[item['estado']]}" + _rcv_tooltip(item.get("rcv"))
             )
             annot.xy = (0, i)
             annot.set_visible(True)

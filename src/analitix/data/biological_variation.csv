@@ -1,0 +1,73 @@
+# Variación biológica intraindividual (CVI) y analítica (CVA) en %, adultos sanos, para el RCV (rcv.py).
+# Valores tomados SOLO de artículos publicados (cada fila cita el suyo); nunca de la web de la
+# EFLM Biological Variation Database, cuyos términos no permiten redistribuirla.
+# Fuentes completas, discrepancias y valores excluidos: docs/referencias_medicas/referencias_rcv.md
+# cvi_mujer_pct/cvi_hombre_pct: solo cuando el artículo da valores distintos por sexo.
+# cva_pct: el CVA del laboratorio del estudio (rcv.py usa el mayor entre este y 0,5*CVI).
+canonical_id,analito,cvi_pct,cvi_mujer_pct,cvi_hombre_pct,cva_pct,fuente,doi,tabla,nota
+glucosa,Glucosa,4.7,,,0.58,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+glucosa_serum,Glucosa,4.7,,,0.58,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+creatinina_serum,Creatinina,4.7,,,4.4,Carobene 2017 (EuBIVAS),10.1373/clinchem.2017.275115,Carobene 2022 Tabla 2,Método de Jaffé (el enzimático da CVI 4.4 y CVA 1.1); se usa Jaffé por ser el más amplio al no conocer el método del laboratorio
+urea_serum,Urea,14.1,,,2.32,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,El artículo indica diferencias por sexo; valores por sexo no disponibles en abierto
+urat_serum,Ácido úrico,8.32,,,0.86,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,El artículo indica diferencias por sexo; valores por sexo no disponibles en abierto
+sodi,Sodio,0.53,,,0.40,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+potassi,Potasio,3.92,,,0.41,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+clor,Cloruro,0.98,,,0.40,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+calci,Calcio total,1.81,,,0.85,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+calci_serum,Calcio total,1.81,,,0.85,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+albumina,Albúmina,2.5,,,1.50,Carobene 2019 (EuBIVAS),10.1373/clinchem.2019.304618,Carobene 2022 Tabla 2,
+albumina_g_dl,Albúmina,2.5,,,1.50,Carobene 2019 (EuBIVAS),10.1373/clinchem.2019.304618,Carobene 2022 Tabla 2,
+albumina_serum,Albúmina,2.5,,,1.50,Carobene 2019 (EuBIVAS),10.1373/clinchem.2019.304618,Carobene 2022 Tabla 2,
+proteines_totals,Proteínas totales,2.6,,,0.97,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+proteines_totals_serum,Proteínas totales,2.6,,,0.97,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+alanina_aminotransferasa,ALT,9.3,,,6.7,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,El artículo indica diferencias por sexo; valores por sexo no disponibles en abierto
+alanina_aminotransferasa_alt_serum,ALT,9.3,,,6.7,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,El artículo indica diferencias por sexo; valores por sexo no disponibles en abierto
+aspartat_aminotranferasa,AST,9.5,,,5.5,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,
+aspartat_aminotranferasa_ast_serum,AST,9.5,,,5.5,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,
+aspartat_aminotranferasa_ast_serum_1,AST,9.5,,,5.5,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,
+gamma_glutamil_transferasa_ggt,GGT,8.9,,,8.7,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,El artículo indica diferencias por sexo; valores por sexo no disponibles en abierto
+gamma_glutamil_transferasa_ggt_serum,GGT,8.9,,,8.7,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,El artículo indica diferencias por sexo; valores por sexo no disponibles en abierto
+gamma_glutamil_transferasa_ggt_serum1,GGT,8.9,,,8.7,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,El artículo indica diferencias por sexo; valores por sexo no disponibles en abierto
+gamma_glutamil_transferasa_ggt_serum2,GGT,8.9,,,8.7,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,El artículo indica diferencias por sexo; valores por sexo no disponibles en abierto
+fosfatasa_alcalina,Fosfatasa alcalina,5.3,,,2.8,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,
+fosfatasa_alcalina_serum,Fosfatasa alcalina,5.3,,,2.8,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,
+bilirubina_total,Bilirrubina total,20.9,,,2.98,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+bilirubina_total_serum,Bilirrubina total,20.9,,,2.98,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+ldh_serum,LDH,5.2,,,1.2,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,
+ldh_serum_186_ui_l,LDH,5.2,,,1.2,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,
+alfa_amilasa_serum,Alfa-amilasa,6.8,,,1.0,Carobene 2017 (EuBIVAS),10.1373/clinchem.2016.269811,Carobene 2022 Tabla 2,
+colesterol,Colesterol total,5.18,,,0.98,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+colesterol_serum,Colesterol total,5.18,,,0.98,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+colesterol_hdl,Colesterol HDL,5.67,,,0.56,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+colesterol_hdl_serum,Colesterol HDL,5.67,,,0.56,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,
+colesterol_ldl,Colesterol LDL,8.46,,,1.77,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,Si el informe da el LDL calculado (Friedewald) su variación real puede ser mayor
+triglicerids,Triglicéridos,19.8,,,1.80,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,El artículo indica diferencias por sexo; valores por sexo no disponibles en abierto
+triglicerids_serum,Triglicéridos,19.8,,,1.80,Aarsand 2018 (EuBIVAS),10.1373/clinchem.2018.288415,Carobene 2022 Tabla 2,El artículo indica diferencias por sexo; valores por sexo no disponibles en abierto
+proteina_c_reactiva,PCR,29.4,,,11.10,Carobene 2019 (EuBIVAS),10.1373/clinchem.2019.304618,Carobene 2022 Tabla 2,Un episodio inflamatorio agudo domina cualquier cambio; el estudio excluyó esos episodios
+proteina_c_reactiva_serum,PCR,29.4,,,11.10,Carobene 2019 (EuBIVAS),10.1373/clinchem.2019.304618,Carobene 2022 Tabla 2,Un episodio inflamatorio agudo domina cualquier cambio; el estudio excluyó esos episodios
+proteina_c_reactiva_en_suero,PCR,29.4,,,11.10,Carobene 2019 (EuBIVAS),10.1373/clinchem.2019.304618,Carobene 2022 Tabla 2,Un episodio inflamatorio agudo domina cualquier cambio; el estudio excluyó esos episodios
+srm_proteina_c_reactiva_c_massa,PCR,29.4,,,11.10,Carobene 2019 (EuBIVAS),10.1373/clinchem.2019.304618,Carobene 2022 Tabla 2,Un episodio inflamatorio agudo domina cualquier cambio; el estudio excluyó esos episodios
+transferrina,Transferrina,3.4,,,2.69,Carobene 2019 (EuBIVAS),10.1373/clinchem.2019.304618,Carobene 2022 Tabla 2,
+transferrina_serum,Transferrina,3.4,,,2.69,Carobene 2019 (EuBIVAS),10.1373/clinchem.2019.304618,Carobene 2022 Tabla 2,
+tirotropina_tsh,TSH,18.9,,,1.46,Bottani 2022 (EuBIVAS),10.1515/cclm-2020-1885,Carobene 2022 Tabla 2,Discrepancia: el resumen de Bottani 2022 da 17.7; se usa 18.9 (el valor visto en tabla)
+tirotropina_tsh_serum,TSH,18.9,,,1.46,Bottani 2022 (EuBIVAS),10.1515/cclm-2020-1885,Carobene 2022 Tabla 2,Discrepancia: el resumen de Bottani 2022 da 17.7; se usa 18.9 (el valor visto en tabla)
+tiroxina_lliure_t4l,T4 libre,4.8,,,1.71,Bottani 2022 (EuBIVAS),10.1515/cclm-2020-1885,Carobene 2022 Tabla 2,
+tiroxina_lliure_t4_lliure_serum,T4 libre,4.8,,,1.71,Bottani 2022 (EuBIVAS),10.1515/cclm-2020-1885,Carobene 2022 Tabla 2,
+hemoglobina,Hemoglobina,2.74,,,0.58,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 1,
+hematocrit,Hematocrito,2.82,,,0.63,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 1,
+hematies,Hematíes,2.77,,,0.66,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 1,
+vcm,VCM,0.72,,,0.18,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 1,
+hcm,HCM,0.75,,,0.78,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 1,
+chcm,CHCM,0.97,,,0.79,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 1,
+leucocits,Leucocitos,,12.82,7.96,1.49,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 2,
+neutrofils_total,Neutrófilos (recuento),,20.09,11.60,1.88,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 2,
+limfocits_total,Linfocitos (recuento),9.81,,,2.40,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 2,
+linfocits_total,Linfocitos (recuento),9.81,,,2.40,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 2,
+monocits_total,Monocitos (recuento),,15.33,11.07,4.95,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 2,
+eosinofils_total,Eosinófilos (recuento),,14.83,10.11,11.01,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 2,
+basofils_total,Basófilos (recuento),11.36,,,16.65,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 2,CVA comparable al CVI (cerca del límite de cuantificación): umbral amplio
+plaquetes,Plaquetas,7.22,,,1.80,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 2,
+vpm,VPM,2.24,,,1.13,Coşkun 2018,10.1515/cclm-2017-1155,Tabla 2,
+fibrinogen,Fibrinógeno,10.2,,,4.7,Aarsand 2021 (EuBIVAS),10.1093/clinchem/hvab100,Carobene 2022 Tabla 2,
+temps_de_protrombina_segons_plasma,Tiempo de protrombina (s),2.6,,,1.7,Aarsand 2021 (EuBIVAS),10.1093/clinchem/hvab100,Carobene 2022 Tabla 2,
+temps_tromboplastina_parcial_activada_s_plasma,TTPa (s),2.9,,,3.7,Aarsand 2021 (EuBIVAS),10.1093/clinchem/hvab100,Carobene 2022 Tabla 2,El artículo indica valores más bajos en hombres que en mujeres de 50 años o menos; no disponibles en abierto

@@ -521,6 +521,9 @@ CHANGE_WORSE = "#d03b3b"     # se aleja del rango o sale de él
 CHANGE_BETTER = "#0ca30c"    # se acerca al rango o vuelve a él
 CHANGE_NEUTRAL = "#b9b8b0"   # dentro del rango antes y ahora
 CHANGE_SYMBOL = {"empeora": "▲", "mejora": "✓", "igual": ""}
+# Opacidad de las barras cuyo cambio cabe en la variación esperable (RCV,
+# `rcv.py`): se ven, pero dejan destacar los cambios probablemente reales.
+RCV_ESPERABLE_ALPHA = 0.35
 # Diferencia de distancia al rango (en anchos) por debajo de la cual no se
 # considera que se haya acercado ni alejado (evita colorear por redondeos).
 CHANGE_EPSILON = 0.01
@@ -553,9 +556,12 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
     de referencia (comparable entre parámetros de escalas distintas; el %
     va en el tooltip), ordenadas de mayor a menor cambio, color según se
     acerque o se aleje del rango. `rows`: dicts con `label`, `value`,
-    `previous`, `unit`, `ref_low`, `ref_high` (y opcionalmente `pct`); los
-    que no tienen anterior o rango se omiten. Guarda en
-    `ax.analitix_changes` las filas en el orden dibujado, para el tooltip."""
+    `previous`, `unit`, `ref_low`, `ref_high` (y opcionalmente `pct` y
+    `rcv`, el resultado de `rcv.classify_change`: si el cambio cabe en la
+    variación esperable, la barra se dibuja atenuada, conservando el color
+    de si se acerca o se aleja del rango); los que no tienen anterior o
+    rango se omiten. Guarda en `ax.analitix_changes` las filas en el orden
+    dibujado, para el tooltip."""
     items = []
     unchanged = 0
     for r in rows:
@@ -575,7 +581,11 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
     ax = fig.add_subplot(111)
     colors = {"empeora": CHANGE_WORSE, "mejora": CHANGE_BETTER, "igual": CHANGE_NEUTRAL}
     y = np.arange(len(items))
-    ax.barh(y, [r["delta"] for r in items], height=0.62, color=[colors[r["estado"]] for r in items], zorder=2)
+    esperable = [(r.get("rcv") or {}).get("estado") == "esperable" for r in items]
+    ax.barh(
+        y, [r["delta"] for r in items], height=0.62, zorder=2,
+        color=[to_rgba(colors[r["estado"]], RCV_ESPERABLE_ALPHA if e else 1.0) for r, e in zip(items, esperable)],
+    )
     ax.axvline(0, color="#c3c2b7", linewidth=1, zorder=1)
     ax.set_yticks(y)
     ax.set_yticklabels([r["label"] if len(r["label"]) <= 40 else r["label"][:39] + "…" for r in items], fontsize=8)
@@ -598,15 +608,19 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
     ax.tick_params(axis="both", colors="#52514e", length=0)
     ax.set_xlabel("Cambio respecto al informe anterior (1 = el ancho del rango de referencia)", fontsize=8,
                   color="#52514e")
-    ax.set_title(title, fontsize=11, loc="left", pad=22)
+    ax.set_title(title, fontsize=11, loc="left", pad=34 if any(esperable) else 22)  # leyenda de 2 filas
     legend = [
         Patch(facecolor=CHANGE_WORSE, label="▲ Se aleja del rango o sale de él"),
         Patch(facecolor=CHANGE_BETTER, label="✓ Se acerca al rango o vuelve a él"),
         Patch(facecolor=CHANGE_NEUTRAL, label="Dentro del rango antes y ahora"),
     ]
+    if any(esperable):
+        legend.append(Patch(facecolor=to_rgba(CHANGE_NEUTRAL, RCV_ESPERABLE_ALPHA),
+                            label="Atenuada = dentro de la variación esperable (RCV)"))
     # Leyenda arriba, junto al título: con muchas filas la figura es alta y
     # abajo quedaría lejos de lo que explica.
-    ax.legend(handles=legend, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=3, fontsize=7, frameon=False,
+    ax.legend(handles=legend, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2 if len(legend) > 3 else 3,
+              fontsize=7, frameon=False,
               borderaxespad=0.2)
     fig.tight_layout()
     ax.analitix_changes = items

@@ -187,7 +187,8 @@ se ve el logo de Analitix como pantalla de bienvenida. Los menús son:
   ninguna clasificación, solo el gráfico combinado TSH+T4L.
 - **Herramientas**: Explorador BD, Normalizar pruebas.
 - **Configuración**: se abre directamente, sin submenú.
-- **Ayuda**: Buscar actualizaciones..., Acerca de...
+- **Ayuda**: Manual de usuario, Documentación técnica, Referencias
+  científicas, Registro de cambios, Buscar actualizaciones..., Acerca de...
 
 Cada apartado de esta guía indica entre paréntesis en qué menú está.
 
@@ -566,6 +567,29 @@ se ve también el % de cambio y el rango. Se omiten (y se indica cuántos) los
 parámetros sin informe anterior, sin rango de referencia o sin ningún
 cambio. Es orientativo: un cambio grande no significa por sí solo nada
 grave.
+
+**¿Cambio real o variación normal? (RCV).** Aunque no cambie nada, dos
+analíticas seguidas nunca dan exactamente el mismo valor. Tu propio
+organismo oscila un poco y la medida del laboratorio tiene un pequeño
+margen de error. Para unas 45 pruebas habituales, Analitix calcula con
+datos de estudios publicados (sobre todo el estudio europeo EuBIVAS) cuánto
+tiene que cambiar el valor para que el cambio sea **probablemente real**.
+Es el "valor de referencia del cambio" (RCV).
+
+- **Barra atenuada (más clara)**: el cambio cabe dentro de esa variación
+  esperable. Conserva su color, porque sigue siendo importante si sale del
+  rango.
+- **Barra de color intenso**: el cambio supera el RCV y es probablemente
+  real. Eso **no** quiere decir que sea malo ni que indique una enfermedad.
+- **Al pasar el ratón** verás el veredicto, los límites (p. ej. "RCV −14 %
+  / +16 %") y el estudio del que salen.
+- **Laboratorios distintos**: si los dos valores son de laboratorios
+  distintos (o uno es una entrada manual), no se valora, porque cada
+  laboratorio y cada método miden un poco distinto.
+- **Pruebas sin RCV**: algunas no lo tienen a propósito. La vitamina D, por
+  ejemplo, cambia con la estación del año. El motivo de cada una, las
+  fuentes y las limitaciones están en **Ayuda → Referencias científicas**
+  (documento "referencias_rcv").
 
 <p align="center">
   <img src="images/resumen_cambios.png" width="80%" alt="Gráfico Qué ha cambiado: barras divergentes por parámetro">
@@ -1254,6 +1278,16 @@ Es la **única conexión a internet** de Analitix: consulta en GitHub el
 número de la última versión publicada y **no envía ningún dato** tuyo ni de
 tus analíticas. Si no hay conexión, verás "No se pudo comprobar"; el resto
 de la aplicación funciona igual sin internet.
+
+### 2.23 📚 Ayuda → Manual, documentación y referencias
+
+**Manual de usuario**, **Documentación técnica**, **Referencias
+científicas** y **Registro de cambios** abren en el navegador la versión más
+reciente de cada documento, en el repositorio público del proyecto. En
+**Referencias científicas** están todos los estudios, guías y fórmulas que
+usa Analitix (paneles clínicos, RCV...), con su cita, sus limitaciones y,
+cuando las fuentes no coinciden, la discrepancia indicada. Abrir estos
+enlaces no envía ningún dato tuyo.
 
 ## 3. Colaborar
 

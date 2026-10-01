@@ -33,6 +33,10 @@ respalda un cálculo o alerta fiable, el propio documento lo dice de forma
 explícita en vez de forzar una propuesta más ambiciosa de lo que la
 literatura permite.
 
+- [`referencias_rcv.md`](referencias_rcv.md) — **implementado**: valor de
+  referencia del cambio (RCV, "¿cambio real o variación esperable?") con
+  variación biológica de artículos publicados (EuBIVAS, Coşkun 2018);
+  discrepancias entre fuentes y parámetros excluidos a propósito.
 - [`referencias_hepatico.md`](referencias_hepatico.md) — **implementado**:
   función e índices hepáticos, ratio AST/ALT (De Ritis), FIB-4, APRI.
 - [`referencias_renal.md`](referencias_renal.md) — **implementado**:

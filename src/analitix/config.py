@@ -94,6 +94,11 @@ DB_PATH = DATA_DIR / "analitix.db"
 # para que una versión nueva de la app traiga sus alias sin pisar los suyos.
 BUNDLED_CATALOG_PATH = PACKAGE_DIR / "data" / "test_aliases.csv"
 CATALOG_PATH = DATA_DIR / "test_aliases.csv" if FROZEN else BUNDLED_CATALOG_PATH
+# Variación biológica para el RCV (`rcv.py`), también en dos capas: la que trae
+# la aplicación (versionada, valores citados) y una opcional del usuario en su
+# carpeta de datos que la completa o corrige (p. ej. el CVA de su laboratorio).
+BUNDLED_BV_PATH = PACKAGE_DIR / "data" / "biological_variation.csv"
+BV_PATH = DATA_DIR / "biological_variation.csv"
 DESCRIPTIONS_DIR = PACKAGE_DIR / "data" / "descripciones"
 PARSER_PROFILES_DIR = PACKAGE_DIR / "data" / "parser_profiles"
 

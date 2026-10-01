@@ -461,6 +461,14 @@ def get_patient_birth_date(con, patient_id: int) -> Optional[str]:
     return row[0] if row else None
 
 
+def get_patient_sex(con, patient_id: int) -> Optional[str]:
+    """Sexo del paciente (uno de `SEX_OPTIONS`), o `None` si no se conoce —
+    usado por `rcv.py` para los parámetros con variación biológica distinta
+    por sexo."""
+    row = con.execute("SELECT sex FROM patients WHERE id = ?", (patient_id,)).fetchone()
+    return row[0] if row else None
+
+
 def merge_patients(con, source_ids: list[int], target_id: int) -> int:
     """Funde uno o más pacientes (`source_ids`) en `target_id` — para
     cuando un mismo paciente ha quedado partido en dos filas porque un PDF
@@ -778,6 +786,10 @@ def get_latest_report_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
     for resultado in resultados:
         serie = get_series(con, resultado["canonical_id"], patient_id)
         resultado["valor_anterior"] = serie[-2]["value_num"] if len(serie) >= 2 else None
+        # Laboratorio de los dos últimos puntos: el RCV (`rcv.py`) no es
+        # válido si cambian de laboratorio.
+        resultado["lab"] = serie[-1]["lab"] if serie else None
+        resultado["lab_anterior"] = serie[-2]["lab"] if len(serie) >= 2 else None
 
     return {"fecha": fecha, "resultados": resultados}
 
