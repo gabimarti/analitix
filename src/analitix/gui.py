@@ -34,6 +34,7 @@ from analitix.charts import (
     COLOR_ALTO,
     COLOR_BAJO,
     COLOR_BRUSCO,
+    DEFAULT_MIN_POINTS,
     LAB_UNKNOWN,
     MAX_COMPARISON_TESTS,
     changes_figure,
@@ -257,7 +258,6 @@ def _smoking_summary(patient: dict) -> str:
 
 THEME = "flatly"
 PAD = 12
-DEFAULT_MIN_POINTS = 4
 
 # Umbral de "cambio brusco" de la pestaña Resumen y la exportación a PDF
 # ("±30%"). Elección de interfaz, no un punto de corte clínico — no
@@ -1332,7 +1332,7 @@ class AnalitixApp(ttk.Window):
         if canonical_id is None:
             return
         series = get_series(self.con, canonical_id, self.current_patient_id)
-        fig = evolution_figure(series, label)
+        fig = evolution_figure(series, label, self.min_points)
         self._embed_figure(fig, self.chart_canvas_evolucion)
 
     def _show_test_info(self, selection: tuple[int, ...], tests: list | None = None) -> None:
@@ -1499,7 +1499,7 @@ class AnalitixApp(ttk.Window):
             series_by_test[label] = get_series(self.con, canonical_id, self.current_patient_id)
         if not series_by_test:
             return
-        fig = comparison_figure(series_by_test)
+        fig = comparison_figure(series_by_test, self.min_points)
         self._embed_figure(fig, self.chart_canvas_comparativa)
 
     def _on_comparativa_selection(self, _event=None) -> None:
@@ -1887,7 +1887,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._lipid_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._lipid_series.get(canonical_id, []), label)
+        fig = evolution_figure(self._lipid_series.get(canonical_id, []), label, self.min_points)
         self._embed_figure(fig, self.chart_canvas_riesgo_cv)
 
     def _format_lipid_summary(self, s: dict) -> str:
@@ -2019,7 +2019,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._hepatic_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._hepatic_series.get(canonical_id, []), label)
+        fig = evolution_figure(self._hepatic_series.get(canonical_id, []), label, self.min_points)
         self._embed_figure(fig, self.chart_canvas_salud_hepatica)
 
     def _format_hepatic_summary(self, s: dict) -> str:
@@ -2167,7 +2167,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._renal_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._renal_series.get(canonical_id, []), label)
+        fig = evolution_figure(self._renal_series.get(canonical_id, []), label, self.min_points)
         self._embed_figure(fig, self.chart_canvas_funcion_renal)
 
     def _format_renal_summary(self, s: dict) -> str:
@@ -2328,7 +2328,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._hemogram_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._hemogram_series.get(canonical_id, []), label)
+        fig = evolution_figure(self._hemogram_series.get(canonical_id, []), label, self.min_points)
         self._embed_figure(fig, self.chart_canvas_hemograma)
 
     def _format_hemogram_summary(self, s: dict, alerta_linfocitosis: Optional[dict] = None) -> str:
@@ -2516,7 +2516,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._iron_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._iron_series.get(canonical_id, []), label)
+        fig = evolution_figure(self._iron_series.get(canonical_id, []), label, self.min_points)
         self._embed_figure(fig, self.chart_canvas_hierro)
 
     def _format_iron_summary(self, s: dict) -> str:
@@ -2657,7 +2657,7 @@ class AnalitixApp(ttk.Window):
             series_by_test["VSG"] = self._inflammation_series["vsg"]
         if not series_by_test:
             return
-        fig = comparison_figure(series_by_test)
+        fig = comparison_figure(series_by_test, self.min_points)
         self._embed_figure(fig, self.chart_canvas_inflamacion)
 
     def _format_inflammation_summary(self, s: dict) -> str:
@@ -2773,7 +2773,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._uric_acid_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._uric_acid_series.get(canonical_id, []), label)
+        fig = evolution_figure(self._uric_acid_series.get(canonical_id, []), label, self.min_points)
         self._embed_figure(fig, self.chart_canvas_acido_urico)
 
     def _format_uric_acid_summary(self, s: dict) -> str:
@@ -2894,7 +2894,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._calcio_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._calcio_series.get(canonical_id, []), label)
+        fig = evolution_figure(self._calcio_series.get(canonical_id, []), label, self.min_points)
         self._embed_figure(fig, self.chart_canvas_calcio)
 
     def _format_calcio_summary(self, s: dict) -> str:
@@ -3042,7 +3042,7 @@ class AnalitixApp(ttk.Window):
             series_by_test["eAG (desde HbA1c)"] = self._glucemia_series["idx_eag"]
         if not series_by_test:
             return
-        fig = comparison_figure(series_by_test)
+        fig = comparison_figure(series_by_test, self.min_points)
         self._embed_figure(fig, self.chart_canvas_glucemia)
 
     def _show_glucemia_index(self) -> None:
@@ -3052,7 +3052,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._glucemia_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._glucemia_series.get(canonical_id, []), label)
+        fig = evolution_figure(self._glucemia_series.get(canonical_id, []), label, self.min_points)
         self._embed_figure(fig, self.chart_canvas_glucemia)
 
     def _format_glucemia_summary(self, s: dict) -> str:
@@ -3181,7 +3181,7 @@ class AnalitixApp(ttk.Window):
             series_by_test["T4 libre"] = self._thyroid_series["t4l"]
         if not series_by_test:
             return
-        fig = comparison_figure(series_by_test)
+        fig = comparison_figure(series_by_test, self.min_points)
         self._embed_figure(fig, self.chart_canvas_tiroides)
 
     def _format_thyroid_summary(self, s: dict) -> str:
@@ -3491,7 +3491,7 @@ class AnalitixApp(ttk.Window):
             return
         paginas = export_pdf(
             patient_name, fecha, filas, series_by_canonical_id, labels, CAMBIO_BRUSCO_PCT, Path(path),
-            tipo_informe=tipo_informe,
+            tipo_informe=tipo_informe, min_points=self.min_points,
         )
         messagebox.showinfo(
             "Exportado",
@@ -3756,8 +3756,11 @@ class AnalitixApp(ttk.Window):
         graficos.pack(fill="x", padx=PAD, pady=6)
         ttk.Label(
             graficos,
-            text="Nº mínimo de valores registrados para que una prueba se muestre junto al resto "
-            "en Evolución/Comparativa (con menos, se agrupa aparte al final de la lista):",
+            text="Nº mínimo de analíticas para que una evolución se considere representativa. Se "
+            "aplica a todos los gráficos de evolución (Evolución, Comparativa, paneles clínicos y "
+            "PDF): por debajo se dibujan con un aviso, y con una sola analítica no se dibuja el "
+            "gráfico, solo el valor. En Evolución/Comparativa, esas pruebas se agrupan además al "
+            "final de la lista. Los cambios se ven al volver a abrir el gráfico:",
             wraplength=700,
         ).pack(anchor="w")
         fila_min_puntos = ttk.Frame(graficos)

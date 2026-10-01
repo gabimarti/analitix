@@ -215,9 +215,10 @@ Esquema completo en `db.SCHEMA` (SQLite). Tablas:
   es la red de seguridad frente a PDF de un formato/laboratorio distinto que
   el parser no reconozca bien (ver §5, `ingest.py`).
 - **`settings`** — pares clave/valor de configuración de la app: `reports_dir`
-  (carpeta de informes) y `min_points_evolucion` (nº mínimo de valores para
-  que una prueba se muestre junto al resto en Evolución/Comparativa, ver
-  §5, `gui.py`).
+  (carpeta de informes) y `min_points_evolucion` (nº mínimo de analíticas
+  para que una evolución sea representativa: agrupa la lista de
+  Evolución/Comparativa y es el umbral del control de pocos datos de todos
+  los gráficos de evolución, ver §5, `charts.data_sufficiency`).
 
 Todas las fechas se normalizan a `AAAA-MM-DD[ HH:MM:SS]` (string,
 ordenable lexicográficamente) por `pdf_parser._parse_date`, que admite
@@ -1390,7 +1391,20 @@ ha cambiado".
   rango y solo con ≤ `HEATMAP_MAX_LABELED_COLUMNS` columnas. Guarda en
   `ax.analitix_heatmap` filas/fechas/celdas para el tooltip
   (`gui._attach_heatmap_hover`, `motion_notify_event`).
-- `_plot_series_on_ax(ax, series, label, base_color)`: helper compartido por
+- **Control común de pocos datos** (`data_sufficiency(n, min_points)` →
+  "sin_datos"/"un_punto"/"pocos"/"suficiente", `DEFAULT_MIN_POINTS = 4`):
+  aplicado dentro de `_plot_series_on_ax`, por donde pasan todos los
+  gráficos de evolución (Evolución, Comparativa, los paneles clínicos y
+  `export.export_pdf`), así la regla vive en un solo sitio. Con 1 valor no
+  se dibuja (`_draw_single_point`: valor, fecha y rango como texto, sin
+  puntos ni tooltip); de 2 a `min_points − 1`, gráfico con el aviso de
+  `_draw_few_points_warning`. `gui` pasa `self.min_points` (ajuste
+  `min_points_evolucion`) a `evolution_figure`/`comparison_figure` y a
+  `export_pdf(min_points=...)`. Es independiente de `MIN_POINTS_FOR_TREND`
+  (3), que sigue decidiendo solo si se dibuja la tendencia. El mapa de calor
+  y "Qué ha cambiado" no lo usan: no muestran una evolución, sino valores
+  sueltos o la comparación de dos.
+- `_plot_series_on_ax(ax, series, label, base_color, min_points)`: helper compartido por
   evolución y comparativa. Dibuja la banda + líneas discontinuas de
   mínimo/máximo de referencia, la línea de evolución y los puntos (color
   según `flag_calc`: normal = `base_color`, alto = rojo, bajo = naranja).
@@ -2072,7 +2086,7 @@ Notas de implementación:
   Comparativa a `MAX_COMPARISON_TESTS`, revirtiendo a la última selección
   válida y avisando si se excede.
 - `_refresh_test_lists`: separa las pruebas con `num_points < self.min_points`
-  (ajustable en Configuración, por defecto `DEFAULT_MIN_POINTS=4`) del resto,
+  (ajustable en Configuración, por defecto `charts.DEFAULT_MIN_POINTS=4`) del resto,
   insertando una fila separadora no seleccionable entre ambos grupos. Para
   que la fila del `Listbox` seleccionada se pueda traducir de vuelta a una
   prueba, `self._evolution_tests` se mantiene alineado fila a fila con cada

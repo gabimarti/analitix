@@ -87,6 +87,42 @@ def test_evolution_points_shaped_by_lab():
     assert {"A", "B", "Laboratorio desconocido"} <= set(labels)
 
 
+def test_data_sufficiency_thresholds():
+    from analitix.charts import data_sufficiency
+
+    assert data_sufficiency(0, 4) == "sin_datos"
+    assert data_sufficiency(1, 4) == "un_punto"
+    assert data_sufficiency(2, 4) == data_sufficiency(3, 4) == "pocos"
+    assert data_sufficiency(4, 4) == "suficiente"
+    assert data_sufficiency(2, 1) == "suficiente"  # el umbral nunca baja de 2
+
+
+def test_few_points_control_in_every_series_chart():
+    from analitix.charts import comparison_figure, evolution_figure
+
+    def texts(ax):
+        return " ".join(t.get_text() for t in ax.texts)
+
+    def scatters(ax):
+        return [c for c in ax.collections if hasattr(c, "analitix_series")]
+
+    uno = [_row("2024-01-01", 14.0, "A")]
+    dos = uno + [_row("2024-02-01", 15.0, "A")]
+    cuatro = dos + [_row("2024-03-01", 15.0, "A"), _row("2024-04-01", 15.0, "A")]
+
+    ax = evolution_figure(uno, "x", 4).axes[0]
+    assert "Solo hay 1 analítica" in texts(ax) and not scatters(ax)  # sin gráfico
+    ax = evolution_figure(dos, "x", 4).axes[0]
+    assert "Solo 2 analíticas" in texts(ax) and scatters(ax)  # gráfico con aviso
+    ax = evolution_figure(cuatro, "x", 4).axes[0]
+    assert "analíticas" not in texts(ax)
+
+    # Comparativa (y paneles combinados): el mismo control en cada subgráfico.
+    fig = comparison_figure({"A": uno, "B": cuatro}, 4)
+    assert "Solo hay 1 analítica" in texts(fig.axes[0])
+    assert "analíticas" not in texts(fig.axes[1])
+
+
 def test_change_status():
     from analitix.charts import change_status
 

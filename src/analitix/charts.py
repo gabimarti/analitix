@@ -36,6 +36,12 @@ MAX_COMPARISON_TESTS = 2
 MIN_POINTS_FOR_TREND = 3
 TREND_PROJECTION_DAYS = 90
 
+# Analíticas recomendadas para que un gráfico de evolución sea
+# representativo (valor por defecto del ajuste "min_points_evolucion" de
+# Configuración); por debajo se dibuja con aviso y con 1 no se dibuja (ver
+# `data_sufficiency`). Elección de interfaz, no un umbral clínico.
+DEFAULT_MIN_POINTS = 4
+
 # Margen vertical extra (proporción del rango de datos) para que las
 # etiquetas de los valores fuera de rango —dibujadas con un desplazamiento
 # fijo en píxeles por encima/debajo del punto— no queden pegadas al borde
@@ -235,13 +241,63 @@ def _apply_y_margin(ax, y_values: list[float]) -> None:
     ax.set_ylim(data_min - margin, data_max + margin)
 
 
-def _plot_series_on_ax(ax, series: list[dict[str, Any]], label: str, base_color: str = COLOR_NORMAL) -> list:
+def data_sufficiency(n_points: int, min_points: int = DEFAULT_MIN_POINTS) -> str:
+    """Control común de "pocos datos" para cualquier gráfico de evolución
+    (Evolución, Comparativa, paneles clínicos, PDF): "sin_datos" (0),
+    "un_punto" (1: no se dibuja, no hay evolución que mostrar), "pocos"
+    (de 2 a `min_points` − 1: se dibuja con aviso) o "suficiente".
+    `min_points` es el umbral configurable de Configuración (mínimo 2)."""
+    if n_points == 0:
+        return "sin_datos"
+    if n_points == 1:
+        return "un_punto"
+    return "pocos" if n_points < max(2, min_points) else "suficiente"
+
+
+def _draw_single_point(ax, s: dict[str, Any]) -> None:
+    """Con un único valor no se dibuja un gráfico (un punto suelto se lee
+    como si hubiera una evolución): se muestra el valor como texto."""
+    rango = ""
+    if s.get("ref_low") is not None and s.get("ref_high") is not None:
+        rango = f"\nRango de referencia: {s['ref_low']:g} – {s['ref_high']:g}"
+    ax.text(
+        0.5, 0.5,
+        f"Solo hay 1 analítica con este parámetro ({(s.get('fecha') or '')[:10]}):\n"
+        f"{s['value_num']:g} {s.get('unit') or ''}".rstrip() + rango
+        + "\n\nHacen falta al menos 2 para ver una evolución.",
+        transform=ax.transAxes, ha="center", va="center", fontsize=10, color=COLOR_INK_SECONDARY,
+    )
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+
+def _draw_few_points_warning(ax, n_points: int, min_points: int) -> None:
+    ax.text(
+        0.01, 0.98,
+        f"⚠ Solo {n_points} analíticas (mínimo recomendado: {min_points}): evolución poco representativa",
+        transform=ax.transAxes, ha="left", va="top", fontsize=8, color=COLOR_BRUSCO,
+        bbox=dict(boxstyle="round", fc="white", ec="#e1e0d9", alpha=0.9), zorder=5,
+    )
+
+
+def _plot_series_on_ax(
+    ax, series: list[dict[str, Any]], label: str, base_color: str = COLOR_NORMAL,
+    min_points: int = DEFAULT_MIN_POINTS,
+) -> list:
     """Dibuja una serie sobre `ax` (línea, banda/límites de referencia, puntos
     coloreados según estén dentro o fuera de rango). Devuelve los handles de
-    leyenda propios de esta serie."""
-    if not series:
+    leyenda propios de esta serie. Aplica el control de pocos datos
+    (`data_sufficiency`): sin gráfico con 1 valor, aviso por debajo de
+    `min_points`."""
+    suficiencia = data_sufficiency(len(series), min_points)
+    if suficiencia == "sin_datos":
         ax.set_title(f"{label} (sin datos)")
         return []
+    if suficiencia == "un_punto":
+        _draw_single_point(ax, series[0])
+        return []
+    if suficiencia == "pocos":
+        _draw_few_points_warning(ax, len(series), min_points)
 
     fechas = [_parse_fecha(s["fecha"]) for s in series]
     valores = [s["value_num"] for s in series]
@@ -328,15 +384,16 @@ def _plot_series_on_ax(ax, series: list[dict[str, Any]], label: str, base_color:
     return handles
 
 
-def evolution_figure(series: list[dict[str, Any]], title: str) -> Figure:
+def evolution_figure(series: list[dict[str, Any]], title: str, min_points: int = DEFAULT_MIN_POINTS) -> Figure:
     """Gráfico de evolución de una prueba en el tiempo, con las líneas de
     mínimo/máximo de referencia y los valores fuera de rango resaltados."""
     fig = Figure(figsize=(8, 4.5), dpi=100)
     ax = fig.add_subplot(111)
-    _plot_series_on_ax(ax, series, title)
+    handles = _plot_series_on_ax(ax, series, title, min_points=min_points)
     ax.set_title(title)
     ax.tick_params(axis="x", rotation=30)
-    ax.legend(fontsize=7)
+    if handles:
+        ax.legend(fontsize=7)
     fig.tight_layout()
     # Deja sitio bajo el eje para el recuadro de tendencia/variación (hasta
     # dos líneas, ver `_draw_info_box`) además de las fechas rotadas; ambos
@@ -345,7 +402,9 @@ def evolution_figure(series: list[dict[str, Any]], title: str) -> Figure:
     return fig
 
 
-def comparison_figure(series_by_test: dict[str, list[dict[str, Any]]]) -> Figure:
+def comparison_figure(
+    series_by_test: dict[str, list[dict[str, Any]]], min_points: int = DEFAULT_MIN_POINTS
+) -> Figure:
     """Compara hasta dos pruebas mediante "small multiples": un panel por
     prueba, cada uno con su propio eje Y, apilados y compartiendo el eje X
     (mismas fechas alineadas verticalmente). Evita el eje Y doble, que
@@ -359,7 +418,7 @@ def comparison_figure(series_by_test: dict[str, list[dict[str, Any]]]) -> Figure
     for i, (label, series) in enumerate(items):
         ax = axes[i][0]
         color = COMPARISON_COLORS[i % len(COMPARISON_COLORS)]
-        handles = _plot_series_on_ax(ax, series, label, base_color=color)
+        handles = _plot_series_on_ax(ax, series, label, base_color=color, min_points=min_points)
         ax.set_title(label)
         if handles:
             ax.legend(handles=handles, fontsize=7, loc="best")

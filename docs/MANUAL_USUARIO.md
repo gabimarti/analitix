@@ -455,6 +455,12 @@ Gráfico de una prueba concreta a lo largo del tiempo.
   y en gris, tras una línea separadora — con tan pocos puntos, un gráfico de
   evolución (y sobre todo una tendencia) no es muy fiable. Siguen estando
   disponibles, solo quedan señaladas para no confundirlas con el resto.
+- El mismo número mínimo se aplica a **todos** los gráficos de evolución
+  (Evolución, Comparativa, cada panel clínico y el informe PDF): por debajo,
+  el gráfico se dibuja con el aviso "⚠ Solo N analíticas (mínimo
+  recomendado: M): evolución poco representativa"; con **una sola**
+  analítica no se dibuja ningún gráfico (un punto suelto parecería una
+  evolución), solo el valor, su fecha y su rango.
 - Selecciona una prueba y pulsa **Ver evolución**. El gráfico muestra:
   - La línea de valores en el tiempo, con un punto por análisis.
   - Las líneas discontinuas de mínimo y máximo del rango de referencia (más
@@ -1202,9 +1208,13 @@ necesidad de ampliar la ventana ni usar barras de desplazamiento.
   **Cambiar carpeta...** para apuntar a otra ubicación (por ejemplo, si
   guardas tus PDF en otro sitio o quieres tener varias carpetas). El cambio
   se recuerda para la próxima vez que abras la app.
-- **Gráficos**: nº mínimo de valores registrados para que una prueba se
-  muestre junto al resto en Evolución/Comparativa/Riesgo cardiovascular (por
-  defecto 4, ver §2.4). Cambia el número y pulsa **Guardar**.
+- **Gráficos**: nº mínimo de analíticas para que una evolución se
+  considere representativa (por defecto 4, mínimo 2). Se aplica a todos los
+  gráficos de evolución, incluidos los paneles clínicos y el PDF: por debajo
+  llevan un aviso y con una sola analítica no se dibuja el gráfico (ver
+  §2.4). En Evolución/Comparativa, esas pruebas se agrupan además al final
+  de la lista. Cambia el número y pulsa **Guardar**; se aplica al volver a
+  abrir el gráfico.
 - **Actualizaciones**: activa **Comprobar al iniciar** para que Analitix
   mire si hay una versión nueva cada vez que se abre (desactivado por
   defecto), o pulsa **Buscar ahora** para comprobarlo en el momento (ver

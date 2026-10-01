@@ -17,7 +17,9 @@ import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 
-from analitix.charts import COLOR_ALTO, COLOR_BAJO, COLOR_BRUSCO, evolution_figure
+from analitix.charts import (
+    COLOR_ALTO, COLOR_BAJO, COLOR_BRUSCO, DEFAULT_MIN_POINTS, data_sufficiency, evolution_figure,
+)
 from analitix.config import LOGO_PATH
 from analitix.pdf_parser import NUMERIC_TOKEN_RE
 
@@ -170,6 +172,7 @@ def export_pdf(
     path: Path,
     *,
     tipo_informe: str,
+    min_points: int = DEFAULT_MIN_POINTS,
 ) -> int:
     """Informe de seguimiento en PDF (ampliado 2026-09-21 en dos pasos:
     primero con dos tipos de informe — "completo"/"de alterados", ver
@@ -186,7 +189,9 @@ def export_pdf(
        parámetro de `filas` con **al menos 2 puntos** en
        `series_by_canonical_id` — nunca para los parámetros "normales"
        (el llamador ya decide qué incluir ahí) ni para uno con un único
-       valor (no hay nada que mostrar como evolución).
+       valor (no hay nada que mostrar como evolución). Con menos de
+       `min_points` (el mismo ajuste de Configuración que la pantalla) el
+       gráfico lleva el aviso de pocos datos de `charts.data_sufficiency`.
 
     Todas las páginas llevan pie con `tipo_informe` a la izquierda y el
     nº de página a la derecha. Devuelve el nº de páginas de gráfico
@@ -208,9 +213,9 @@ def export_pdf(
 
         for f in filas:
             series = series_by_canonical_id.get(f["canonical_id"])
-            if not series or len(series) < 2:
+            if not series or data_sufficiency(len(series), min_points) in ("sin_datos", "un_punto"):
                 continue
-            fig = evolution_figure(series, labels.get(f["canonical_id"], f["raw_name"]))
+            fig = evolution_figure(series, labels.get(f["canonical_id"], f["raw_name"]), min_points)
             _add_footer(fig, tipo_informe, pagina)
             pdf.savefig(fig)
             pagina += 1

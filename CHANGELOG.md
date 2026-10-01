@@ -10,6 +10,7 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ### Cambiado
 
+- Todos los gráficos de evolución (Evolución, Comparativa, paneles clínicos e informe PDF) aplican el mínimo de analíticas de Configuración: por debajo muestran un aviso y con una sola analítica no se dibuja el gráfico, solo el valor. Antes ese mínimo solo agrupaba la lista de Evolución y podían aparecer gráficos de un único punto.
 - El registro `analitix.log` ya no guarda el nombre de los PDF con aviso o error (suele ser el del paciente), sino el inicio de su huella MD5.
 
 ### Añadido
