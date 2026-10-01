@@ -3029,7 +3029,9 @@ corrige publicando la siguiente versión de parche.
    que ambas ramas partan del mismo punto:
    `git checkout develop && git merge --ff-only origin/main && git push`.
 
-La página de descargas es `…/releases/latest`. `scripts\update_main.bat`
+La página de descargas es `…/releases`, no `…/releases/latest`: GitHub excluye de
+`latest` las *pre-release*, y todas las 0.x lo son (mismo motivo por el que
+`updates.py` no usa ese endpoint). `scripts\update_main.bat`
 sigue actualizando el checkout local de `main`, es decir, a la última
 versión publicada.
 

@@ -8,6 +8,10 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ## [Sin publicar]
 
+### Corregido
+
+- `SHA256SUMS.txt` de las Releases se genera con saltos de línea LF: con los CRLF de la 0.10.0, `sha256sum -c` fallaba (la huella era correcta; `Get-FileHash` en Windows sí funcionaba).
+
 ## [0.10.0] - 2026-10-01
 
 ### Cambiado
