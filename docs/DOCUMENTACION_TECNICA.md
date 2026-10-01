@@ -2617,7 +2617,18 @@ Otros controles automáticos del repositorio (público):
   comprobación ignora. En el mismo workflow, gitleaks busca secretos (tokens,
   claves) en todo el historial.
 - `.github/dependabot.yml`: cada semana Dependabot propone por PR las
-  actualizaciones de `requirements*.txt` y de las Actions.
+  actualizaciones de las Actions. Para `requirements*.txt` usa
+  `versioning-strategy: increase-if-necessary`: como los requisitos son
+  mínimos (`>=`) y CI ya instala siempre la última versión, solo abre un PR
+  si una versión nueva queda fuera del rango. Las actualizaciones de
+  seguridad (Dependabot alerts, activadas en *Settings → Code security*)
+  van aparte y sí abren PR.
+- Rulesets (*Settings → Rules → Rulesets*): en `main`, prohibido borrarla
+  o hacer force-push, y un PR solo se integra con "Python tests", "Privacy
+  check" y "Secret scan" en verde; las etiquetas `v*` solo las puede crear,
+  mover o borrar un administrador (así nadie más lanza una Release). El
+  administrador del repositorio puede saltarse ambas reglas (push directo a
+  `main`, con el aviso "Bypassed rule violations").
 - Las Actions de todos los workflows están fijadas por hash de commit (con
   la versión en un comentario) en vez de por etiqueta, para que un cambio en
   una Action de terceros no afecte sin revisión a la Release, que tiene
