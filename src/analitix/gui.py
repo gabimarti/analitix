@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 import os
 import subprocess
@@ -89,6 +90,7 @@ from analitix.repository import (
     delete_patient,
     delete_reports,
     get_all_results,
+    get_excluded_labs,
     get_latest_report_summary,
     get_merged_series,
     get_patient_sex,
@@ -100,12 +102,14 @@ from analitix.repository import (
     list_canonical_tests,
     list_files_needing_review,
     list_known_test_names,
+    list_labs,
     list_orphan_reports,
     list_patient_reports,
     list_patients,
     merge_canonical_ids,
     merge_check,
     merge_patients,
+    set_excluded_labs,
     set_setting,
     update_patient,
 )
@@ -317,6 +321,10 @@ class AnalitixApp(ttk.Window):
         self.var_reports_dir = tk.StringVar(value=str(self.reports_dir))
         self.var_import_subfolders = tk.BooleanVar(value=get_setting(self.con, "import_subfolders", "1") == "1")
         self.min_points = int(get_setting(self.con, "min_points_evolucion", str(DEFAULT_MIN_POINTS)))
+        # Laboratorios excluidos de gráficos y paneles (Análisis → Laboratorios
+        # incluidos...): se guardan en `settings` y se cargan en la tabla
+        # temporal de la conexión que filtra las consultas (`repository`).
+        set_excluded_labs(self.con, json.loads(get_setting(self.con, "excluded_labs", "[]")))
 
         self._build_menu()
         self._build_pages()
@@ -348,6 +356,8 @@ class AnalitixApp(ttk.Window):
         analisis_menu.add_command(label="Comparativa", command=lambda: self._show_page("comparativa"))
         analisis_menu.add_command(label="Resumen", command=lambda: self._show_page("resumen"))
         analisis_menu.add_command(label="Mapa de calor", command=lambda: self._show_page("mapa_calor"))
+        analisis_menu.add_separator()
+        analisis_menu.add_command(label="Laboratorios incluidos...", command=self._choose_labs)
         menubar.add_cascade(label="Análisis", menu=analisis_menu)
 
         # Menú separado de "Análisis" (que son gráficos puros de uno o dos
@@ -1113,10 +1123,70 @@ class AnalitixApp(ttk.Window):
 
     def _update_status_patient(self) -> None:
         patient = next((p for p in self.patients if p["id"] == self.current_patient_id), None)
-        if patient:
-            self._set_status(f"Paciente: {patient['full_name']}")
-        else:
-            self._set_status("Ningún paciente activo")
+        texto = f"Paciente: {patient['full_name']}" if patient else "Ningún paciente activo"
+        filtro = self._lab_filter_text()
+        # El filtro se ve siempre (barra inferior y cabecera de cada panel):
+        # que nunca se olvide que hay laboratorios fuera de los gráficos.
+        self._set_status(f"{texto} · {filtro}" if filtro else texto)
+
+    def _lab_filter_text(self) -> str:
+        """"" sin filtro; si no, qué laboratorios se están usando."""
+        excluidos = get_excluded_labs(self.con)
+        if not excluidos:
+            return ""
+        nombre = lambda lab: lab or LAB_UNKNOWN  # noqa: E731
+        incluidos = [nombre(l["lab"]) for l in list_labs(self.con) if l["lab"] not in excluidos]
+        return f"Datos solo de: {', '.join(incluidos)}"
+
+    def _choose_labs(self) -> None:
+        """Análisis → Laboratorios incluidos...: elegir de qué laboratorios
+        salen los datos de los gráficos, los paneles clínicos, el Resumen y
+        el PDF (por defecto, todos). Métodos o rangos distintos entre
+        centros pueden falsear una serie mezclada. No afecta a la
+        exportación Excel/CSV ni al Explorador BD (datos en bruto)."""
+        labs = list_labs(self.con)
+        if not labs:
+            messagebox.showinfo("Laboratorios", "Todavía no hay informes importados.", parent=self)
+            return
+        excluidos = get_excluded_labs(self.con)
+        dialog = tk.Toplevel(self)
+        dialog.title("Laboratorios incluidos")
+        dialog.transient(self)
+        dialog.resizable(False, False)
+        dialog.grab_set()
+        ttk.Label(
+            dialog,
+            text="Datos de qué laboratorios se usan en gráficos, paneles clínicos, Resumen e informe PDF.\n"
+            "Cada laboratorio puede usar métodos o rangos distintos: quedarse con uno (o con varios "
+            "compatibles) da series más coherentes. La exportación Excel/CSV no se filtra.",
+            wraplength=520, justify="left",
+        ).pack(anchor="w", padx=PAD, pady=(PAD, 6))
+        variables = {}
+        for l in labs:
+            var = tk.BooleanVar(value=l["lab"] not in excluidos)
+            variables[l["lab"]] = var
+            ttk.Checkbutton(
+                dialog, text=f"{l['lab'] or LAB_UNKNOWN} ({l['n']} informe{'s' if l['n'] != 1 else ''})",
+                variable=var,
+            ).pack(anchor="w", padx=PAD + 8, pady=2)
+
+        def _aceptar() -> None:
+            nuevos = sorted(lab for lab, var in variables.items() if not var.get())
+            if len(nuevos) == len(variables):
+                messagebox.showwarning("Laboratorios", "Deja al menos un laboratorio marcado.", parent=dialog)
+                return
+            set_setting(self.con, "excluded_labs", json.dumps(nuevos, ensure_ascii=False))
+            set_excluded_labs(self.con, nuevos)
+            dialog.destroy()
+            self._refresh_test_lists()
+            self._update_status_patient()
+
+        botones = ttk.Frame(dialog)
+        botones.pack(fill="x", padx=PAD, pady=PAD)
+        ttk.Button(botones, text="Marcar todos", bootstyle="secondary-outline",
+                   command=lambda: [v.set(True) for v in variables.values()]).pack(side="left")
+        ttk.Button(botones, text="Cancelar", bootstyle="secondary", command=dialog.destroy).pack(side="right")
+        ttk.Button(botones, text="Aceptar", bootstyle="primary", command=_aceptar).pack(side="right", padx=(0, 6))
 
     # -- Entrada manual -----------------------------------------------------
     def _build_tab_manual(self) -> None:
@@ -3489,6 +3559,9 @@ class AnalitixApp(ttk.Window):
         path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[(".pdf", "*.pdf")], parent=self)
         if not path:
             return
+        filtro = self._lab_filter_text()
+        if filtro:
+            tipo_informe = f"{tipo_informe} · {filtro}"  # portada y pie de cada página
         paginas = export_pdf(
             patient_name, fecha, filas, series_by_canonical_id, labels, CAMBIO_BRUSCO_PCT, Path(path),
             tipo_informe=tipo_informe, min_points=self.min_points,

@@ -178,7 +178,8 @@ se ve el logo de Analitix como pantalla de bienvenida. Los menús son:
 - **Pacientes**: Cambiar paciente activo..., Pacientes, Entrada manual.
 - **Análisis**: Evolución, Comparativa, Resumen, Mapa de calor — gráficos a la carta de uno o dos
   parámetros elegidos por ti — y Resumen, una tabla tipo "semáforo" con
-  todos los parámetros del último informe de un vistazo.
+  todos los parámetros del último informe de un vistazo. Al final,
+  **Laboratorios incluidos...** (ver §2.6.2).
 - **Paneles clínicos**: Riesgo cardiovascular, Salud hepática, Función
   renal, Hemograma, Metabolismo del hierro, Inflamación, Ácido úrico,
   Calcio corregido, Glucosa media estimada (eAG), Tiroides — informes ya
@@ -470,6 +471,12 @@ Gráfico de una prueba concreta a lo largo del tiempo.
     quede pegado al borde del gráfico ni a la leyenda.
   - Pasando el cursor sobre cualquier punto (también los normales) aparece
     la fecha, el valor y la unidad.
+  - Debajo del gráfico, un **resumen en texto**: en cuántas analíticas ha
+    estado dentro del rango y cómo está la última, por ejemplo "Dentro del
+    rango en 8 de 10 analíticas; la última (2025-01-01), un 8 % por encima
+    del límite superior (110)". Es solo una descripción de tus datos, no una
+    interpretación. Aparece también en la Comparativa, en los paneles
+    clínicos y en el informe PDF.
   - Con al menos 2 valores, debajo del gráfico se indica la **variación
     porcentual**: cuánto ha cambiado el último valor respecto al anterior y
     respecto al primero de toda la serie — útil para saber si un cambio es
@@ -633,6 +640,33 @@ Como el color depende del rango de cada informe, el mapa compara bien
 analíticas de laboratorios distintos aunque usen unidades diferentes.
 Es una ayuda visual de seguimiento, no un diagnóstico: un color intenso no
 significa por sí solo nada grave; coméntalo con tu médico.
+
+### 2.6.2 🧪 Laboratorios incluidos (menú Análisis → Laboratorios incluidos...)
+
+Por defecto, los gráficos y paneles usan las analíticas de **todos** los
+laboratorios. Cada laboratorio puede usar métodos o rangos de referencia
+distintos, y mezclarlos en una misma serie puede dar saltos que no son
+cambios reales tuyos: al cambiar de laboratorio, una prueba puede subir o
+bajar solo por el método. Aquí puedes quitar uno o varios laboratorios, o
+quedarte solo con uno, para ver series más coherentes.
+
+- Marca los laboratorios que quieres usar y pulsa **Aceptar**. Debe quedar
+  al menos uno; **Marcar todos** vuelve a la situación por defecto. La
+  elección se recuerda la próxima vez que abras la app.
+- Se aplica a **Evolución, Comparativa, Resumen ("Qué ha cambiado"
+  incluido), Mapa de calor, todos los paneles clínicos y el informe PDF**.
+  Las pruebas que solo tengan analíticas de laboratorios quitados dejan de
+  aparecer en las listas, y el aviso de pocas analíticas cuenta solo las
+  que quedan.
+- **Siempre a la vista**: mientras haya un filtro, la barra inferior (y la
+  cabecera de cada panel) dice "Datos solo de: …", y el informe PDF lo
+  indica en la portada y en el pie de cada página.
+- **No se filtran** la exportación a Excel/CSV ni el Explorador BD: son tus
+  datos en bruto, completos.
+- "Laboratorio desconocido" agrupa los informes importados antes de que
+  Analitix guardara el laboratorio; una reimportación forzada (§2.1) se lo
+  asigna. Las analíticas que introduces a mano aparecen como "Entrada
+  manual".
 
 ### 2.7 ❤ Riesgo cardiovascular (menú Paneles clínicos → Riesgo cardiovascular)
 

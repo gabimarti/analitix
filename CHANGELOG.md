@@ -15,6 +15,8 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ### Añadido
 
+- Análisis → Laboratorios incluidos...: elegir de qué laboratorios salen los datos de gráficos, paneles clínicos, Resumen e informe PDF (por defecto, todos), para series más coherentes; el filtro activo se indica siempre en la barra inferior y en el PDF. La exportación Excel/CSV no se filtra.
+- Resumen en texto bajo cada gráfico de evolución (pantalla, paneles clínicos y PDF): en cuántas analíticas ha estado dentro del rango y cómo está la última respecto a su límite.
 - «Qué ha cambiado» indica si cada cambio es probablemente real o cabe en la variación esperable (valor de referencia del cambio, RCV), con variación biológica de estudios publicados citados; no se valora entre laboratorios distintos.
 - Menú Ayuda con enlaces al manual de usuario, la documentación técnica, las referencias científicas y el registro de cambios.
 - Política de seguridad (`SECURITY.md`) con el procedimiento para informar de vulnerabilidades de forma privada.

@@ -26,6 +26,36 @@ from analitix.textutils import normalize_name, normalize_test_name, strip_accent
 # descarga del informe, que no se guarda.
 _FECHA_SQL = "COALESCE(r.sample_date, rep.request_date, rep.validation_date)"
 
+# Filtro de laboratorios de gráficos y paneles: los informes cuyo `lab` está
+# en la tabla temporal `excluded_labs` (ver `db.connect`) no cuentan en
+# `get_series` (y por tanto `get_merged_series`, todos los paneles, el mapa
+# de calor y el PDF), `get_latest_report_summary` ni `list_canonical_tests`.
+# Los informes sin laboratorio conocido (importados antes de guardarlo) se
+# filtran con la clave "". Las exportaciones Excel/CSV y el Explorador BD no
+# se filtran: son los datos en bruto.
+_LAB_FILTER_SQL = "COALESCE(rep.lab, '') NOT IN (SELECT lab FROM temp.excluded_labs)"
+
+
+def list_labs(con) -> list[dict[str, Any]]:
+    """Laboratorios con informes (`lab`, "" si no consta) y cuántos informes
+    tiene cada uno, para el diálogo de laboratorios incluidos."""
+    cur = con.execute("SELECT COALESCE(lab, '') AS lab, COUNT(*) AS n FROM reports GROUP BY 1 ORDER BY 1")
+    return [{"lab": lab, "n": n} for lab, n in cur.fetchall()]
+
+
+def get_excluded_labs(con) -> set[str]:
+    return {row[0] for row in con.execute("SELECT lab FROM temp.excluded_labs")}
+
+
+def set_excluded_labs(con, labs) -> None:
+    """Sustituye los laboratorios excluidos de gráficos y paneles. Se
+    confirma (`commit`) en el acto: un `rollback` posterior de otra
+    operación (p. ej. un PDF con error al importar) no debe deshacer el
+    filtro en silencio."""
+    con.execute("DELETE FROM temp.excluded_labs")
+    con.executemany("INSERT OR IGNORE INTO temp.excluded_labs (lab) VALUES (?)", [(lab or "",) for lab in labs])
+    con.commit()
+
 
 def _add_alt_value(alt_str: Optional[str], value: Optional[str]) -> Optional[str]:
     """Añade `value` a una lista de valores alternativos guardada como texto
@@ -562,7 +592,7 @@ def list_canonical_tests(con, patient_id: Optional[int] = None) -> list[dict[str
         "SELECT r.canonical_id, MAX(r.raw_name) AS raw_name, MAX(r.unit) AS unit, "
         "MAX(CASE WHEN r.flag_calc IN ('alto', 'bajo') THEN 1 ELSE 0 END) AS out_of_range, "
         "COUNT(*) AS num_points "
-        "FROM results r JOIN reports rep ON rep.id = r.report_id WHERE r.value_num IS NOT NULL"
+        f"FROM results r JOIN reports rep ON rep.id = r.report_id WHERE r.value_num IS NOT NULL AND {_LAB_FILTER_SQL}"
     )
     params: tuple = ()
     if patient_id is not None:
@@ -578,7 +608,8 @@ def list_canonical_tests(con, patient_id: Optional[int] = None) -> list[dict[str
     # "Hemoglobina" solo por orden alfabético.
     q_names = (
         "SELECT r.canonical_id, r.raw_name, COUNT(*) FROM results r JOIN reports rep ON rep.id = r.report_id "
-        "WHERE r.value_num IS NOT NULL" + (" AND rep.patient_id = ?" if patient_id is not None else "")
+        f"WHERE r.value_num IS NOT NULL AND {_LAB_FILTER_SQL}"
+        + (" AND rep.patient_id = ?" if patient_id is not None else "")
         + " GROUP BY r.canonical_id, r.raw_name"
     )
     best: dict[str, tuple[int, str]] = {}
@@ -730,7 +761,7 @@ def get_series(con, canonical_id: str, patient_id: int) -> list[dict[str, Any]]:
         "r.value_num, r.unit, r.ref_low, r.ref_high, r.flag_calc, r.raw_name, rep.lab "
         "FROM results r JOIN reports rep ON rep.id = r.report_id "
         "WHERE r.canonical_id = ? AND rep.patient_id = ? AND r.value_num IS NOT NULL "
-        f"AND {_FECHA_SQL} IS NOT NULL "
+        f"AND {_FECHA_SQL} IS NOT NULL AND {_LAB_FILTER_SQL} "
         "ORDER BY fecha",
         (canonical_id, patient_id),
     )
@@ -767,7 +798,7 @@ def get_latest_report_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
         f"SELECT rep.id, {_FECHA_SQL} AS fecha "
         "FROM results r JOIN reports rep ON rep.id = r.report_id "
         "WHERE rep.patient_id = ? AND r.value_num IS NOT NULL "
-        f"AND {_FECHA_SQL} IS NOT NULL "
+        f"AND {_FECHA_SQL} IS NOT NULL AND {_LAB_FILTER_SQL} "
         "ORDER BY fecha DESC LIMIT 1",
         (patient_id,),
     ).fetchone()

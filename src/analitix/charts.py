@@ -203,19 +203,51 @@ def _pct_change_text(valores: list[float]) -> Optional[str]:
     return " · ".join(partes) if partes else None
 
 
+def series_summary(series: list[dict[str, Any]]) -> Optional[str]:
+    """Resumen en lenguaje llano de la serie, descriptivo y nunca causal:
+    "Dentro del rango en 9 de 10 analíticas; la última (2026-01-01), un 8 %
+    por encima del límite superior." Los estudios con pacientes encuentran
+    que una frase así ayuda a entender el resultado tanto o más que el
+    propio gráfico (Morrow et al., J Exp Psychol Appl 2019;25(1):41-61,
+    doi:10.1037/xap0000203; Shaffer et al., JAMIA Open 2026;9(2):ooag034,
+    doi:10.1093/jamiaopen/ooag034). Cuenta solo los puntos con rango de
+    referencia (el estado de cada uno es su `flag_calc`, calculado contra
+    el rango de su propio informe); `None` si ninguno lo tiene."""
+    con_rango = [s for s in series if s.get("ref_low") is not None or s.get("ref_high") is not None]
+    if not con_rango:
+        return None
+    dentro = sum(1 for s in con_rango if s.get("flag_calc") not in ("alto", "bajo"))
+    texto = f"Dentro del rango en {dentro} de {len(con_rango)} analíticas"
+    ultima = series[-1]
+    fecha = (ultima.get("fecha") or "")[:10]
+    valor, flag = ultima["value_num"], ultima.get("flag_calc")
+    limite = ultima.get("ref_high") if flag == "alto" else ultima.get("ref_low") if flag == "bajo" else None
+    if limite:
+        pct = abs(valor - limite) / abs(limite) * 100
+        lado = "por encima del límite superior" if flag == "alto" else "por debajo del límite inferior"
+        texto += f"; la última ({fecha}), un {pct:.0f} % {lado} ({limite:g})"
+    elif flag in ("alto", "bajo"):
+        texto += f"; la última ({fecha}), fuera del rango"
+    elif ultima.get("ref_low") is not None or ultima.get("ref_high") is not None:
+        texto += f"; la última ({fecha}), dentro"
+    return texto + "."
+
+
 def _draw_info_box(
     ax,
     fit: Optional[tuple[float, float, Any]],
     valores: list[float],
     ref_low: Optional[float],
     ref_high: Optional[float],
+    summary: Optional[str] = None,
 ) -> None:
-    """Recuadro de texto bajo el eje con la tendencia (si hay suficientes
-    puntos) y la variación porcentual (si hay al menos 2) en líneas
-    separadas. Anclado a `ax` (no a la figura), para que funcione igual en
-    Evolución como en cada panel de la Comparativa; `annotation_clip=False`
-    evita que se recorte al quedar fuera del área de datos."""
-    lineas = [t for t in (_trend_text(fit, valores, ref_low, ref_high), _pct_change_text(valores)) if t]
+    """Recuadro de texto bajo el eje con el resumen en texto de la serie
+    (`series_summary`), la tendencia (si hay suficientes puntos) y la
+    variación porcentual (si hay al menos 2) en líneas separadas. Anclado a
+    `ax` (no a la figura), para que funcione igual en Evolución como en
+    cada panel de la Comparativa; `annotation_clip=False` evita que se
+    recorte al quedar fuera del área de datos."""
+    lineas = [t for t in (summary, _trend_text(fit, valores, ref_low, ref_high), _pct_change_text(valores)) if t]
     if not lineas:
         return
     ax.annotate(
@@ -376,7 +408,10 @@ def _plot_series_on_ax(
         )
 
     _draw_trend_lines(ax, fit)
-    _draw_info_box(ax, fit, valores, ref_low[-1] if ref_low else None, ref_high[-1] if ref_high else None)
+    _draw_info_box(
+        ax, fit, valores, ref_low[-1] if ref_low else None, ref_high[-1] if ref_high else None,
+        summary=series_summary(series),
+    )
     _apply_y_margin(ax, y_extent)
 
     unit = next((s["unit"] for s in series if s.get("unit")), "")
@@ -430,9 +465,10 @@ def comparison_figure(
     # Sitio para el recuadro de tendencia/variación de cada panel (hasta dos
     # líneas, se dibuja debajo de cada eje) y, en el último, también para las
     # fechas rotadas. `hspace` reserva ese mismo hueco entre paneles
-    # intermedios: 0.55 es lo justo para dos líneas de texto sin dejar un
+    # intermedios: 0.8 es lo justo para las tres líneas (resumen en texto,
+    # tendencia y variación) más el título del panel siguiente sin dejar un
     # espacio en blanco excesivo entre paneles.
-    fig.subplots_adjust(bottom=0.34 / n, hspace=0.55)
+    fig.subplots_adjust(bottom=0.34 / n, hspace=0.8)
     return fig
 
 

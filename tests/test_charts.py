@@ -115,12 +115,27 @@ def test_few_points_control_in_every_series_chart():
     ax = evolution_figure(dos, "x", 4).axes[0]
     assert "Solo 2 analíticas" in texts(ax) and scatters(ax)  # gráfico con aviso
     ax = evolution_figure(cuatro, "x", 4).axes[0]
-    assert "analíticas" not in texts(ax)
+    assert "Solo" not in texts(ax)
 
     # Comparativa (y paneles combinados): el mismo control en cada subgráfico.
     fig = comparison_figure({"A": uno, "B": cuatro}, 4)
     assert "Solo hay 1 analítica" in texts(fig.axes[0])
-    assert "analíticas" not in texts(fig.axes[1])
+    assert "Solo" not in texts(fig.axes[1])
+
+
+def test_series_summary_text():
+    from analitix.charts import series_summary
+
+    # Rango 12-16 (`_row`): 11 bajo, 14 dentro, 17.6 alto (+10 % sobre 16).
+    serie = [_row("2024-01-01", 11.0, "A"), _row("2024-02-01", 14.0, "A"), _row("2024-03-01", 17.6, "A")]
+    assert series_summary(serie) == (
+        "Dentro del rango en 1 de 3 analíticas; la última (2024-03-01), un 10 % por encima del límite "
+        "superior (16)."
+    )
+    assert series_summary(serie[:2]).endswith("la última (2024-02-01), dentro.")
+    assert "por debajo del límite inferior (12)" in series_summary(serie[:1])
+    sin_rango = [dict(fecha="2024-01-01", value_num=1.5, ref_low=None, ref_high=None, flag_calc=None)]
+    assert series_summary(sin_rango) is None  # sin rango no hay nada que resumir
 
 
 def test_change_status():

@@ -33,6 +33,10 @@ respalda un cálculo o alerta fiable, el propio documento lo dice de forma
 explícita en vez de forzar una propuesta más ambiciosa de lo que la
 literatura permite.
 
+- [`referencias_visualizacion.md`](referencias_visualizacion.md) — cómo se
+  presentan los resultados a pacientes: resumen en texto y aviso de pocos
+  datos (**implementados**), ideas pendientes con su evidencia y por qué
+  la evidencia general es escasa.
 - [`referencias_rcv.md`](referencias_rcv.md) — **implementado**: valor de
   referencia del cambio (RCV, "¿cambio real o variación esperable?") con
   variación biológica de artículos publicados (EuBIVAS, Coşkun 2018);

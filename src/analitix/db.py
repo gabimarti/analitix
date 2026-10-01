@@ -147,6 +147,10 @@ def connect(password: str, db_path: Path = DB_PATH) -> sqlcipher.Connection:
     # hasta la siguiente reimportación forzada.
     _ensure_column(con, "reports", "lab", "TEXT")
     con.commit()
+    # Laboratorios excluidos de gráficos y paneles (`repository.set_excluded_labs`):
+    # tabla TEMPORAL, propia de esta conexión y nunca guardada en el fichero;
+    # la elección del usuario persiste aparte en `settings`.
+    con.execute("CREATE TEMP TABLE IF NOT EXISTS excluded_labs (lab TEXT PRIMARY KEY)")
     return con
 
 

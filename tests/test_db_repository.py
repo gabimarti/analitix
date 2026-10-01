@@ -358,3 +358,32 @@ def test_list_canonical_groups_reports_labs(db):
     (group,) = list_canonical_groups(db)
     assert group["labs"] == ["Lab A", "Lab B"]
     assert group["variants"] == [("Urea", "Lab A", 1), ("Urea sèrum", "Lab B", 1)]
+
+
+def test_lab_filter_applies_to_series_summary_and_test_list(db):
+    from analitix.repository import get_excluded_labs, list_canonical_tests, list_labs, set_excluded_labs
+
+    pid, _ = get_or_create_patient(db, full_name="PACIENTE FICTICIO", birth_date="1980-01-01", dni=None, nhc=None)
+    for numero, fecha, lab, valor in (("1", "2024-01-01", "Lab A", 90.0), ("2", "2024-06-01", "Lab B", 95.0),
+                                      ("3", "2025-01-01", None, 99.0)):
+        report_id = upsert_report(db, pid, numero, fecha, fecha, "synthetic.pdf", lab=lab)
+        insert_result(db, report_id, dict(
+            section=None, test_group=None, loinc_code=None, raw_name="Glucosa", canonical_id="glucosa",
+            value_raw=str(valor), value_num=valor, unit="mg/dL", ref_low=70.0, ref_high=110.0, ref_text=None,
+            flag_pdf=None, flag_calc="normal", sample_date=None))
+    db.commit()
+    assert [l["lab"] for l in list_labs(db)] == ["", "Lab A", "Lab B"]  # "" = laboratorio desconocido
+
+    assert len(get_series(db, "glucosa", pid)) == 3  # sin filtro: todo
+    set_excluded_labs(db, ["Lab A", ""])
+    assert get_excluded_labs(db) == {"Lab A", ""}
+    assert [s["value_num"] for s in get_series(db, "glucosa", pid)] == [95.0]
+    summary = get_latest_report_summary(db, pid)
+    assert summary["fecha"].startswith("2024-06-01")  # el último de los laboratorios incluidos
+    assert summary["resultados"][0]["valor_anterior"] is None
+    assert list_canonical_tests(db, pid)[0]["num_points"] == 1
+
+    db.rollback()  # un rollback de otra operación no deshace el filtro
+    assert get_excluded_labs(db) == {"Lab A", ""}
+    set_excluded_labs(db, [])
+    assert len(get_series(db, "glucosa", pid)) == 3

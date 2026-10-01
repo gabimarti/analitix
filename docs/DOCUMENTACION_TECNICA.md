@@ -911,7 +911,8 @@ solo lo trae Maresme.
 
 - `SCHEMA`: DDL completo (ver §4).
 - `connect(password, db_path=DB_PATH) -> sqlcipher.Connection`: abre (crea si
-  no existe) la base cifrada. `PRAGMA key` no admite parámetros ligados en
+  no existe) la base cifrada y crea la tabla temporal `excluded_labs` del
+  filtro de laboratorios (ver `repository.py`). `PRAGMA key` no admite parámetros ligados en
   SQLite, así que la contraseña se interpola escapando comillas simples
   (`'` → `''`) en un literal SQL — no hay inyección posible porque el valor
   no proviene de fuera del propio usuario de la app y solo se usa para este
@@ -939,6 +940,23 @@ solo lo trae Maresme.
 
 Toda la SQL de la app vive aquí (ninguna otra parte del código construye
 sentencias SQL a mano). Funciones relevantes:
+
+- **Filtro de laboratorios** (Análisis → Laboratorios incluidos...):
+  `set_excluded_labs(con, labs)` / `get_excluded_labs(con)` / `list_labs(con)`.
+  Los laboratorios excluidos viven en una tabla **temporal** de la conexión,
+  `temp.excluded_labs` (creada en `db.connect`, nunca guardada en el
+  fichero). `_LAB_FILTER_SQL` se añade a `get_series` (y con ello a
+  `get_merged_series`, todos los `*_risk.py`, el mapa de calor y el PDF),
+  a `get_latest_report_summary` (el "último informe" es el último de los
+  laboratorios incluidos) y a `list_canonical_tests` (listas y recuento de
+  puntos). Un único sitio, sin tocar la firma de ninguna función ni de los
+  10 módulos de paneles. `lab` nulo (informes anteriores a guardar el
+  laboratorio) se filtra con la clave "". `set_excluded_labs` hace `commit`
+  en el acto para que un `rollback` posterior (p. ej. un PDF con error al
+  importar) no deshaga el filtro. No se filtran `get_all_results`
+  (exportación Excel/CSV) ni `get_table_rows` (Explorador BD). La elección
+  persiste en `settings` (`excluded_labs`, JSON) y `gui` la carga al
+  arrancar.
 
 - `_add_alt_value(alt_str, value) -> str | None`: añade `value` a una lista
   de texto separada por comas sin duplicarlo (o la deja igual si `value` es
@@ -1435,6 +1453,15 @@ ha cambiado".
   de tendencia (menos de `MIN_POINTS_FOR_TREND=3` puntos). Es una regresión
   lineal simple, no un modelo clínico: se ofrece como orientación visual,
   no como predicción médica.
+- `series_summary(series) -> str | None`: resumen en lenguaje llano,
+  descriptivo y nunca causal ("Dentro del rango en N de M analíticas; la
+  última (fecha), un X % por encima del límite superior (L)"). Cuenta solo
+  los puntos con rango y usa el `flag_calc` de cada uno (rango de su propio
+  informe); el % se mide respecto al límite superado. Es la primera línea
+  del recuadro de `_draw_info_box`, así aparece en todos los gráficos de
+  evolución sin cambios en `gui.py`. `comparison_figure` usa `hspace=0.8`
+  para que quepan las tres líneas entre paneles. Evidencia (Morrow 2019;
+  Shaffer 2026): [`docs/referencias_medicas/referencias_visualizacion.md`](referencias_medicas/referencias_visualizacion.md).
 - `_pct_change_text(valores) -> str | None`: variación porcentual del
   último valor respecto al anterior y respecto al primero de toda la
   serie — complementa la tendencia (que dice hacia dónde va a largo plazo)
@@ -2013,6 +2040,12 @@ parámetros excluidos a propósito.
   técnica, las referencias científicas y el registro de cambios de la rama
   principal del repositorio público (`updates.REPO_URL`), es decir, la
   versión más reciente de la documentación.
+- Análisis → Laboratorios incluidos... (`_choose_labs`): casillas por
+  laboratorio (`list_labs`), al menos uno marcado; guarda `excluded_labs` y
+  llama a `_refresh_test_lists`, que refresca listas, Resumen y paneles.
+  `_lab_filter_text` ("Datos solo de: …") se añade a `status_var`, visible
+  en la barra inferior y en la cabecera de los paneles, y a `tipo_informe`
+  en `_export_pdf` (portada y pie de página).
 - Pestaña "Mapa de calor" (menú Análisis, requiere paciente):
   `_build_tab_mapa_calor` / `_heatmap_rows` / `_show_heatmap`. Conjuntos:
   alguna vez fuera de rango (por defecto), todos, o uno por panel
@@ -2724,6 +2757,9 @@ sin sobrescribir nada si detecta modificaciones. Los archivos ignorados
 La suite cubre, sin abrir la GUI, las partes con mayor riesgo de regresión:
 
 - normalización de nombres y catálogo de pruebas;
+- filtro de laboratorios: series, último informe y lista de pruebas sin los
+  laboratorios excluidos (incluido el laboratorio desconocido) y filtro que
+  sobrevive a un `rollback`;
 - RCV (`rcv.py`): límites log-normales contra un cálculo a mano, CVA mínimo
   0,5·CVI, estados real/esperable/otro laboratorio, CVI por sexo, tabla
   de la app válida y citada (DOI en cada fila, excluidos ausentes) y capa
