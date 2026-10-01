@@ -94,7 +94,12 @@ cambios versionados locales.
 
 Los casos deben usar datos sintéticos y bases de datos temporales. No se
 aceptan PDF reales, nombres, identificadores, fechas de nacimiento ni
-resultados de salud en el repositorio. Para cambios del parser, cubre tanto
+resultados de salud en el repositorio. El workflow
+`.github/workflows/privacy.yml` (`scripts/check_privacy.py`) lo comprueba en
+cada `push` y pull request: falla si se versiona un fichero de datos
+(`.pdf`, `.db`, `.xlsx`, `.csv`…) o un DNI/NIE con letra de control válida.
+Para DNI sintéticos usa el número `00000000` (`00000000T`) o una letra
+inválida (`00000000A`). Para cambios del parser, cubre tanto
 la nueva estructura como al menos una estructura ya soportada; para cambios
 de base de datos, verifica también que una base temporal se pueda abrir y
 que la migración sea compatible.

@@ -1,0 +1,19 @@
+# Actualizaciones automáticas por PR: dependencias de Python
+# (requirements*.txt) y las Actions de los workflows (fijadas por hash).
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

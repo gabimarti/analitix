@@ -31,6 +31,23 @@ Intentaré responder en un plazo de 7 días. Si se confirma el problema,
 prepararé una corrección y una nueva versión, y te daré crédito en el
 [registro de cambios](CHANGELOG.md) si lo deseas.
 
+## Verificar el instalador
+
+Cada [Release](https://github.com/gabimarti/analitix/releases) incluye
+`SHA256SUMS.txt` con la huella del instalador. En Windows (PowerShell):
+
+```text
+Get-FileHash .\Analitix-Setup-X.Y.Z.exe -Algorithm SHA256
+```
+
+El resultado debe coincidir con el de `SHA256SUMS.txt`. Con
+[GitHub CLI](https://cli.github.com/) también puedes comprobar que lo compiló
+el workflow de este repositorio y no se subió a mano:
+
+```text
+gh attestation verify Analitix-Setup-X.Y.Z.exe --repo gabimarti/analitix
+```
+
 ## Alcance
 
 Analitix es una aplicación de escritorio que funciona en local: guarda los

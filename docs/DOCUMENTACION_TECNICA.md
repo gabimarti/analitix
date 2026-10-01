@@ -2602,7 +2602,26 @@ GitHub Actions ejecuta automáticamente el mismo comando en
 `.github/workflows/tests.yml` para cada `push` y pull request. El workflow
 usa `windows-latest` y Python 3.11, igual que el entorno de desarrollo
 principal de Analitix, porque `sqlcipher3` es una dependencia crítica de la
-suite.
+suite. Después de los tests, `pip-audit` comprueba que ninguna dependencia
+instalada tenga vulnerabilidades conocidas; el workflow se ejecuta además
+cada lunes aunque no haya cambios, para detectar las publicadas después.
+
+Otros controles automáticos del repositorio (público):
+
+- `.github/workflows/privacy.yml`, en cada `push` y pull request:
+  `scripts/check_privacy.py` falla si hay versionado algún fichero de datos
+  (`.pdf`, `.db`, `.xlsx`, `.csv`, `.log`…, salvo
+  `src/analitix/data/test_aliases.csv`) o un DNI/NIE con letra de control
+  válida. Los DNI sintéticos de tests y documentación usan el número
+  `00000000` (p. ej. `00000000T`) o una letra inválida (`00000000A`), que la
+  comprobación ignora. En el mismo workflow, gitleaks busca secretos (tokens,
+  claves) en todo el historial.
+- `.github/dependabot.yml`: cada semana Dependabot propone por PR las
+  actualizaciones de `requirements*.txt` y de las Actions.
+- Las Actions de todos los workflows están fijadas por hash de commit (con
+  la versión en un comentario) en vez de por etiqueta, para que un cambio en
+  una Action de terceros no afecte sin revisión a la Release, que tiene
+  permiso de escritura. Dependabot actualiza esos hashes.
 
 En Windows, `scripts\run_tests.bat` automatiza la creación o actualización
 del entorno aislado `venv-tests` y ejecuta la suite. No usa ni modifica el
@@ -2802,17 +2821,20 @@ Release.
 4. El workflow comprueba que la etiqueta coincide con `__version__`, pasa
    los tests, compila, prueba el instalador (instalar con `/DATADIR`,
    `--self-test`, desinstalar y comprobar que los datos siguen) y crea la
-   Release `vX.Y.Z` con `Analitix-Setup-X.Y.Z.exe` y, como notas, la
+   Release `vX.Y.Z` con `Analitix-Setup-X.Y.Z.exe`, `SHA256SUMS.txt`
+   (huella SHA-256 del instalador) y, como notas, la
    sección `## [X.Y.Z]` de `CHANGELOG.md` (si no existe, falla sin publicar;
    se pueden editar después en la web). Las
-   versiones `0.x` se marcan como *pre-release*.
+   versiones `0.x` se marcan como *pre-release*. También genera una
+   atestación de procedencia del instalador (`actions/attest-build-provenance`),
+   que prueba que el `.exe` lo compiló este workflow desde este repositorio:
+   se verifica con `gh attestation verify Analitix-Setup-X.Y.Z.exe --repo gabimarti/analitix`.
 
 Si algún paso falla no se publica nada; el registro está en la pestaña
 Actions. Para repetir una versión fallida: `git tag -d vX.Y.Z`,
 `git push origin :refs/tags/vX.Y.Z`, corregir y volver a etiquetar.
 
-La página de descargas es `…/releases/latest`. Mientras el repositorio sea
-privado, solo pueden descargarla quienes tengan acceso a él.
+La página de descargas es `…/releases/latest`.
 
 ### 8.2 Numeración de versiones
 

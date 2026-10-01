@@ -11,6 +11,8 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 ### Añadido
 
 - Política de seguridad (`SECURITY.md`) con el procedimiento para informar de vulnerabilidades de forma privada.
+- Cada Release incluye `SHA256SUMS.txt` y una atestación de procedencia del instalador para verificar la descarga (ver `SECURITY.md`).
+- Controles automáticos del repositorio: comprobación de datos personales y secretos en cada cambio, auditoría de vulnerabilidades de dependencias (`pip-audit`, también semanal) y actualizaciones con Dependabot.
 
 ## [0.9.0] - 2026-09-30
 
