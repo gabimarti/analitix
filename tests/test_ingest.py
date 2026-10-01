@@ -144,3 +144,23 @@ def test_ingest_folder_optionally_includes_subfolders(db, monkeypatch, tmp_path)
     assert ingest.ingest_folder(db, tmp_path).processed == []
     result = ingest.ingest_folder(db, tmp_path, recursive=True)
     assert [name for name, _ in result.processed] == ["informes_SINTETICO_20260101.pdf"]
+
+
+def test_log_uses_file_hash_not_filename(db, monkeypatch, tmp_path, caplog):
+    # El nombre de un PDF real puede ser el del paciente: el log (texto
+    # plano) solo debe llevar la huella del fichero, tanto en "revisar"
+    # como en error.
+    def _parse(pdf_path):
+        if "error" in pdf_path.name:
+            raise RuntimeError("fallo sintético")
+        return _fake_no_birth_date_result(pdf_path)  # sin fecha de nacimiento → revisar
+
+    monkeypatch.setattr(ingest, "parse_report", _parse)
+    (tmp_path / "PACIENTE_FICTICIO_revisar.pdf").write_bytes(b"%PDF uno")
+    (tmp_path / "PACIENTE_FICTICIO_error.pdf").write_bytes(b"%PDF dos")
+    with caplog.at_level("INFO", logger="analitix"):
+        result = ingest.ingest_folder(db, tmp_path)
+
+    assert result.review and result.errors
+    assert "PACIENTE_FICTICIO" not in caplog.text
+    assert caplog.text.count("md5=") == 2

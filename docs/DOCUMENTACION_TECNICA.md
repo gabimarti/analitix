@@ -1231,14 +1231,17 @@ aparezca un laboratorio nuevo.
 `RotatingFileHandler` sobre `data/analitix.log` (1 MB × 3 ficheros de
 rotación). Se llama una sola vez, al principio de `main.main()`; idempotente
 (una segunda llamada no hace nada) gracias a un flag interno. El fichero de
-log **no contiene datos de pacientes ni resultados**, solo nombres de
-fichero PDF, identificadores internos (`id` de paciente/prueba) y mensajes
+log **no contiene datos de pacientes ni resultados**, solo la huella de
+los PDF (`md5=` + 12 primeros caracteres del MD5 de `ingest.file_hash`,
+nunca el nombre del fichero, que en los PDF reales suele ser el del
+paciente), identificadores internos (`id` de paciente/prueba) y mensajes
 de estado/error, para poder diagnosticar problemas sin que el log en sí
 mismo sea un dato sensible — revisado explícitamente en una auditoría de
 privacidad: `gui._delete_selected_patient` llegó a registrar el nombre
 completo del paciente además de su `id`, ya corregido. `ingest.py` registra
 el inicio/fin de cada importación y cada
-aviso "review"/error (solo nombre de fichero, nunca el contenido); `gui.py`
+aviso "review"/error (solo la huella del fichero, nunca su nombre ni el
+contenido; test `test_log_uses_file_hash_not_filename`); `gui.py`
 registra cambios de contraseña y borrados de datos (por `id`, no por
 nombre).
 

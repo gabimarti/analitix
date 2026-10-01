@@ -123,10 +123,14 @@ def ingest_folder(
             reasons, format_name = _ingest_one(con, pdf_path, digest)
             result.processed.append((pdf_path.name, format_name))
             if reasons:
-                logger.warning("%s marcado para revisar: %s", pdf_path.name, reasons)
+                # En el log (texto plano, sin cifrar) va la huella del
+                # fichero y no su nombre: los PDF reales suelen llamarse con
+                # el nombre del paciente. Coincide con el inicio de la
+                # columna "MD5" de la ficha del paciente.
+                logger.warning("PDF md5=%s marcado para revisar: %s", digest[:12], reasons)
                 result.review.append((pdf_path.name, reasons))
         except Exception as exc:  # noqa: BLE001 - se registra y se continúa con el resto
-            logger.exception("Error importando %s", pdf_path.name)
+            logger.exception("Error importando PDF md5=%s", digest[:12])
             con.rollback()
             record_processed_file(con, pdf_path.name, digest, status="error", error_message=str(exc))
             con.commit()

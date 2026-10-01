@@ -161,8 +161,10 @@ Conviene guardar también tus PDF originales.
 Si algo no funciona como esperabas, `analitix.log` (en la misma carpeta que
 la base de datos) guarda un registro de lo que ha ido haciendo la app
 (importaciones, avisos, errores con su detalle técnico) para poder
-investigarlo con calma. No contiene datos de pacientes ni resultados, solo
-nombres de fichero y mensajes de estado.
+investigarlo con calma. No contiene datos de pacientes ni resultados, ni
+siquiera el nombre de los PDF (que a menudo es el del paciente): un PDF con
+aviso o error aparece como `md5=` seguido de los primeros caracteres de su
+huella, la misma que se ve en la columna "MD5" de la ficha del paciente.
 
 ---
 

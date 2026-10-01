@@ -8,6 +8,10 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ## [Sin publicar]
 
+### Cambiado
+
+- El registro `analitix.log` ya no guarda el nombre de los PDF con aviso o error (suele ser el del paciente), sino el inicio de su huella MD5.
+
 ### Añadido
 
 - Política de seguridad (`SECURITY.md`) con el procedimiento para informar de vulnerabilidades de forma privada.
