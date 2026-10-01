@@ -9,6 +9,8 @@ updates:
     # fuera del rango. Las actualizaciones de seguridad van aparte
     # (Dependabot alerts / security updates).
     versioning-strategy: increase-if-necessary
+    # Todo cambio va a `develop`; `main` = última versión publicada.
+    target-branch: develop
     schedule:
       interval: weekly
     groups:
@@ -17,6 +19,7 @@ updates:
 
   - package-ecosystem: github-actions
     directory: "/"
+    target-branch: develop
     schedule:
       interval: weekly
     groups:

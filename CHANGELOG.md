@@ -8,6 +8,8 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ## [Sin publicar]
 
+## [0.10.0] - 2026-10-01
+
 ### Cambiado
 
 - Todos los cuadros de diálogo siguen el mismo diseño: fondo del tema (antes, algunos mostraban textos con fondo distinto al de la ventana), botones al pie a la derecha, centrados sobre la ventana principal y Escape para cerrar. Directrices en `docs/GUIA_DIALOGOS.md`.
@@ -25,6 +27,7 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 - Política de seguridad (`SECURITY.md`) con el procedimiento para informar de vulnerabilidades de forma privada.
 - Cada Release incluye `SHA256SUMS.txt` y una atestación de procedencia del instalador para verificar la descarga (ver `SECURITY.md`).
 - Controles automáticos del repositorio: comprobación de datos personales y secretos en cada cambio, auditoría de vulnerabilidades de dependencias (`pip-audit`, también semanal) y actualizaciones con Dependabot.
+- Procedimiento de ramas: `main` contiene solo la última versión publicada y el desarrollo se hace en `develop` (ver `CONTRIBUTING.md`).
 
 ## [0.9.0] - 2026-09-30
 

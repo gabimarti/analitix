@@ -25,7 +25,9 @@ programar**. Todo tipo de ayuda suma:
 
 - **Abre un issue** describiendo el problema, la idea o la pregunta.
 - **Envía un pull request** si ya tienes un cambio de código o
-  documentación.
+  documentación, **contra la rama `develop`** (no `main`). `main` contiene
+  solo la última versión publicada; `develop` se fusiona en `main` al
+  publicar cada versión (ver la documentación técnica, §8.1).
 - **Escríbeme directamente** por [GitHub](https://github.com/gabimarti) o
   [X/Twitter](https://x.com/gmarti) si prefieres comentarlo antes de abrir
   nada formal.

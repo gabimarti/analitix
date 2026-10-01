@@ -8,4 +8,4 @@
 """Analitix: análisis local de informes de laboratorio en PDF."""
 
 # Versión de la aplicación; la etiqueta de cada Release de GitHub es "v" + esto.
-__version__ = "0.9.0"
+__version__ = "0.10.0"

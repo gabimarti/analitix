@@ -2747,18 +2747,23 @@ Otros controles automáticos del repositorio (público):
   comprobación ignora. En el mismo workflow, gitleaks busca secretos (tokens,
   claves) en todo el historial.
 - `.github/dependabot.yml`: cada semana Dependabot propone por PR las
-  actualizaciones de las Actions. Para `requirements*.txt` usa
+  actualizaciones de las Actions, **contra `develop`** (`target-branch`),
+  como cualquier otro cambio (§8.1). Para `requirements*.txt` usa
   `versioning-strategy: increase-if-necessary`: como los requisitos son
   mínimos (`>=`) y CI ya instala siempre la última versión, solo abre un PR
   si una versión nueva queda fuera del rango. Las actualizaciones de
   seguridad (Dependabot alerts, activadas en *Settings → Code security*)
-  van aparte y sí abren PR.
+  van aparte y sí abren PR; GitHub las abre siempre contra `main`. Si es
+  urgente, se tratan como *hotfix* (§8.1); si no, se integran primero en
+  `develop`.
 - Rulesets (*Settings → Rules → Rulesets*): en `main`, prohibido borrarla
   o hacer force-push, y un PR solo se integra con "Python tests", "Privacy
   check" y "Secret scan" en verde; las etiquetas `v*` solo las puede crear,
-  mover o borrar un administrador (así nadie más lanza una Release). El
-  administrador del repositorio puede saltarse ambas reglas (push directo a
-  `main`, con el aviso "Bypassed rule violations").
+  mover o borrar un administrador (así nadie más lanza una Release). En
+  `develop`, prohibido borrarla o hacer force-push. El administrador puede
+  saltarse las reglas (aviso "Bypassed rule violations"), pero el
+  procedimiento de §8.1 no hace push directo a `main`: solo se usa en una
+  emergencia.
 - *Settings → Actions → General*: solo se permiten Actions de GitHub,
   de creadores verificados y `gitleaks/gitleaks-action`, y es obligatorio
   fijarlas por hash (un workflow con `@v7` no se ejecuta). Una Action nueva
@@ -2958,26 +2963,51 @@ Ejecutar de todas formas").
 
 ### 8.1 Publicar una versión (GitHub Releases)
 
+**Ramas (procedimiento obligatorio desde la 0.10.0).** Quien clona el
+repositorio o descarga el código tiene que obtener siempre la última
+versión **publicada**, no una a medio hacer:
+
+- **`main` = la última Release publicada.** Nunca se hacen commits
+  directos en `main`; solo recibe la fusión de `develop` al publicar una
+  versión (o una corrección urgente, ver abajo).
+- **`develop` = el trabajo en curso.** Todos los cambios, propios y pull
+  requests de colaboradores, van a `develop`, cada uno con su entrada en
+  `## [Sin publicar]` del CHANGELOG. Los tests y los controles de
+  privacidad se ejecutan igual en cada push a `develop`.
+- **Corrección urgente de una versión publicada**: rama `hotfix/X.Y.Z`
+  desde `main`, PR a `main`, publicar el parche (pasos 3-5) y después
+  fusionar `main` en `develop`.
+
 Las versiones las compila y publica GitHub Actions
 (`.github/workflows/release.yml`), no el equipo de desarrollo: un Windows
 limpio parte del commit exacto de la etiqueta, así el instalador no depende
 de nada local. El `.exe` nunca se guarda en el repositorio; va adjunto a la
 Release.
 
-1. Probar en local con `scripts\build_windows.bat` (y, si se quiere, con
-   **Actions → Release → Run workflow**, que hace todo el proceso sin
-   publicar y deja el instalador como artefacto descargable de esa
-   ejecución).
-2. Subir la versión en `src/analitix/__init__.py` (`__version__`) y, en
-   [`CHANGELOG.md`](../CHANGELOG.md), pasar lo acumulado en `## [Sin publicar]`
-   a una sección nueva `## [X.Y.Z] - AAAA-MM-DD` (dejando `[Sin publicar]`
-   vacía). Commit y push.
-3. Etiquetar y subir la etiqueta:
+Pasos para publicar una versión:
+
+1. **Probar el instalador** desde `develop`, sin publicar:
+   **Actions → Release → Run workflow** eligiendo `develop`, o
+   `gh workflow run release.yml --ref develop`. Deja el instalador como
+   artefacto descargable de esa ejecución. En local, también
+   `scripts\build_windows.bat`.
+2. **En `develop`**: subir la versión en `src/analitix/__init__.py`
+   (`__version__`) y, en [`CHANGELOG.md`](../CHANGELOG.md), pasar lo
+   acumulado en `## [Sin publicar]` a una sección nueva
+   `## [X.Y.Z] - AAAA-MM-DD`, dejando `[Sin publicar]` vacía. Commit y
+   push a `develop`.
+3. **Fusionar `develop` en `main`** con un pull request: `gh pr create
+   --base main --head develop --title "Release X.Y.Z"`. Se integra cuando
+   pasen los checks obligatorios del ruleset de `main` ("Python tests",
+   "Privacy check", "Secret scan"), con *merge commit*, no *squash*, para
+   conservar el historial.
+4. **Etiquetar en `main`** y subir la etiqueta:
    ```
-   git tag v0.9.0
-   git push origin v0.9.0
+   git checkout main && git pull
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
    ```
-4. El workflow comprueba que la etiqueta coincide con `__version__`, pasa
+5. El workflow comprueba que la etiqueta coincide con `__version__`, pasa
    los tests, compila, prueba el instalador (instalar con `/DATADIR`,
    `--self-test`, desinstalar y comprobar que los datos siguen) y crea la
    Release `vX.Y.Z` con `Analitix-Setup-X.Y.Z.exe`, `SHA256SUMS.txt`
@@ -2995,7 +3025,13 @@ Release**: `git tag -d vX.Y.Z`, `git push origin :refs/tags/vX.Y.Z`,
 corregir y volver a etiquetar. Una Release ya publicada es inmutable: se
 corrige publicando la siguiente versión de parche.
 
-La página de descargas es `…/releases/latest`.
+6. **Volver a alinear `develop`** con el commit de fusión de `main`, para
+   que ambas ramas partan del mismo punto:
+   `git checkout develop && git merge --ff-only origin/main && git push`.
+
+La página de descargas es `…/releases/latest`. `scripts\update_main.bat`
+sigue actualizando el checkout local de `main`, es decir, a la última
+versión publicada.
 
 ### 8.2 Numeración de versiones
 
