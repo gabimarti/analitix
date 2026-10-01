@@ -1453,6 +1453,15 @@ ha cambiado".
   de tendencia (menos de `MIN_POINTS_FOR_TREND=3` puntos). Es una regresión
   lineal simple, no un modelo clínico: se ofrece como orientación visual,
   no como predicción médica.
+- `evolution_figure(series, title, min_points, rcv=None)` + `_draw_rcv_band`:
+  con `rcv` (`rcv.classify_change` de los dos últimos valores), barra gris
+  en la fecha del último punto centrada en el valor **anterior** con los
+  límites del RCV (si el último punto cae dentro, el cambio cabe en la
+  variación esperable). Con `estado == "otro_lab"` no hay banda, solo una
+  entrada de leyenda. `gui._evolution_figure` es el único punto que la
+  calcula (sexo del paciente, laboratorios de los dos puntos) para
+  Evolución y todos los paneles; los índices calculados (`idx_*`) no
+  tienen variación biológica y se dibujan sin banda.
 - `series_summary(series) -> str | None`: resumen en lenguaje llano,
   descriptivo y nunca causal ("Dentro del rango en N de M analíticas; la
   última (fecha), un X % por encima del límite superior (L)"). Cuenta solo
@@ -1968,6 +1977,23 @@ Noveno módulo de cálculo clínico. Ver
   parámetros, sin cálculo nuevo) — mismo patrón que
   `inflammation_risk.get_inflammation_series`.
 
+### `tyg_risk.py` — índice TyG (triglicéridos-glucosa)
+
+Ver [`docs/referencias_medicas/referencias_hierro_glucosa.md`](referencias_medicas/referencias_hierro_glucosa.md)
+(sección "Índice TyG").
+
+- `tyg(tg, glucosa)` = ln[TG (mg/dL) × glucosa (mg/dL) / 2]
+  (Simental-Mendía 2008, fórmula corregida en Eur J Pediatr 2020).
+- `get_tyg_series`: une `lipid_risk.TG_IDS` y `glycemic_risk.GLUCOSA_IDS`
+  por fecha (mismo informe) con `get_merged_series`; descarta el punto si
+  falta uno de los dos o no está en mg/dL (`glycemic_risk._mg_dl`). Puntos
+  **sin rango ni `flag_calc`**: solo tendencia, sin umbral (los cortes
+  publicados dependen de la población). Conserva `lab` para el filtro de
+  laboratorios y el RCV.
+- Se muestra en el panel de glucosa (`gui._refresh_glucemia_panel` añade
+  su serie a la de eAG) en vez de en una pestaña propia: también es
+  metabolismo glucídico. Ficha en `data/descripciones/idx_tyg.txt`.
+
 ### `thyroid_risk.py` — TSH + T4L, gráfico combinado
 
 Décimo módulo de cálculo clínico. Ver
@@ -2026,6 +2052,12 @@ parámetros excluidos a propósito.
 
 ### `gui.py`
 
+- **Diálogos**: todos se crean con `_new_dialog(title, resizable=False)` →
+  `(dialog, body)`, con todo el contenido dentro de `body`, un único
+  `ttk.Frame` con margen `PAD`. Así nunca se ve el gris del `tk.Toplevel`
+  detrás de los widgets ttk. Se centran con `_center_dialog`. Reglas
+  completas (botones, textos, privacidad, cómo probarlos):
+  [`docs/GUIA_DIALOGOS.md`](GUIA_DIALOGOS.md).
 - Pestaña Resumen con dos subpestañas (`ttk.Notebook`): "Tabla" (la de
   siempre) y "Qué ha cambiado" (`_draw_changes`, que se redibuja en
   `_refresh_resumen_panel`, es decir, en cada cambio de paciente; a partir de
@@ -2072,7 +2104,7 @@ por todo el proyecto. Estructura del menú (`_build_menu`):
   todo el último informe de un vistazo.
 - **Paneles clínicos**: Riesgo cardiovascular, Salud hepática, Función
   renal, Hemograma, Metabolismo del hierro, Inflamación, Ácido úrico,
-  Calcio corregido, Glucosa media estimada (eAG), Tiroides — informes ya
+  Calcio corregido, Glucosa (eAG y TyG), Tiroides — informes ya
   "hechos" que combinan varios parámetros (o, en el caso de Ácido úrico/
   Calcio corregido/eAG, uno o dos con un umbral/fórmula citados) con
   fórmulas/umbrales citados y texto orientativo propio; Tiroides es el

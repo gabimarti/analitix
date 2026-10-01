@@ -3,7 +3,9 @@
 **Implementado** en [`src/analitix/rcv.py`](../../src/analitix/rcv.py) con
 los datos de
 [`src/analitix/data/biological_variation.csv`](../../src/analitix/data/biological_variation.csv);
-se muestra en **Resumen → "Qué ha cambiado"**.
+se muestra en **Resumen → "Qué ha cambiado"** (barras atenuadas) y en los gráficos de
+**Evolución y de los paneles clínicos** (banda gris de variación esperable en el último
+punto, centrada en el valor anterior).
 
 Apoyo informativo, nunca un diagnóstico. Superar el RCV quiere decir "es
 probable que el cambio sea real" y **no** que sea patológico. Quedar por

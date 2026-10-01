@@ -419,12 +419,42 @@ def _plot_series_on_ax(
     return handles
 
 
-def evolution_figure(series: list[dict[str, Any]], title: str, min_points: int = DEFAULT_MIN_POINTS) -> Figure:
+def _draw_rcv_band(ax, series: list[dict[str, Any]], rcv: dict[str, Any]) -> None:
+    """Banda de variación esperable (RCV, `rcv.classify_change`) en la fecha
+    del último punto, centrada en el valor ANTERIOR: si el último punto cae
+    dentro, el cambio cabe en la variación biológica + analítica esperable;
+    si cae fuera, es probablemente real (no "patológico"). Con laboratorios
+    distintos no se dibuja banda, solo se indica en la leyenda."""
+    if rcv["estado"] == "otro_lab":
+        (h,) = ax.plot([], [], linestyle="none")
+        h.set_label("RCV no aplicable: el último valor es de otro laboratorio")
+        return
+    anterior = series[-2]["value_num"]
+    bajo = anterior * (1 + rcv["rcv_bajada"] / 100)
+    alto = anterior * (1 + rcv["rcv_subida"] / 100)
+    x = _parse_fecha(series[-1]["fecha"])
+    ax.errorbar(
+        [x], [anterior], yerr=[[anterior - bajo], [alto - anterior]], fmt="none", ecolor=COLOR_INK_SECONDARY,
+        elinewidth=6, capsize=0, alpha=0.25, zorder=1,
+        label=f"Variación esperable desde el anterior (RCV {rcv['rcv_bajada']:+.0f}% / {rcv['rcv_subida']:+.0f}%)",
+    )
+    ymin, ymax = ax.get_ylim()
+    ax.set_ylim(min(ymin, bajo), max(ymax, alto))
+
+
+def evolution_figure(
+    series: list[dict[str, Any]], title: str, min_points: int = DEFAULT_MIN_POINTS,
+    rcv: Optional[dict[str, Any]] = None,
+) -> Figure:
     """Gráfico de evolución de una prueba en el tiempo, con las líneas de
-    mínimo/máximo de referencia y los valores fuera de rango resaltados."""
+    mínimo/máximo de referencia y los valores fuera de rango resaltados.
+    `rcv` (opcional, `rcv.classify_change` de los dos últimos valores):
+    añade la banda de variación esperable (`_draw_rcv_band`)."""
     fig = Figure(figsize=(8, 4.5), dpi=100)
     ax = fig.add_subplot(111)
     handles = _plot_series_on_ax(ax, series, title, min_points=min_points)
+    if handles and rcv and len(series) >= 2:
+        _draw_rcv_band(ax, series, rcv)
     ax.set_title(title)
     ax.tick_params(axis="x", rotation=30)
     if handles:

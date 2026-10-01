@@ -123,6 +123,24 @@ def test_few_points_control_in_every_series_chart():
     assert "Solo" not in texts(fig.axes[1])
 
 
+def test_evolution_rcv_band():
+    from analitix.charts import evolution_figure
+
+    serie = [_row("2024-01-01", 14.0, "A"), _row("2024-02-01", 15.0, "A")]
+    rcv = dict(estado="esperable", rcv_bajada=-10.0, rcv_subida=12.0)
+    ax = evolution_figure(serie, "x", 2, rcv=rcv).axes[0]
+    (barra,) = [c for c in ax.containers if c.__class__.__name__ == "ErrorbarContainer"]
+    (lineas,) = barra.lines[2]
+    (segmento,) = lineas.get_segments()
+    assert [round(y, 2) for _, y in segmento] == [12.6, 15.68]  # 14 −10 % y +12 %, centrada en el anterior
+    labels = [t.get_text() for t in ax.get_legend().get_texts()]
+    assert any("RCV -10% / +12%" in t for t in labels)
+
+    otro = evolution_figure(serie, "x", 2, rcv=dict(estado="otro_lab", rcv_bajada=-10.0, rcv_subida=12.0))
+    assert not otro.axes[0].containers
+    assert any("otro laboratorio" in t.get_text() for t in otro.axes[0].get_legend().get_texts())
+
+
 def test_series_summary_text():
     from analitix.charts import series_summary
 

@@ -165,6 +165,31 @@ falsamente baja enmascarando diabetes real en un paciente con
 drepanocitosis + alfa-talasemia: PMC12906350:
 https://www.ncbi.nlm.nih.gov/pmc/articles/PMC12906350/
 
+### Índice TyG (triglicéridos-glucosa) — implementado 2026-10-01
+
+`TyG = ln[triglicéridos (mg/dL) × glucosa en ayunas (mg/dL) / 2]`
+
+- Simental-Mendía LE, Rodríguez-Morán M, Guerrero-Romero F. *Metab Syndr
+  Relat Disord* 2008;6(4):299-304. doi:10.1089/met.2008.0034.
+- ⚠ La fórmula salió mal impresa en el original; la versión corregida es
+  la de arriba (*Eur J Pediatr* 2020;179:1171,
+  doi:10.1007/s00431-020-03644-1).
+- Validación frente al clamp euglucémico-hiperinsulinémico:
+  Guerrero-Romero F et al., *J Clin Endocrinol Metab* 2010;95:3347-3351
+  (referencia sin DOI verificado).
+
+Decisiones y limitaciones:
+
+- **Sin umbral, solo tendencia**: los puntos de corte publicados (en torno
+  a 8,5-8,8) dependen de la población estudiada.
+- Es un **marcador indirecto** de resistencia a la insulina, no una
+  medida de ella ni un diagnóstico.
+- **Requiere ayuno**, y Analitix no registra si la analítica lo era: se
+  avisa en la ficha.
+- Solo se calcula con glucosa y triglicéridos del mismo informe, en mg/dL.
+- Implementación: `src/analitix/tyg_risk.py`, mostrado en el panel de
+  glucosa junto a la eAG.
+
 ### Puntos de corte diagnósticos de HbA1c (ADA)
 
 - Normal: < 5.7% (< 39 mmol/mol)

@@ -10,11 +10,14 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ### Cambiado
 
+- Todos los cuadros de diálogo siguen el mismo diseño: fondo del tema (antes, algunos mostraban textos con fondo distinto al de la ventana), botones al pie a la derecha, centrados sobre la ventana principal y Escape para cerrar. Directrices en `docs/GUIA_DIALOGOS.md`.
 - Todos los gráficos de evolución (Evolución, Comparativa, paneles clínicos e informe PDF) aplican el mínimo de analíticas de Configuración: por debajo muestran un aviso y con una sola analítica no se dibuja el gráfico, solo el valor. Antes ese mínimo solo agrupaba la lista de Evolución y podían aparecer gráficos de un único punto.
 - El registro `analitix.log` ya no guarda el nombre de los PDF con aviso o error (suele ser el del paciente), sino el inicio de su huella MD5.
 
 ### Añadido
 
+- Índice TyG (triglicéridos-glucosa) en el panel de glucosa, solo como tendencia y sin umbral.
+- Banda de variación esperable (RCV) en el último punto de los gráficos de Evolución y de los paneles.
 - Análisis → Laboratorios incluidos...: elegir de qué laboratorios salen los datos de gráficos, paneles clínicos, Resumen e informe PDF (por defecto, todos), para series más coherentes; el filtro activo se indica siempre en la barra inferior y en el PDF. La exportación Excel/CSV no se filtra.
 - Resumen en texto bajo cada gráfico de evolución (pantalla, paneles clínicos y PDF): en cuántas analíticas ha estado dentro del rango y cómo está la última respecto a su límite.
 - «Qué ha cambiado» indica si cada cambio es probablemente real o cabe en la variación esperable (valor de referencia del cambio, RCV), con variación biológica de estudios publicados citados; no se valora entre laboratorios distintos.

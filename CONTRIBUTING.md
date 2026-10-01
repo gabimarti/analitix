@@ -30,6 +30,10 @@ programar**. Todo tipo de ayuda suma:
   [X/Twitter](https://x.com/gmarti) si prefieres comentarlo antes de abrir
   nada formal.
 
+Si tu cambio añade o modifica una ventana o un cuadro de diálogo, sigue la
+[guía de diseño de diálogos](docs/GUIA_DIALOGOS.md) para que toda la
+aplicación se vea igual.
+
 ## Sobre añadir soporte para otro laboratorio/hospital
 
 El reconocimiento de cada centro/laboratorio (etiquetas de

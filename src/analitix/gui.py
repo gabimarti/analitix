@@ -127,6 +127,7 @@ from analitix import (
 )
 from analitix.rcv import classify_change
 from analitix.textutils import strip_accents
+from analitix.tyg_risk import INDEX_LABELS as TYG_INDEX_LABELS, get_tyg_series
 from analitix.thyroid_risk import get_latest_thyroid_summary, get_thyroid_series
 from analitix.updates import RELEASES_URL, REPO_URL, fetch_latest_release, is_newer
 from analitix.uric_acid_risk import (
@@ -393,7 +394,7 @@ class AnalitixApp(ttk.Window):
             label="Calcio corregido", command=lambda: self._show_page("calcio")
         )
         paneles_menu.add_command(
-            label="Glucosa media estimada (eAG)", command=lambda: self._show_page("glucemia")
+            label="Glucosa (eAG y TyG)", command=lambda: self._show_page("glucemia")
         )
         paneles_menu.add_command(
             label="Tiroides", command=lambda: self._show_page("tiroides")
@@ -446,7 +447,7 @@ class AnalitixApp(ttk.Window):
             (paneles_menu, "Inflamación"),
             (paneles_menu, "Ácido úrico"),
             (paneles_menu, "Calcio corregido"),
-            (paneles_menu, "Glucosa media estimada (eAG)"),
+            (paneles_menu, "Glucosa (eAG y TyG)"),
             (paneles_menu, "Tiroides"),
         )
 
@@ -818,20 +819,36 @@ class AnalitixApp(ttk.Window):
             self.current_patient_id = patient_id
             self._refresh_patients()
 
+    def _new_dialog(self, title: str, resizable: bool = False) -> tuple[tk.Toplevel, ttk.Frame]:
+        """Ventana de diálogo modal homogénea (ver docs/GUIA_DIALOGOS.md):
+        devuelve la ventana y un único `ttk.Frame` de cuerpo con `PAD` de
+        margen, donde va TODO el contenido. Nada directamente sobre el
+        `tk.Toplevel`: su fondo es el gris del sistema y los widgets ttk se
+        verían como recuadros de otro color. Escape cierra (= Cancelar)."""
+        dialog = tk.Toplevel(self)
+        dialog.title(title)
+        dialog.transient(self)
+        dialog.resizable(resizable, resizable)
+        dialog.grab_set()
+        dialog.bind("<Escape>", lambda _e: dialog.destroy())
+        body = ttk.Frame(dialog, padding=PAD)
+        body.pack(fill="both", expand=True)
+        return dialog, body
+
+    def _center_dialog(self, dialog: tk.Toplevel) -> None:
+        """Centra el diálogo sobre la ventana principal (Tk lo abre en la
+        esquina superior izquierda de la pantalla si no se le da posición).
+        Llamar cuando ya tiene todo su contenido."""
+        dialog.update_idletasks()
+        x = self.winfo_rootx() + (self.winfo_width() - dialog.winfo_reqwidth()) // 2
+        y = self.winfo_rooty() + (self.winfo_height() - dialog.winfo_reqheight()) // 3
+        dialog.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+
     def _ask_active_patient(self) -> int | None:
         """Diálogo modal que lista SOLO el nombre completo de cada paciente
         (sin fecha de nacimiento, DNI, NHC...: la ficha completa está en la
         pestaña Pacientes). Devuelve el id elegido o `None` si se cancela."""
-        dialog = tk.Toplevel(self)
-        dialog.title("Seleccionar paciente activo")
-        dialog.transient(self)
-        dialog.resizable(False, False)
-        dialog.grab_set()
-        # Todo dentro de un único `ttk.Frame` (como en "Acerca de"): colocados
-        # directamente sobre el `tk.Toplevel`, la etiqueta y la fila de
-        # botones mostraban el fondo del tema sobre el gris del sistema.
-        body = ttk.Frame(dialog, padding=PAD)
-        body.pack(fill="both", expand=True)
+        dialog, body = self._new_dialog("Seleccionar paciente activo")
         ttk.Label(body, text="¿Con qué paciente quieres trabajar?").pack(anchor="w", pady=(0, PAD))
 
         lista = ttk.Frame(body)
@@ -860,18 +877,11 @@ class AnalitixApp(ttk.Window):
 
         listbox.bind("<Double-1>", _confirm)
         listbox.bind("<Return>", _confirm)
-        dialog.bind("<Escape>", lambda _e: dialog.destroy())
         botones = ttk.Frame(body)
-        botones.pack(pady=(PAD, 0))  # sin `fill`: queda centrado bajo la lista
-        ttk.Button(botones, text="Aceptar", bootstyle="primary", command=_confirm).pack(side="left", padx=(0, 8))
-        ttk.Button(botones, text="Cancelar", command=dialog.destroy).pack(side="left")
-
-        # Centrado sobre la ventana principal (Tk lo abre en la esquina
-        # superior izquierda de la pantalla si no se le da posición).
-        dialog.update_idletasks()
-        x = self.winfo_rootx() + (self.winfo_width() - dialog.winfo_reqwidth()) // 2
-        y = self.winfo_rooty() + (self.winfo_height() - dialog.winfo_reqheight()) // 3
-        dialog.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+        botones.pack(fill="x", pady=(PAD, 0))
+        ttk.Button(botones, text="Cancelar", command=dialog.destroy).pack(side="right")
+        ttk.Button(botones, text="Aceptar", bootstyle="primary", command=_confirm).pack(side="right", padx=(0, 8))
+        self._center_dialog(dialog)
         self.wait_window(dialog)
         return result["value"]
 
@@ -911,11 +921,8 @@ class AnalitixApp(ttk.Window):
         if patient is None:
             messagebox.showwarning("Sin paciente", "Selecciona antes un paciente.", parent=self)
             return
-        dialog = tk.Toplevel(self)
-        dialog.title("Ficha del paciente")
-        dialog.transient(self)
-        dialog.grab_set()
-        form = ttk.Frame(dialog, padding=PAD)
+        dialog, outer = self._new_dialog("Ficha del paciente", resizable=True)
+        form = ttk.Frame(outer)
         form.pack(fill="both", expand=True)
 
         yes_no = {None: "", 1: "Sí", 0: "No"}
@@ -989,8 +996,8 @@ class AnalitixApp(ttk.Window):
             self._refresh_patients()
 
         reports = list_patient_reports(self.con, patient["id"])
-        informes = ttk.Labelframe(dialog, text=f"Informes importados ({len(reports)})", padding=6)
-        informes.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
+        informes = ttk.Labelframe(outer, text=f"Informes importados ({len(reports)})", padding=6)
+        informes.pack(fill="both", expand=True, pady=(PAD, 0))
         columns = ("fecha", "lab", "source_file", "num_results", "file_md5")
         tree = ttk.Treeview(informes, columns=columns, show="headings", height=min(max(len(reports), 3), 10))
         for col, label, width, anchor in (
@@ -1009,10 +1016,11 @@ class AnalitixApp(ttk.Window):
                 (r["fecha"] or "")[:10], r["lab"] or "—", r["source_file"], r["num_results"], r["file_md5"] or "—",
             ))
 
-        botones = ttk.Frame(dialog, padding=(PAD, 0, PAD, PAD))
-        botones.pack(fill="x")
+        botones = ttk.Frame(outer)
+        botones.pack(fill="x", pady=(PAD, 0))
         ttk.Button(botones, text="Cancelar", command=dialog.destroy).pack(side="right")
         ttk.Button(botones, text="Guardar", bootstyle="primary", command=_save).pack(side="right", padx=(0, 8))
+        self._center_dialog(dialog)
         self.wait_window(dialog)
 
     def _merge_selected_patients(self) -> None:
@@ -1042,17 +1050,14 @@ class AnalitixApp(ttk.Window):
         para fusionar, cuál conserva su nombre/identidad; el resto se funde
         en él (su DNI/NHC se aprovechan si al destino le faltan). Devuelve
         `None` si se cancela."""
-        dialog = tk.Toplevel(self)
-        dialog.title("Elegir paciente a conservar")
-        dialog.transient(self)
-        dialog.grab_set()
+        dialog, body = self._new_dialog("Elegir paciente a conservar")
         ttk.Label(
-            dialog,
+            body,
             text="¿Cuál de estos es el paciente a conservar? El resto se fundirá en él (sus "
             "informes pasan a pertenecerle; el DNI/NHC que le falten se rellenan con los del "
             "resto si los tienen).",
-            padding=PAD, wraplength=520,
-        ).pack(anchor="w")
+            wraplength=520,
+        ).pack(anchor="w", pady=(0, 6))
         default_id = max(candidates, key=lambda p: p["num_reports"])["id"]
         choice = tk.IntVar(value=default_id)
         for p in candidates:
@@ -1063,8 +1068,8 @@ class AnalitixApp(ttk.Window):
                 f"{p['full_name']}  (nac. {p['birth_date'] or '?'}, DNI {p['dni'] or '—'}, "
                 f"NHC {nhc_txt}, {p['num_reports']} informe(s))"
             )
-            ttk.Radiobutton(dialog, text=etiqueta, variable=choice, value=p["id"]).pack(
-                anchor="w", padx=PAD, pady=2
+            ttk.Radiobutton(body, text=etiqueta, variable=choice, value=p["id"]).pack(
+                anchor="w", padx=8, pady=2
             )
         result: dict[str, int | None] = {"value": None}
 
@@ -1072,14 +1077,11 @@ class AnalitixApp(ttk.Window):
             result["value"] = choice.get()
             dialog.destroy()
 
-        def _cancel() -> None:
-            dialog.destroy()
-
-        botones = ttk.Frame(dialog)
-        botones.pack(fill="x", padx=PAD, pady=PAD)
-        ttk.Button(botones, text="Cancelar", command=_cancel).pack(side="right")
+        botones = ttk.Frame(body)
+        botones.pack(fill="x", pady=(PAD, 0))
+        ttk.Button(botones, text="Cancelar", command=dialog.destroy).pack(side="right")
         ttk.Button(botones, text="Fusionar", bootstyle="primary", command=_confirm).pack(side="right", padx=(0, 8))
-        dialog.protocol("WM_DELETE_WINDOW", _cancel)
+        self._center_dialog(dialog)
         self.wait_window(dialog)
         return result["value"]
 
@@ -1149,26 +1151,22 @@ class AnalitixApp(ttk.Window):
             messagebox.showinfo("Laboratorios", "Todavía no hay informes importados.", parent=self)
             return
         excluidos = get_excluded_labs(self.con)
-        dialog = tk.Toplevel(self)
-        dialog.title("Laboratorios incluidos")
-        dialog.transient(self)
-        dialog.resizable(False, False)
-        dialog.grab_set()
+        dialog, body = self._new_dialog("Laboratorios incluidos")
         ttk.Label(
-            dialog,
+            body,
             text="Datos de qué laboratorios se usan en gráficos, paneles clínicos, Resumen e informe PDF.\n"
             "Cada laboratorio puede usar métodos o rangos distintos: quedarse con uno (o con varios "
             "compatibles) da series más coherentes. La exportación Excel/CSV no se filtra.",
             wraplength=520, justify="left",
-        ).pack(anchor="w", padx=PAD, pady=(PAD, 6))
+        ).pack(anchor="w", pady=(0, 6))
         variables = {}
         for l in labs:
             var = tk.BooleanVar(value=l["lab"] not in excluidos)
             variables[l["lab"]] = var
             ttk.Checkbutton(
-                dialog, text=f"{l['lab'] or LAB_UNKNOWN} ({l['n']} informe{'s' if l['n'] != 1 else ''})",
+                body, text=f"{l['lab'] or LAB_UNKNOWN} ({l['n']} informe{'s' if l['n'] != 1 else ''})",
                 variable=var,
-            ).pack(anchor="w", padx=PAD + 8, pady=2)
+            ).pack(anchor="w", padx=8, pady=2)
 
         def _aceptar() -> None:
             nuevos = sorted(lab for lab, var in variables.items() if not var.get())
@@ -1181,12 +1179,13 @@ class AnalitixApp(ttk.Window):
             self._refresh_test_lists()
             self._update_status_patient()
 
-        botones = ttk.Frame(dialog)
-        botones.pack(fill="x", padx=PAD, pady=PAD)
+        botones = ttk.Frame(body)
+        botones.pack(fill="x", pady=(PAD, 0))
         ttk.Button(botones, text="Marcar todos", bootstyle="secondary-outline",
                    command=lambda: [v.set(True) for v in variables.values()]).pack(side="left")
-        ttk.Button(botones, text="Cancelar", bootstyle="secondary", command=dialog.destroy).pack(side="right")
-        ttk.Button(botones, text="Aceptar", bootstyle="primary", command=_aceptar).pack(side="right", padx=(0, 6))
+        ttk.Button(botones, text="Cancelar", command=dialog.destroy).pack(side="right")
+        ttk.Button(botones, text="Aceptar", bootstyle="primary", command=_aceptar).pack(side="right", padx=(0, 8))
+        self._center_dialog(dialog)
 
     # -- Entrada manual -----------------------------------------------------
     def _build_tab_manual(self) -> None:
@@ -1402,7 +1401,7 @@ class AnalitixApp(ttk.Window):
         if canonical_id is None:
             return
         series = get_series(self.con, canonical_id, self.current_patient_id)
-        fig = evolution_figure(series, label, self.min_points)
+        fig = self._evolution_figure(series, label, canonical_id)
         self._embed_figure(fig, self.chart_canvas_evolucion)
 
     def _show_test_info(self, selection: tuple[int, ...], tests: list | None = None) -> None:
@@ -1421,10 +1420,9 @@ class AnalitixApp(ttk.Window):
                 "Sin selección", "Selecciona antes uno o varios parámetros en la lista.", parent=self
             )
             return
-        dialog = tk.Toplevel(self)
-        dialog.title("Acerca de este parámetro" if len(candidatos) == 1 else "Acerca de estos parámetros")
-        dialog.transient(self)
-        dialog.grab_set()
+        dialog, outer = self._new_dialog(
+            "Acerca de este parámetro" if len(candidatos) == 1 else "Acerca de estos parámetros", resizable=True
+        )
 
         # Ancho acotado a la pantalla (con un tope de 96 caracteres, cómodo
         # en pantallas normales/grandes) — estimación gruesa de ~9 px por
@@ -1433,8 +1431,8 @@ class AnalitixApp(ttk.Window):
         max_width_chars = max(60, int(self.winfo_screenwidth() * 0.85 / 9))
         width = min(96, max_width_chars)
 
-        body = ttk.Frame(dialog)
-        body.pack(fill="both", expand=True, padx=PAD, pady=(PAD, 4))
+        body = ttk.Frame(outer)
+        body.pack(fill="both", expand=True, pady=(0, 4))
         text = tk.Text(body, width=width, wrap="word", relief="flat")
         scrollbar = ttk.Scrollbar(body, orient="vertical", command=text.yview)
         text.configure(yscrollcommand=scrollbar.set)
@@ -1474,14 +1472,15 @@ class AnalitixApp(ttk.Window):
         text.configure(height=min(max(display_lines + 1, 6), max_height_lines))
 
         ttk.Label(
-            dialog,
+            outer,
             text="Información general, no sustituye el consejo médico. Ver el manual de usuario "
             "(§3.1) para añadir o corregir una ficha.",
             bootstyle="secondary", wraplength=width * 7,
-        ).pack(anchor="w", padx=PAD)
-        ttk.Button(dialog, text="Cerrar", command=dialog.destroy).pack(pady=PAD)
-        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
-        dialog.update_idletasks()
+        ).pack(anchor="w")
+        botones = ttk.Frame(outer)
+        botones.pack(fill="x", pady=(PAD, 0))
+        ttk.Button(botones, text="Cerrar", command=dialog.destroy).pack(side="right")
+        self._center_dialog(dialog)
         self.wait_window(dialog)
 
     def _build_disclaimer_button(self, parent: ttk.Frame, titulo: str, texto: str) -> None:
@@ -1500,16 +1499,13 @@ class AnalitixApp(ttk.Window):
         """Diálogo de solo texto para el aviso completo de un panel
         clínico, mismo patrón de tamaño ajustado al contenido real que
         `_show_test_info`."""
-        dialog = tk.Toplevel(self)
-        dialog.title(titulo)
-        dialog.transient(self)
-        dialog.grab_set()
+        dialog, outer = self._new_dialog(titulo, resizable=True)
 
         max_width_chars = max(60, int(self.winfo_screenwidth() * 0.85 / 9))
         width = min(96, max_width_chars)
 
-        body = ttk.Frame(dialog)
-        body.pack(fill="both", expand=True, padx=PAD, pady=(PAD, 4))
+        body = ttk.Frame(outer)
+        body.pack(fill="both", expand=True, pady=(0, 4))
         text = tk.Text(body, width=width, wrap="word", relief="flat")
         scrollbar = ttk.Scrollbar(body, orient="vertical", command=text.yview)
         text.configure(yscrollcommand=scrollbar.set)
@@ -1524,9 +1520,10 @@ class AnalitixApp(ttk.Window):
         max_height_lines = max(15, int(self.winfo_screenheight() * 0.75 / 20))
         text.configure(height=min(max(display_lines + 1, 4), max_height_lines))
 
-        ttk.Button(dialog, text="Cerrar", command=dialog.destroy).pack(pady=PAD)
-        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
-        dialog.update_idletasks()
+        botones = ttk.Frame(outer)
+        botones.pack(fill="x", pady=(PAD, 0))
+        ttk.Button(botones, text="Cerrar", command=dialog.destroy).pack(side="right")
+        self._center_dialog(dialog)
         self.wait_window(dialog)
 
     # -- Comparativa ------------------------------------------------------
@@ -1957,7 +1954,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._lipid_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._lipid_series.get(canonical_id, []), label, self.min_points)
+        fig = self._evolution_figure(self._lipid_series.get(canonical_id, []), label, canonical_id)
         self._embed_figure(fig, self.chart_canvas_riesgo_cv)
 
     def _format_lipid_summary(self, s: dict) -> str:
@@ -2089,7 +2086,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._hepatic_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._hepatic_series.get(canonical_id, []), label, self.min_points)
+        fig = self._evolution_figure(self._hepatic_series.get(canonical_id, []), label, canonical_id)
         self._embed_figure(fig, self.chart_canvas_salud_hepatica)
 
     def _format_hepatic_summary(self, s: dict) -> str:
@@ -2237,7 +2234,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._renal_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._renal_series.get(canonical_id, []), label, self.min_points)
+        fig = self._evolution_figure(self._renal_series.get(canonical_id, []), label, canonical_id)
         self._embed_figure(fig, self.chart_canvas_funcion_renal)
 
     def _format_renal_summary(self, s: dict) -> str:
@@ -2398,7 +2395,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._hemogram_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._hemogram_series.get(canonical_id, []), label, self.min_points)
+        fig = self._evolution_figure(self._hemogram_series.get(canonical_id, []), label, canonical_id)
         self._embed_figure(fig, self.chart_canvas_hemograma)
 
     def _format_hemogram_summary(self, s: dict, alerta_linfocitosis: Optional[dict] = None) -> str:
@@ -2586,7 +2583,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._iron_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._iron_series.get(canonical_id, []), label, self.min_points)
+        fig = self._evolution_figure(self._iron_series.get(canonical_id, []), label, canonical_id)
         self._embed_figure(fig, self.chart_canvas_hierro)
 
     def _format_iron_summary(self, s: dict) -> str:
@@ -2843,7 +2840,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._uric_acid_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._uric_acid_series.get(canonical_id, []), label, self.min_points)
+        fig = self._evolution_figure(self._uric_acid_series.get(canonical_id, []), label, canonical_id)
         self._embed_figure(fig, self.chart_canvas_acido_urico)
 
     def _format_uric_acid_summary(self, s: dict) -> str:
@@ -2964,7 +2961,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._calcio_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._calcio_series.get(canonical_id, []), label, self.min_points)
+        fig = self._evolution_figure(self._calcio_series.get(canonical_id, []), label, canonical_id)
         self._embed_figure(fig, self.chart_canvas_calcio)
 
     def _format_calcio_summary(self, s: dict) -> str:
@@ -3033,7 +3030,7 @@ class AnalitixApp(ttk.Window):
         """Glucosa media estimada (eAG) a partir de la HbA1c (ver
         `glycemic_risk.py` para las citas científicas). Mismo patrón que "🩹 Ácido úrico"."""
         frame = self.tab_glucemia
-        ttk.Label(frame, text="Glucosa media estimada (eAG)", font=("Segoe UI", 14, "bold")).pack(
+        ttk.Label(frame, text="Glucosa: glucosa media estimada (eAG) e índice TyG", font=("Segoe UI", 14, "bold")).pack(
             anchor="w", padx=PAD, pady=(PAD, 0)
         )
         ttk.Label(frame, textvariable=self.status_var, bootstyle="info").pack(
@@ -3044,7 +3041,7 @@ class AnalitixApp(ttk.Window):
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor="w", padx=PAD, pady=(2, 4))
         self._build_disclaimer_button(
-            frame, "Aviso — Glucosa media estimada (eAG)",
+            frame, "Aviso — Glucosa (eAG y TyG)",
             "⚠ Apoyo informativo y de seguimiento, nunca un diagnóstico: la interpretación "
             "clínica final es siempre del médico.\n"
             "Fórmula ADAG: eAG (mg/dL) = 28.7 × HbA1c(%) − 46.7. Nathan DM, Kuenen J, Borg R, "
@@ -3054,7 +3051,12 @@ class AnalitixApp(ttk.Window):
             "son umbrales diagnósticos oficiales de la ADA, pero requieren un HbA1c de "
             "laboratorio estandarizado para uso diagnóstico formal. Ver \"ℹ ¿Qué es este "
             "índice?\" para la cita completa, las limitaciones (anemia, ferropenia, embarazo...) "
-            "y una explicación en lenguaje sencillo.",
+            "y una explicación en lenguaje sencillo.\n"
+            "Índice TyG = ln[triglicéridos (mg/dL) × glucosa (mg/dL) / 2], marcador indirecto de "
+            "resistencia a la insulina (Simental-Mendía LE et al., Metab Syndr Relat Disord "
+            "2008;6(4):299-304; fórmula corregida en Eur J Pediatr 2020;179:1171). Se muestra solo "
+            "como tendencia, sin umbral: los puntos de corte publicados dependen de la población. "
+            "Usa glucosa y triglicéridos del mismo informe; la fórmula se validó en ayunas.",
         )
         self.text_glucemia_summary = tk.Text(frame, height=6, wrap="word", relief="flat")
         self.text_glucemia_summary.pack(fill="x", padx=PAD, pady=(0, 6))
@@ -3122,7 +3124,7 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._glucemia_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = evolution_figure(self._glucemia_series.get(canonical_id, []), label, self.min_points)
+        fig = self._evolution_figure(self._glucemia_series.get(canonical_id, []), label, canonical_id)
         self._embed_figure(fig, self.chart_canvas_glucemia)
 
     def _format_glucemia_summary(self, s: dict) -> str:
@@ -3164,7 +3166,11 @@ class AnalitixApp(ttk.Window):
         self._glucose_series = (
             get_glucose_series(self.con, self.current_patient_id) if self.current_patient_id else []
         )
-        self._glucemia_indices = [(cid, GLYCEMIC_INDEX_LABELS[cid]) for cid in self._glucemia_series]
+        if self.current_patient_id:
+            # El índice TyG (`tyg_risk.py`) va en este mismo panel: también es metabolismo glucídico.
+            self._glucemia_series.update(get_tyg_series(self.con, self.current_patient_id))
+        etiquetas = {**GLYCEMIC_INDEX_LABELS, **TYG_INDEX_LABELS}
+        self._glucemia_indices = [(cid, etiquetas[cid]) for cid in self._glucemia_series]
         self.list_glucemia_indices.delete(0, "end")
         for cid, label in self._glucemia_indices:
             points = self._glucemia_series[cid]
@@ -3371,6 +3377,20 @@ class AnalitixApp(ttk.Window):
         ):
             for child in container.winfo_children():
                 child.destroy()
+
+    def _evolution_figure(self, series: list[dict], label: str, canonical_id: str | None):
+        """Gráfico de evolución común a Evolución y a todos los paneles:
+        umbral de pocos datos del usuario y banda de variación esperable
+        (RCV) de los dos últimos valores, si el parámetro tiene variación
+        biológica (`rcv.py`; los índices calculados de los paneles no la
+        tienen y se dibujan sin banda)."""
+        rcv = None
+        if len(series) >= 2:
+            rcv = classify_change(
+                canonical_id, series[-2]["value_num"], series[-1]["value_num"],
+                get_patient_sex(self.con, self.current_patient_id), series[-2].get("lab"), series[-1].get("lab"),
+            )
+        return evolution_figure(series, label, self.min_points, rcv=rcv)
 
     def _embed_figure(self, fig, container: ttk.Frame) -> None:
         for child in container.winfo_children():
@@ -3763,35 +3783,29 @@ class AnalitixApp(ttk.Window):
         """Pequeño diálogo modal para elegir, de entre las filas seleccionadas
         para fusionar, cuál se queda como identificador interno; el resto
         pasa a valer lo mismo. Devuelve `None` si se cancela."""
-        dialog = tk.Toplevel(self)
-        dialog.title("Elegir nombre a conservar")
-        dialog.transient(self)
-        dialog.grab_set()
+        dialog, body = self._new_dialog("Elegir nombre a conservar")
         ttk.Label(
-            dialog, text="¿Cuál de estas es la prueba a conservar? El resto se fundirá en ella.", padding=PAD
-        ).pack(anchor="w")
+            body, text="¿Cuál de estas es la prueba a conservar? El resto se fundirá en ella."
+        ).pack(anchor="w", pady=(0, 6))
         default_id = max(groups, key=lambda g: g["num_results"])["canonical_id"]
         choice = tk.StringVar(value=default_id)
         for g in groups:
             nombre = g["raw_names"][0][0]
             ttk.Radiobutton(
-                dialog, text=f"{nombre}  ({g['num_results']} resultados, id: {g['canonical_id']})",
+                body, text=f"{nombre}  ({g['num_results']} resultados, id: {g['canonical_id']})",
                 variable=choice, value=g["canonical_id"],
-            ).pack(anchor="w", padx=PAD, pady=2)
+            ).pack(anchor="w", padx=8, pady=2)
         result: dict[str, str | None] = {"value": None}
 
         def _confirm() -> None:
             result["value"] = choice.get()
             dialog.destroy()
 
-        def _cancel() -> None:
-            dialog.destroy()
-
-        botones = ttk.Frame(dialog)
-        botones.pack(fill="x", padx=PAD, pady=PAD)
-        ttk.Button(botones, text="Cancelar", command=_cancel).pack(side="right")
+        botones = ttk.Frame(body)
+        botones.pack(fill="x", pady=(PAD, 0))
+        ttk.Button(botones, text="Cancelar", command=dialog.destroy).pack(side="right")
         ttk.Button(botones, text="Fusionar", bootstyle="primary", command=_confirm).pack(side="right", padx=(0, 8))
-        dialog.protocol("WM_DELETE_WINDOW", _cancel)
+        self._center_dialog(dialog)
         self.wait_window(dialog)
         return result["value"]
 

@@ -21,6 +21,7 @@ VSG, sin índice combinado),
 úrico/hiperuricemia),
 [`calcium_risk.py`](../../src/analitix/calcium_risk.py) (calcio corregido
 por albúmina),
+[`tyg_risk.py`](../../src/analitix/tyg_risk.py) (índice TyG, solo tendencia),
 [`glycemic_risk.py`](../../src/analitix/glycemic_risk.py) (glucosa media
 estimada desde HbA1c) y
 [`thyroid_risk.py`](../../src/analitix/thyroid_risk.py) (TSH+T4L, solo

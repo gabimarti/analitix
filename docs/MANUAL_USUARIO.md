@@ -182,7 +182,7 @@ se ve el logo de Analitix como pantalla de bienvenida. Los menús son:
   **Laboratorios incluidos...** (ver §2.6.2).
 - **Paneles clínicos**: Riesgo cardiovascular, Salud hepática, Función
   renal, Hemograma, Metabolismo del hierro, Inflamación, Ácido úrico,
-  Calcio corregido, Glucosa media estimada (eAG), Tiroides — informes ya
+  Calcio corregido, Glucosa (eAG y TyG), Tiroides — informes ya
   preparados que combinan varios parámetros (o uno solo, con un umbral
   citado) con una interpretación propia; Tiroides es el único sin
   ninguna clasificación, solo el gráfico combinado TSH+T4L.
@@ -481,6 +481,13 @@ Gráfico de una prueba concreta a lo largo del tiempo.
     porcentual**: cuánto ha cambiado el último valor respecto al anterior y
     respecto al primero de toda la serie — útil para saber si un cambio es
     grande o pequeño en términos relativos, no solo en unidades absolutas.
+  - **Banda gris en el último punto** (pruebas con variación biológica
+    conocida, ver "¿Cambio real o variación normal?" en §2.6): el margen
+    de variación esperable desde el valor anterior. Si el último punto cae
+    dentro, el cambio cabe en la variación normal; si cae fuera, es
+    probablemente real (no necesariamente malo). Si el último valor es de
+    otro laboratorio, la leyenda lo indica y no se dibuja la banda. También
+    aparece en los gráficos de los paneles clínicos.
   - Con al menos 3 valores, además una **línea de tendencia** punteada
     (regresión lineal simple) con si el valor tiende a subir, bajar o
     mantenerse estable, la tasa de cambio aproximada al año y una
@@ -959,7 +966,7 @@ albúmina el mismo día.
   (con cita completa y la limitación de la fórmula en los extremos de
   albúmina).
 
-### 2.15 🍬 Glucosa media estimada — eAG (menú Paneles clínicos → Glucosa media estimada (eAG))
+### 2.15 🍬 Glucosa: eAG e índice TyG (menú Paneles clínicos → Glucosa (eAG y TyG))
 
 Traduce la HbA1c (%) a una glucosa media estimada en mg/dL, directamente
 comparable con las lecturas de glucosa — **apoyo informativo y de
@@ -983,6 +990,15 @@ siempre del médico.
   glucosa puntual de cada análisis junto a la eAG, en dos paneles con el
   mismo eje de fechas (igual que hace Inflamación con PCR+VSG) — para
   distinguir un día puntual raro de una tendencia mantenida.
+- **Índice TyG (triglicéridos-glucosa)**, en la misma lista de índices:
+  combina los triglicéridos y la glucosa de una misma analítica en un
+  número que los estudios usan como estimación indirecta de la
+  resistencia a la insulina. Se muestra **solo como tendencia, sin marcar
+  nada como alto o normal**: los puntos de corte publicados cambian según
+  la población y ninguno está pensado para ti. Necesita los dos valores en
+  el mismo informe (en mg/dL) y se validó con analíticas en ayunas, algo
+  que Analitix no sabe de tus informes. La fuente y las limitaciones
+  completas están en "ℹ️ ¿Qué es este índice?".
 
 ### 2.16 🦋 Tiroides (menú Paneles clínicos → Tiroides)
 
