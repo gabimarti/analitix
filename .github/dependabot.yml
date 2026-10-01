@@ -4,6 +4,11 @@ version: 2
 updates:
   - package-ecosystem: pip
     directory: "/"
+    # Los requisitos son mínimos (">="): CI ya instala siempre la última
+    # versión, así que solo se propone un cambio si una versión nueva queda
+    # fuera del rango. Las actualizaciones de seguridad van aparte
+    # (Dependabot alerts / security updates).
+    versioning-strategy: increase-if-necessary
     schedule:
       interval: weekly
     groups:
