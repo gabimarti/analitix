@@ -1,0 +1,39 @@
+name: Nuevo laboratorio u hospital
+description: Pedir soporte para los informes de un centro que Analitix aún no reconoce.
+labels: ["nuevo-laboratorio"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **Privacidad**: esta issue es pública. **No adjuntes el PDF real.** Para
+        añadir un centro hacen falta PDF de muestra: se acuerda cómo enviarlos en
+        privado (ver [CONTRIBUTING.md](https://github.com/gabimarti/analitix/blob/main/CONTRIBUTING.md)).
+  - type: input
+    id: center
+    attributes:
+      label: Laboratorio u hospital
+      placeholder: "Nombre del centro"
+    validations:
+      required: true
+  - type: textarea
+    id: format
+    attributes:
+      label: Cómo es el informe
+      description: Idioma, si los resultados van en columnas o en líneas, cómo marca los valores fuera de rango... Sin copiar datos reales.
+  - type: dropdown
+    id: samples
+    attributes:
+      label: ¿Puedes enviar PDF de muestra en privado?
+      options:
+        - Sí, anonimizados
+        - Sí, sin anonimizar (acordar envío privado)
+        - No
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacidad
+      options:
+        - label: He comprobado que esta issue no contiene datos de salud ni datos personales reales.
+          required: true

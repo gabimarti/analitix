@@ -2629,6 +2629,17 @@ Otros controles automáticos del repositorio (público):
   mover o borrar un administrador (así nadie más lanza una Release). El
   administrador del repositorio puede saltarse ambas reglas (push directo a
   `main`, con el aviso "Bypassed rule violations").
+- *Settings → Actions → General*: solo se permiten Actions de GitHub,
+  de creadores verificados y `gitleaks/gitleaks-action`, y es obligatorio
+  fijarlas por hash (un workflow con `@v7` no se ejecuta). Una Action nueva
+  de otro autor hay que añadirla a esa lista.
+- Releases inmutables (*Settings → General → Releases*): una vez publicada,
+  no se puede sustituir el instalador ni mover la etiqueta. Para corregir
+  una versión publicada se saca otra (`X.Y.Z+1`), no se reescribe.
+- Plantillas de issue (`.github/ISSUE_TEMPLATE/`: "Error", "Nuevo
+  laboratorio u hospital"; sin issues en blanco, enlace a avisos de
+  seguridad privados) y de PR (`.github/pull_request_template.md`), todas
+  con el aviso de no adjuntar datos de salud reales.
 - Las Actions de todos los workflows están fijadas por hash de commit (con
   la versión en un comentario) en vez de por etiqueta, para que un cambio en
   una Action de terceros no afecte sin revisión a la Release, que tiene
@@ -2842,8 +2853,10 @@ Release.
    se verifica con `gh attestation verify Analitix-Setup-X.Y.Z.exe --repo gabimarti/analitix`.
 
 Si algún paso falla no se publica nada; el registro está en la pestaña
-Actions. Para repetir una versión fallida: `git tag -d vX.Y.Z`,
-`git push origin :refs/tags/vX.Y.Z`, corregir y volver a etiquetar.
+Actions. Para repetir una versión fallida **antes de que se publique la
+Release**: `git tag -d vX.Y.Z`, `git push origin :refs/tags/vX.Y.Z`,
+corregir y volver a etiquetar. Una Release ya publicada es inmutable: se
+corrige publicando la siguiente versión de parche.
 
 La página de descargas es `…/releases/latest`.
 
