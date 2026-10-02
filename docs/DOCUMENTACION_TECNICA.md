@@ -2771,7 +2771,8 @@ Otros controles automáticos del repositorio (público):
   o hacer force-push, y un PR solo se integra con "Python tests", "Privacy
   check" y "Secret scan" en verde; las etiquetas `v*` solo las puede crear,
   mover o borrar un administrador (así nadie más lanza una Release). En
-  `develop`, prohibido borrarla o hacer force-push. El administrador puede
+  `develop`, prohibido borrarla o hacer force-push, y un PR solo se integra
+  con los mismos tres checks en verde. El administrador puede
   saltarse las reglas (aviso "Bypassed rule violations"), pero el
   procedimiento de §8.1 no hace push directo a `main`: solo se usa en una
   emergencia.
@@ -2987,6 +2988,25 @@ versión **publicada**, no una a medio hacer:
   operativa de desarrollo o la gestión del repositorio (workflows, reglas,
   procedimientos) no se anotan en el CHANGELOG. Los tests y los controles de
   privacidad se ejecutan igual en cada push a `develop`.
+- **Pull requests de colaboradores**: van contra `develop` desde una rama
+  de su *fork*. El PR ya es la separación: nada entra en `develop` hasta
+  que el mantenedor lo revisa y lo integra, y el ruleset de `develop` exige
+  "Python tests", "Privacy check" y "Secret scan" en verde. Para probarlo
+  en local antes de integrarlo: `gh pr checkout <número>`, y después
+  `git switch develop`. No se usa una rama intermedia (p. ej. `contrib`):
+  obligaría a fusionar dos veces y a mantenerla al día, con más conflictos.
+- **Workflows de colaboradores nuevos**: GitHub no ejecuta las Actions del
+  primer PR de un colaborador hasta que el mantenedor lo aprueba
+  (*Settings → Actions → General → Approval for running fork pull request
+  workflows*, "Require approval for first-time contributors", activo). Así
+  nadie ejecuta código en las Actions del proyecto sin revisión previa.
+  Antes de aprobarlo, revisar sobre todo los cambios en `.github/` y en
+  los scripts.
+- **Cambios grandes del mantenedor**: en una rama propia
+  `feature/<tema>` (p. ej. `feature/pdf-personalizado`), fusionada en
+  `develop` cuando esté terminada, igual que un PR externo. Así el trabajo
+  a medias no se mezcla con lo ya terminado. Los cambios pequeños pueden ir
+  directos a `develop`.
 - **Corrección urgente de una versión publicada**: rama `hotfix/X.Y.Z`
   desde `main`, PR a `main`, publicar el parche (pasos 3-5) y después
   fusionar `main` en `develop`.

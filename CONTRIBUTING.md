@@ -38,7 +38,9 @@ programar**. Todo tipo de ayuda suma:
 - **Envía un pull request** si ya tienes un cambio de código o
   documentación, **contra la rama `develop`** (no `main`). `main` contiene
   solo la última versión publicada; `develop` se fusiona en `main` al
-  publicar cada versión (ver la documentación técnica, §8.1).
+  publicar cada versión (ver la documentación técnica, §8.1). En tu primer
+  PR, los checks automáticos esperan a que el mantenedor los apruebe: es
+  una medida de seguridad de GitHub, no un rechazo.
 - También me encontrarás en [GitHub](https://github.com/gabimarti) y en
   [X/Twitter](https://x.com/gmarti).
 
