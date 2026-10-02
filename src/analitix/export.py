@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -92,11 +93,59 @@ _PDF_DISCLAIMER = (
 )
 
 
+_FOOTER_STRIP_IN = 0.4  # franja propia del pie en las páginas que no eran A4
+# Tabla de parámetros: el nombre ocupa casi la mitad (antes las cinco
+# columnas medían igual y el nombre se cortaba); el estado es una palabra.
+_TABLE_COL_WIDTHS = (0.46, 0.15, 0.15, 0.09, 0.15)
+_TABLE_NAME_MAX = 60  # caracteres que caben en esa columna a 8 pt
+_A4_IN = (8.27, 11.69)
+
+
+def _fit_page_a4(fig: Figure) -> None:
+    """Toda página del PDF sale en tamaño A4, para imprimirla aprovechando
+    la hoja: las figuras que no lo son (gráficos de evolución, mapa de
+    calor, "Qué ha cambiado"...) pasan a A4 vertical si son más altas que
+    anchas, o apaisado si no, ocupando todo el ancho. Como su contenido
+    llega hasta el borde inferior (p. ej. la leyenda del mapa de calor),
+    se reserva abajo una franja de `_FOOTER_STRIP_IN` para el pie y se
+    comprime el resto en vertical (ejes, textos y leyendas de figura), para
+    que el pie no se superponga a nada. Las páginas que ya son A4 (portada,
+    tablas, textos) tienen su sitio para el pie y no se tocan."""
+    ancho, alto = fig.get_size_inches()
+    if sorted((round(ancho, 2), round(alto, 2))) == sorted(_A4_IN):
+        return
+    nuevo_ancho, nuevo_alto = _A4_IN if alto > ancho else _A4_IN[::-1]
+    escala, desplazamiento = 1 - _FOOTER_STRIP_IN / nuevo_alto, _FOOTER_STRIP_IN / nuevo_alto
+    fig.set_size_inches(nuevo_ancho, nuevo_alto)
+    rect = getattr(fig, "analitix_tight_rect", None)
+    if rect is not None:
+        # Figuras de altura variable ("Qué ha cambiado", mapa de calor): se
+        # recalculan sus márgenes al tamaño A4 final, dentro del espacio que
+        # deja libre el pie, en vez de comprimirlas (si no, las etiquetas
+        # largas y la leyenda superior quedaban cortadas por el borde).
+        x0, y0, x1, y1 = rect
+        fig.tight_layout(rect=(x0, desplazamiento + y0 * escala, x1, desplazamiento + y1 * escala))
+        for leyenda in fig.legends:
+            leyenda.set_bbox_to_anchor((0, desplazamiento, 1, escala), transform=fig.transFigure)
+        return
+    for ax in fig.axes:
+        pos = ax.get_position()
+        ax.set_position((pos.x0, pos.y0 * escala + desplazamiento, pos.width, pos.height * escala))
+    for texto in fig.texts:
+        x, y = texto.get_position()
+        texto.set_position((x, y * escala + desplazamiento))
+    for leyenda in fig.legends:
+        leyenda.set_bbox_to_anchor((0, desplazamiento, 1, escala), transform=fig.transFigure)
+
+
 def _add_footer(fig: Figure, tipo_informe: str, pagina: int) -> None:
     """Pie de página (tipo de informe a la izquierda, nº de página a la
-    derecha) en todas las páginas del PDF, incluida la portada."""
-    fig.text(0.06, 0.02, tipo_informe, fontsize=8, color="#777777")
-    fig.text(0.94, 0.02, f"Página {pagina}", fontsize=8, color="#777777", ha="right")
+    derecha) en todas las páginas del PDF, incluida la portada, en una
+    franja propia que no tapa el contenido, en una página A4 (`_fit_page_a4`)."""
+    _fit_page_a4(fig)
+    y = 0.08 / fig.get_size_inches()[1]  # a 0,08 pulgadas del borde inferior
+    fig.text(0.06, y, tipo_informe, fontsize=8, color="#777777")
+    fig.text(0.94, y, f"Página {pagina}", fontsize=8, color="#777777", ha="right")
 
 
 def _cover_page(patient_name: str, tipo_informe: str, fecha: str) -> Figure:
@@ -114,7 +163,7 @@ def _cover_page(patient_name: str, tipo_informe: str, fecha: str) -> Figure:
     fig.text(0.5, 0.50, tipo_informe, fontsize=14, ha="center", color="#555555")
     fig.text(0.5, 0.44, f"Paciente: {patient_name}", fontsize=12, ha="center")
     fig.text(
-        0.5, 0.40, f"Último informe: {fecha[:10]}  ·  Generado: {dt.date.today().isoformat()}",
+        0.5, 0.40, f"Último informe de laboratorio: {fecha[:10]}  ·  Generado: {dt.date.today().isoformat()}",
         fontsize=10, ha="center", color="#555555",
     )
     fig.text(0.5, 0.1, _PDF_DISCLAIMER, fontsize=8, color="#555555", ha="center", wrap=True)
@@ -126,7 +175,7 @@ def _table_page(fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: floa
     la pestaña Resumen de `gui.py`)."""
     fig = Figure(figsize=(8.27, 11.69), dpi=100)  # A4 vertical
     fig.text(0.06, 0.95, subtitulo, fontsize=14, weight="bold")
-    fig.text(0.06, 0.925, f"Último informe: {fecha[:10]}", fontsize=9, color="#555555")
+    fig.text(0.06, 0.925, f"Último informe de laboratorio: {fecha[:10]}", fontsize=9, color="#555555")
 
     ax = fig.add_axes((0.06, 0.08, 0.88, 0.82))
     ax.axis("off")
@@ -141,10 +190,14 @@ def _table_page(fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: floa
             referencia = f"{ref_low:g} - {ref_high:g}" if ref_low is not None and ref_high is not None else "-"
             estado = _ESTADO_TEXTO.get(f["flag_calc"], "Normal")
             variacion = "-" if f["pct"] is None else f"{f['pct']:+.1f}%{' (*)' if f['brusco'] else ''}"
+            nombre = f["raw_name"] or ""
+            if len(nombre) > _TABLE_NAME_MAX:
+                nombre = nombre[: _TABLE_NAME_MAX - 1] + "…"
             filas_texto.append(
-                [f["raw_name"], f"{f['value_num']:g} {f['unit'] or ''}".strip(), referencia, estado, variacion]
+                [nombre, f"{f['value_num']:g} {f['unit'] or ''}".strip(), referencia, estado, variacion]
             )
-        tabla = ax.table(cellText=filas_texto, colLabels=columnas, loc="upper center", cellLoc="left")
+        tabla = ax.table(cellText=filas_texto, colLabels=columnas, loc="upper center", cellLoc="left",
+                         colWidths=_TABLE_COL_WIDTHS)
         tabla.auto_set_font_size(False)
         tabla.set_fontsize(8)
         tabla.scale(1, 1.4)
@@ -221,3 +274,42 @@ def export_pdf(
             pagina += 1
             paginas_graficos += 1
     return paginas_graficos
+
+
+# -- Informe PDF personalizado (Exportar → "Informe PDF personalizado...") --
+# El usuario elige las secciones en `gui._export_custom_pdf`, que construye
+# las figuras; aquí solo se monta el documento: portada + páginas en el
+# orden recibido + pie en todas, igual que `export_pdf`.
+
+def table_page(fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: float, subtitulo: str) -> Figure:
+    """Página de tabla (la misma de `export_pdf`), para el informe personalizado."""
+    return _table_page(fecha, filas, cambio_brusco_pct, subtitulo)
+
+
+def text_page(titulo: str, texto: str) -> Figure:
+    """Página A4 con un título y un texto (p. ej. el resumen de un panel
+    clínico tal como se ve en pantalla). El texto se ajusta a lo ancho y
+    se corta al final de la página si no cabe; los resúmenes de los
+    paneles caben de sobra."""
+    fig = Figure(figsize=(8.27, 11.69), dpi=100)  # A4 vertical
+    fig.text(0.06, 0.95, titulo, fontsize=14, weight="bold")
+    lineas = []
+    for parrafo in texto.strip().splitlines():
+        lineas.extend(textwrap.wrap(parrafo, width=_TEXT_PAGE_WIDTH) or [""])
+    fig.text(0.06, 0.91, "\n".join(lineas[:_TEXT_PAGE_MAX_LINES]), fontsize=9, va="top", linespacing=1.4)
+    return fig
+
+
+_TEXT_PAGE_WIDTH = 100
+_TEXT_PAGE_MAX_LINES = 70
+
+
+def export_pages_pdf(patient_name: str, fecha: str, paginas: list[Figure], path: Path, *, tipo_informe: str) -> int:
+    """Escribe el informe personalizado: portada (`_cover_page`, con el
+    aviso de que no es un diagnóstico) y después `paginas` en ese orden,
+    todas con pie (`_add_footer`). Devuelve el nº total de páginas."""
+    with PdfPages(path) as pdf:
+        for numero, fig in enumerate([_cover_page(patient_name, tipo_informe, fecha), *paginas], start=1):
+            _add_footer(fig, tipo_informe, numero)
+            pdf.savefig(fig)
+    return len(paginas) + 1

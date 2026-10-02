@@ -591,6 +591,15 @@ def range_distance(value: Optional[float], ref_low: Optional[float], ref_high: O
     return 0.0
 
 
+def _ink_for(rgba) -> str:
+    """Color de texto que contrasta con el de la casilla: blanco sobre
+    colores oscuros, casi negro sobre claros (luminancia relativa WCAG)."""
+    def canal(c: float) -> float:
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (canal(float(c)) for c in rgba[:3])
+    return "white" if 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.35 else HEATMAP_INK
+
+
 def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> Figure:
     """Mapa de calor del historial: una fila por parámetro, una columna por
     fecha de analítica, color según la posición del valor respecto a su
@@ -636,12 +645,25 @@ def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> 
     ax.set_xticklabels([f"{d[8:10]}/{d[5:7]}/{d[2:4]}" for d in dates[::step]], rotation=90, fontsize=7)
     ax.tick_params(axis="both", length=0, colors="#52514e")
 
-    # Etiquetas selectivas: solo el valor de las casillas fuera de rango.
+    # Etiquetas selectivas: el valor de las casillas fuera de rango. Con
+    # muchas columnas no caben todas: solo los extremos de cada fila (el
+    # valor más alto por encima del rango y el más bajo por debajo), para ver
+    # hasta dónde ha llegado cada parámetro.
     if n_cols <= HEATMAP_MAX_LABELED_COLUMNS:
-        for (i, j), pos in positions.items():
-            if pos:
-                ax.text(j, i, f"{cells[(i, j)]['value_num']:g}", ha="center", va="center", fontsize=6.5,
-                        color="white" if abs(pos) > 0.6 else HEATMAP_INK)
+        etiquetadas = [k for k, pos in positions.items() if pos]
+    else:
+        etiquetadas = []
+        for i in range(len(rows)):
+            fuera = [(k, cells[k]["value_num"]) for k, pos in positions.items() if k[0] == i and pos]
+            altos = [kv for kv in fuera if positions[kv[0]] > 0]
+            bajos = [kv for kv in fuera if positions[kv[0]] < 0]
+            if altos:
+                etiquetadas.append(max(altos, key=lambda kv: kv[1])[0])
+            if bajos:
+                etiquetadas.append(min(bajos, key=lambda kv: kv[1])[0])
+    for i, j in etiquetadas:
+        ax.text(j, i, f"{cells[(i, j)]['value_num']:g}", ha="center", va="center", fontsize=6.5,
+                color=_ink_for(rgba[i, j]), weight="bold")
     for (i, j), pos in positions.items():
         if pos is None:
             ax.plot(j, i, marker="o", markersize=2.5, color="#898781", linestyle="none")
@@ -658,6 +680,9 @@ def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> 
     ]
     fig.legend(handles=legend, loc="lower center", ncol=len(legend), fontsize=7, frameon=False)
     fig.tight_layout(rect=(0, 0.1, 1, 1))
+    # Al pasarla a A4 (`export._fit_page_a4`) se recalculan los márgenes con
+    # este mismo `rect`: las etiquetas largas de las filas no se cortan.
+    fig.analitix_tight_rect = (0, 0.1, 1, 1)
     ax.analitix_heatmap = {"rows": [label for label, _ in rows], "dates": dates, "cells": cells}
     return fig
 
@@ -756,7 +781,7 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
     ax.tick_params(axis="both", colors="#52514e", length=0)
     ax.set_xlabel("Cambio respecto al informe anterior (1 = el ancho del rango de referencia)", fontsize=8,
                   color="#52514e")
-    ax.set_title(title, fontsize=11, loc="left", pad=34 if any(esperable) else 22)  # leyenda de 2 filas
+    ax.set_title(title, fontsize=11, loc="left", pad=34)  # leyenda en 2 filas: cabe también en un A4 vertical
     legend = [
         Patch(facecolor=CHANGE_WORSE, label="▲ Se aleja del rango o sale de él"),
         Patch(facecolor=CHANGE_BETTER, label="✓ Se acerca al rango o vuelve a él"),
@@ -767,10 +792,11 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
                             label="Atenuada = dentro de la variación esperable (RCV)"))
     # Leyenda arriba, junto al título: con muchas filas la figura es alta y
     # abajo quedaría lejos de lo que explica.
-    ax.legend(handles=legend, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2 if len(legend) > 3 else 3,
+    ax.legend(handles=legend, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2,
               fontsize=7, frameon=False,
               borderaxespad=0.2)
     fig.tight_layout()
+    fig.analitix_tight_rect = (0, 0, 1, 1)  # ver heatmap_figure
     ax.analitix_changes = items
     ax.analitix_changes_unchanged = unchanged
     return fig
