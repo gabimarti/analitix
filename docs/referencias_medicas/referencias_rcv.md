@@ -60,7 +60,7 @@ décadas.
     Con el mayor, el umbral es más prudente: se marcan menos cambios como
     "reales" por error.
   - El usuario puede poner el CVA real de su laboratorio en su fichero
-    local (§6).
+    local (§7).
 
 ## 3. Origen de los valores (solo datos abiertos)
 
@@ -149,7 +149,50 @@ Fuentes:
 | Linfocitos (%), INR | Sin dato primario de calidad en adultos sanos. |
 | Fibrinógeno derivado | Es otro método (derivado del tiempo de protrombina), distinto del fibrinógeno de Clauss que estudia EuBIVAS. |
 
-## 6. Limitaciones y cómo corregir valores
+## 6. Rango personal (punto de equilibrio) — implementado 2026-10-02
+
+Además del rango de referencia del laboratorio, que se calcula con mucha
+gente distinta, cada persona tiene su propio "punto de equilibrio" y oscila
+poco en torno a él. Analitix puede dibujar ese **rango personal** en el
+gráfico de Evolución, con el interruptor "Mostrar mi rango personal",
+desactivado por defecto.
+
+- **Método**: Coşkun A, Sandberg S, Unsal I, et al. *Clin Chem*
+  2021;67(2):374-384, doi:10.1093/clinchem/hvaa233 (verificado en el texto
+  completo, ecuación 4):
+  - punto de equilibrio (SP) = media de n resultados previos en estado
+    estable;
+  - prRI = SP · (1 ± Z·√((n+1)/n)·√(CVI² + CVA²)/100), con Z = 1,96.
+
+  Con n ≥ 3 el intervalo ya es robusto. Usa los mismos CVI de §3 y el
+  mismo CVA efectivo de §2.
+- **Base empírica**: Foy BH et al. "Haematological setpoints are a stable
+  and patient-specific deep phenotype". *Nature* 2025;637:430-438,
+  doi:10.1038/s41586-024-08264-5. En 12.407 adultos seguidos durante 20
+  años, los puntos de equilibrio del hemograma fueron estables y propios
+  de cada persona.
+- **Qué valores cuentan** (decisión de diseño de Analitix): todos los
+  anteriores al último que estaban **dentro del rango de referencia de su
+  informe**. Nunca entra un valor fuera de rango, para no "normalizar" lo
+  anormal, y el último queda fuera porque es el que se compara. Hacen falta
+  al menos 3. Coşkun usa resultados de un periodo de salud estable; aquí
+  "dentro de rango" es una aproximación, porque Analitix no sabe si
+  estabas sano en esas fechas.
+- **Limitaciones, a tener siempre presentes**:
+  - Salir del rango personal **no significa enfermedad** si sigues dentro
+    del rango del laboratorio. Es una señal para fijarse, no un
+    diagnóstico.
+  - Si en las analíticas "normales" ya había un problema incipiente, el
+    rango personal lo da por normal.
+  - El modelo supone un mismo método de medida. Si los valores vienen de
+    varios laboratorios, la leyenda lo indica ("mezcla laboratorios"); se
+    puede limitar a uno con Análisis → Laboratorios incluidos.
+  - Solo existe para las pruebas con variación biológica en la tabla
+    (§3). Los índices calculados de los paneles no la tienen.
+  - El límite inferior nunca baja de 0 (la fórmula simétrica podría darlo
+    con CVI muy altos).
+
+## 7. Limitaciones y cómo corregir valores
 
 - **Población de los estudios.** Los CVI proceden de adultos sanos en
   estado estable. En una enfermedad crónica, la variación propia puede ser

@@ -141,6 +141,18 @@ def test_evolution_rcv_band():
     assert any("otro laboratorio" in t.get_text() for t in otro.axes[0].get_legend().get_texts())
 
 
+def test_evolution_personal_band():
+    from analitix.charts import evolution_figure
+
+    serie = [_row(f"2024-0{m}-01", 14.0, "A") for m in (1, 2, 3, 4)]
+    pr = dict(bajo=13.0, alto=15.0, punto=14.0, n=3, labs=2)
+    ax = evolution_figure(serie, "x", 2, personal=pr).axes[0]
+    labels = [t.get_text() for t in ax.get_legend().get_texts()]
+    assert any(t.startswith("Tu rango personal 13–15 (n=3)") and "mezcla laboratorios" in t for t in labels)
+    assert not any("rango personal" in t for t in
+                   [t.get_text() for t in evolution_figure(serie, "x", 2).axes[0].get_legend().get_texts()])
+
+
 def test_series_summary_text():
     from analitix.charts import series_summary
 

@@ -442,17 +442,40 @@ def _draw_rcv_band(ax, series: list[dict[str, Any]], rcv: dict[str, Any]) -> Non
     ax.set_ylim(min(ymin, bajo), max(ymax, alto))
 
 
+COLOR_PERSONAL = "#6b46c1"  # rango personal: distinto del verde/azul del rango del laboratorio
+
+
+def _draw_personal_band(ax, series: list[dict[str, Any]], pr: dict[str, Any]) -> None:
+    """Banda rayada del rango personal (`rcv.personal_range`) a lo ancho del
+    periodo: más estrecha que la del laboratorio, porque mide cuánto
+    varías TÚ. Salirse de ella no significa enfermedad si sigues dentro
+    del rango del laboratorio."""
+    fechas = [_parse_fecha(series[0]["fecha"]), _parse_fecha(series[-1]["fecha"])]
+    varios = " · mezcla laboratorios" if pr["labs"] > 1 else ""
+    ax.fill_between(
+        fechas, [pr["bajo"]] * 2, [pr["alto"]] * 2, facecolor="none", edgecolor=COLOR_PERSONAL,
+        hatch="///", linewidth=0.8, alpha=0.45, zorder=0,
+        label=f"Tu rango personal {pr['bajo']:.3g}–{pr['alto']:.3g} (n={pr['n']}){varios}",
+    )
+    ymin, ymax = ax.get_ylim()
+    ax.set_ylim(min(ymin, pr["bajo"]), max(ymax, pr["alto"]))
+
+
 def evolution_figure(
     series: list[dict[str, Any]], title: str, min_points: int = DEFAULT_MIN_POINTS,
-    rcv: Optional[dict[str, Any]] = None,
+    rcv: Optional[dict[str, Any]] = None, personal: Optional[dict[str, Any]] = None,
 ) -> Figure:
     """Gráfico de evolución de una prueba en el tiempo, con las líneas de
     mínimo/máximo de referencia y los valores fuera de rango resaltados.
     `rcv` (opcional, `rcv.classify_change` de los dos últimos valores):
-    añade la banda de variación esperable (`_draw_rcv_band`)."""
+    añade la banda de variación esperable (`_draw_rcv_band`). `personal`
+    (opcional, `rcv.personal_range`): añade la banda del rango personal
+    (`_draw_personal_band`)."""
     fig = Figure(figsize=(8, 4.5), dpi=100)
     ax = fig.add_subplot(111)
     handles = _plot_series_on_ax(ax, series, title, min_points=min_points)
+    if handles and personal:
+        _draw_personal_band(ax, series, personal)
     if handles and rcv and len(series) >= 2:
         _draw_rcv_band(ax, series, rcv)
     ax.set_title(title)

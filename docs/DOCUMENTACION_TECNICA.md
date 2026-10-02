@@ -2044,6 +2044,17 @@ parámetros excluidos a propósito.
   (`repository.get_patient_sex`); sin sexo, el mayor.
 - `load_table()` (`lru_cache`, se lee una vez por sesión) = capa de la app
   + capa del usuario. `read_table` ignora las líneas que empiezan por "#".
+- `personal_range(canonical_id, series, sex)` (rango personal, Coşkun 2021,
+  ecuación 4): SP = media de los valores anteriores al último que tienen
+  rango y no están fuera de él (mínimo `PERSONAL_MIN_POINTS = 3`); semiancho
+  = Z·√((n+1)/n)·√(CVI² + CVA²) % de SP, con el mismo CVA efectivo que el
+  RCV, y límite inferior ≥ 0. Devuelve también `labs` (cuántos laboratorios
+  aportan valores). Lo dibuja `charts._draw_personal_band` (banda rayada
+  `COLOR_PERSONAL` a lo ancho del periodo) vía `evolution_figure(personal=...)`;
+  `gui._evolution_figure(..., with_personal=True)` lo calcula solo desde
+  Evolución (`_show_evolution`), que es donde está su interruptor
+  (`var_personal_range`, persistido en `settings.personal_range`); los
+  paneles no lo muestran.
 - **Solo datos abiertos**: cada fila del CSV cita su artículo (DOI y
   tabla); ningún valor procede de la web de la EFLM Biological Variation
   Database, cuyos términos no permiten redistribuirla.

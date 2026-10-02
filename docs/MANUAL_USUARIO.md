@@ -481,6 +481,18 @@ Gráfico de una prueba concreta a lo largo del tiempo.
     porcentual**: cuánto ha cambiado el último valor respecto al anterior y
     respecto al primero de toda la serie — útil para saber si un cambio es
     grande o pequeño en términos relativos, no solo en unidades absolutas.
+  - **Tu rango personal (opcional)**: activa el interruptor **Mostrar mi
+    rango personal**, debajo de la lista de pruebas, para ver una banda
+    rayada morada con tu propio rango "normal". Se calcula con tus
+    analíticas anteriores que estaban dentro del rango del laboratorio (al
+    menos 3, sin contar la última), y suele ser más estrecho que el del
+    laboratorio, porque mide cuánto varías **tú**. Si la última analítica
+    sale de tu rango personal pero sigue dentro del rango del laboratorio,
+    no significa que estés enfermo, solo que te has movido de tu valor
+    habitual; puede ser algo para comentar con tu médico. La elección se
+    recuerda. Solo está en esta pantalla, no en los paneles clínicos.
+    Fuente y limitaciones en Ayuda → Referencias científicas
+    ("referencias_rcv").
   - **Banda gris en el último punto** (pruebas con variación biológica
     conocida, ver "¿Cambio real o variación normal?" en §2.6): el margen
     de variación esperable desde el valor anterior. Si el último punto cae

@@ -125,7 +125,7 @@ from analitix import (
     thyroid_risk as _thyroid,
     uric_acid_risk as _uric,
 )
-from analitix.rcv import classify_change
+from analitix.rcv import classify_change, personal_range
 from analitix.textutils import strip_accents
 from analitix.tyg_risk import INDEX_LABELS as TYG_INDEX_LABELS, get_tyg_series
 from analitix.thyroid_risk import get_latest_thyroid_summary, get_thyroid_series
@@ -322,6 +322,9 @@ class AnalitixApp(ttk.Window):
         self.var_reports_dir = tk.StringVar(value=str(self.reports_dir))
         self.var_import_subfolders = tk.BooleanVar(value=get_setting(self.con, "import_subfolders", "1") == "1")
         self.min_points = int(get_setting(self.con, "min_points_evolucion", str(DEFAULT_MIN_POINTS)))
+        # Rango personal (`rcv.personal_range`) en el gráfico de Evolución:
+        # desactivado por defecto, se activa con su interruptor en esa pantalla.
+        self.var_personal_range = tk.BooleanVar(value=get_setting(self.con, "personal_range", "0") == "1")
         # Laboratorios excluidos de gráficos y paneles (Análisis → Laboratorios
         # incluidos...): se guardan en `settings` y se cargan en la tabla
         # temporal de la conexión que filtra las consultas (`repository`).
@@ -1387,6 +1390,10 @@ class AnalitixApp(ttk.Window):
             left, text="ℹ️ ¿Qué es este parámetro?", bootstyle="info",
             command=lambda: self._show_test_info(self.list_tests_evolucion.curselection()),
         ).pack(fill="x")
+        ttk.Checkbutton(
+            left, text="Mostrar mi rango personal", variable=self.var_personal_range,
+            command=self._toggle_personal_range, bootstyle="round-toggle",
+        ).pack(anchor="w", pady=(10, 0))
 
         self.chart_frame_evolucion = ttk.Frame(frame)
         self.chart_frame_evolucion.pack(side="left", fill="both", expand=True, padx=PAD, pady=PAD)
@@ -1401,7 +1408,7 @@ class AnalitixApp(ttk.Window):
         if canonical_id is None:
             return
         series = get_series(self.con, canonical_id, self.current_patient_id)
-        fig = self._evolution_figure(series, label, canonical_id)
+        fig = self._evolution_figure(series, label, canonical_id, with_personal=True)
         self._embed_figure(fig, self.chart_canvas_evolucion)
 
     def _show_test_info(self, selection: tuple[int, ...], tests: list | None = None) -> None:
@@ -3378,19 +3385,33 @@ class AnalitixApp(ttk.Window):
             for child in container.winfo_children():
                 child.destroy()
 
-    def _evolution_figure(self, series: list[dict], label: str, canonical_id: str | None):
+    def _evolution_figure(
+        self, series: list[dict], label: str, canonical_id: str | None, with_personal: bool = False
+    ):
         """Gráfico de evolución común a Evolución y a todos los paneles:
         umbral de pocos datos del usuario y banda de variación esperable
         (RCV) de los dos últimos valores, si el parámetro tiene variación
         biológica (`rcv.py`; los índices calculados de los paneles no la
-        tienen y se dibujan sin banda)."""
+        tienen y se dibujan sin banda). El rango personal solo en Evolución
+        (`with_personal`), donde está su interruptor."""
+        sex = get_patient_sex(self.con, self.current_patient_id)
         rcv = None
         if len(series) >= 2:
             rcv = classify_change(
                 canonical_id, series[-2]["value_num"], series[-1]["value_num"],
-                get_patient_sex(self.con, self.current_patient_id), series[-2].get("lab"), series[-1].get("lab"),
+                sex, series[-2].get("lab"), series[-1].get("lab"),
             )
-        return evolution_figure(series, label, self.min_points, rcv=rcv)
+        personal = (
+            personal_range(canonical_id, series, sex) if with_personal and self.var_personal_range.get() else None
+        )
+        return evolution_figure(series, label, self.min_points, rcv=rcv, personal=personal)
+
+    def _toggle_personal_range(self) -> None:
+        """Interruptor "Mostrar mi rango personal" de Evolución: se recuerda
+        y redibuja el gráfico si hay una prueba elegida."""
+        set_setting(self.con, "personal_range", "1" if self.var_personal_range.get() else "0")
+        if self.list_tests_evolucion.curselection():
+            self._show_evolution()
 
     def _embed_figure(self, fig, container: ttk.Frame) -> None:
         for child in container.winfo_children():
