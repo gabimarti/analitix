@@ -1,0 +1,27 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **Privacidad**: este foro es público. **No publiques informes PDF, capturas
+        con datos de salud ni datos personales** (nombre, DNI, NHC, fecha de
+        nacimiento, resultados). Para algo privado, escribe a contact@analitix.slmail.me.
+  - type: textarea
+    id: pregunta
+    attributes:
+      label: Tu pregunta
+      description: Qué quieres saber o hacer con Analitix.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versión (opcional)
+      description: Menú Ayuda → Acerca de.
+      placeholder: "0.10.0"
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacidad
+      options:
+        - label: He comprobado que mi mensaje no contiene datos de salud ni datos personales reales.
+          required: true

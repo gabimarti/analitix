@@ -60,7 +60,7 @@ informar de una vulnerabilidad: los complementa.
 - Si hace falta un PDF para reproducir un problema, anonimízalo (sustituye
   todos los datos identificativos y, si puedes, también los valores) o
   recréalo con datos ficticios. Un PDF real solo se comparte en privado
-  y previo acuerdo.
+  y previo acuerdo, escribiendo a [contact@analitix.slmail.me](mailto:contact@analitix.slmail.me).
 - **No envíes datos reales a herramientas de IA** (asistentes de código,
   chats) para preparar una contribución. Si usas una, trabaja solo con
   datos sintéticos.
@@ -227,8 +227,9 @@ Una contribución no se acepta, aunque funcione, si:
   salvaguardas;
 - añade dependencias innecesarias o con licencias incompatibles.
 
-Si ya se ha publicado un dato real por error, avisa en privado cuanto antes
-(ver [`SECURITY.md`](../SECURITY.md)). Se retirará y, si hace falta, se
+Si ya se ha publicado un dato real por error, avisa en privado cuanto antes,
+escribiendo a [contact@analitix.slmail.me](mailto:contact@analitix.slmail.me) o con el aviso privado de
+seguridad (ver [`SECURITY.md`](../SECURITY.md)). Se retirará y, si hace falta, se
 limpiará también del historial del repositorio.
 
 ---
