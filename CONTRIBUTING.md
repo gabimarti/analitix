@@ -21,6 +21,12 @@ programar**. Todo tipo de ayuda suma:
   documentación, o simplemente decir qué te gustaría que hiciera la
   aplicación.
 
+> **Antes de contribuir, lee la
+> [política de contribuciones](docs/POLITICA_CONTRIBUCIONES.md)**: las reglas
+> obligatorias de **seguridad, privacidad e integridad** que se aplican a
+> cualquier aportación, y los motivos por los que una contribución puede no
+> aceptarse aunque funcione.
+
 ## Formas de participar
 
 - **Abre un issue** describiendo el problema, la idea o la pregunta.
