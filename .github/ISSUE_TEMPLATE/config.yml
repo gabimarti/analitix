@@ -1,5 +1,11 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Contacto por correo
+    url: https://github.com/gabimarti/analitix/blob/main/CONTRIBUTING.md#formas-de-participar
+    about: "Preguntas, ideas o envío privado de PDF de muestra: escribe a contact@analitix.slmail.me"
+  - name: Preguntas e ideas (foro)
+    url: https://github.com/gabimarti/analitix/discussions
+    about: Dudas de uso, ideas o comentarios en el foro público del proyecto.
   - name: Vulnerabilidad de seguridad
     url: https://github.com/gabimarti/analitix/security/advisories/new
     about: Infórmala en privado (ver SECURITY.md), nunca en una issue pública.

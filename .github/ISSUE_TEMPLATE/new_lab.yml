@@ -6,8 +6,9 @@ body:
     attributes:
       value: |
         ⚠️ **Privacidad**: esta issue es pública. **No adjuntes el PDF real.** Para
-        añadir un centro hacen falta PDF de muestra: se acuerda cómo enviarlos en
-        privado (ver [CONTRIBUTING.md](https://github.com/gabimarti/analitix/blob/main/CONTRIBUTING.md)).
+        añadir un centro hacen falta PDF de muestra: escribe a contact@analitix.slmail.me
+        para acordar cómo enviarlos en privado (ver
+        [CONTRIBUTING.md](https://github.com/gabimarti/analitix/blob/main/CONTRIBUTING.md)).
   - type: input
     id: center
     attributes:
@@ -26,7 +27,7 @@ body:
       label: ¿Puedes enviar PDF de muestra en privado?
       options:
         - Sí, anonimizados
-        - Sí, sin anonimizar (acordar envío privado)
+        - Sí, sin anonimizar (escribiré a contact@analitix.slmail.me para acordar el envío)
         - No
     validations:
       required: true
