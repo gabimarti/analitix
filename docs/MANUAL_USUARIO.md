@@ -1331,7 +1331,9 @@ necesidad de ampliar la ventana ni usar barras de desplazamiento.
 ### 2.21 ℹ Ayuda → Acerca de...
 
 Muestra el logo de Analitix, el nombre de la aplicación, el autor (Gabriel
-Marti) y un enlace a su perfil de GitHub (pulsable, abre el navegador).
+Marti), el **correo de contacto del proyecto** (contact@analitix.slmail.me; pulsable,
+abre tu programa de correo) y un enlace a su perfil de GitHub (pulsable,
+abre el navegador).
 
 ### 2.22 🔄 Ayuda → Buscar actualizaciones...
 

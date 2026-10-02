@@ -207,6 +207,10 @@ def _rcv_tooltip(rcv: Optional[dict]) -> str:
     return f"\n{texto}\nFuente: {rcv['fuente']}{nota}"
 
 
+# Contacto preferente del proyecto ("Acerca de"): alias de correo propio del
+# proyecto, que no expone ningún correo personal.
+CONTACT_EMAIL = "contact@analitix.slmail.me"
+
 # Ayuda → documentación (rutas dentro del repositorio público, `REPO_URL`).
 DOC_LINKS = (
     ("Manual de usuario", "blob/main/docs/MANUAL_USUARIO.md"),
@@ -475,6 +479,9 @@ class AnalitixApp(ttk.Window):
             body, text="Análisis de informes de laboratorio", bootstyle="secondary"
         ).pack(pady=(0, 10))
         ttk.Label(body, text="Autor: Gabriel Marti").pack()
+        correo = ttk.Label(body, text=CONTACT_EMAIL, bootstyle="info", cursor="hand2")
+        correo.pack()
+        correo.bind("<Button-1>", lambda _e: webbrowser.open(f"mailto:{CONTACT_EMAIL}"))
         contacto = ttk.Label(
             body, text="github.com/gabimarti", bootstyle="info", cursor="hand2"
         )

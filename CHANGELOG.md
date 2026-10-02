@@ -12,6 +12,7 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ### Añadido
 
+- «Acerca de» muestra el correo de contacto del proyecto (contact@analitix.slmail.me).
 - Rango personal opcional en el gráfico de Evolución (interruptor «Mostrar mi rango personal»): tu propio rango «normal», calculado con tus analíticas anteriores dentro de rango y la variación biológica publicada (método de Coşkun 2021).
 
 ## [0.10.0] - 2026-10-01
