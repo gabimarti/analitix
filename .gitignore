@@ -18,4 +18,3 @@ __pycache__/
 # Compilación del ejecutable/instalador de Windows (scripts/build_windows.bat).
 /build/
 /dist/
-.opencode
