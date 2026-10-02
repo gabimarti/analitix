@@ -1352,6 +1352,64 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
     sin caber entera (sin paginación automática dentro de una misma
     categoría).
 
+**Informe PDF personalizado** (Exportar → "Informe PDF personalizado..."):
+
+- `export.py` solo monta el documento:
+  - `export_pages_pdf(patient_name, fecha, paginas, path, tipo_informe=...)`
+    escribe la portada (`_cover_page`, con el aviso de que no es un
+    diagnóstico) y las figuras recibidas, en orden y con pie;
+  - `table_page` es la misma tabla de `export_pdf`;
+  - `text_page(titulo, texto)` es una página A4 de texto ajustado (resumen
+    de un panel).
+- `_add_footer` llama antes a `_fit_page_a4`, que pone **todas** las
+  páginas en A4:
+  - las figuras que no lo son (gráficos de evolución, mapa de calor, "Qué
+    ha cambiado") pasan a A4 vertical si son más altas que anchas, o
+    apaisado si no, ocupando todo el ancho;
+  - se reserva abajo una franja de `_FOOTER_STRIP_IN` para el pie y se
+    comprimen en vertical ejes, textos y leyendas de figura, para que el
+    pie no se superponga a nada. Antes, el pie se montaba sobre la leyenda
+    del mapa de calor;
+  - las figuras de altura variable ("Qué ha cambiado", mapa de calor)
+    llevan `fig.analitix_tight_rect`: al pasar a A4 se recalculan sus
+    márgenes con `tight_layout` al tamaño final, en vez de comprimirlas.
+    Sin esto, las etiquetas largas de las filas y la leyenda superior
+    quedaban cortadas por el borde de la hoja;
+  - las páginas que ya son A4 (portada, tablas, textos) no se tocan.
+- Tabla de parámetros (`_table_page`): columnas de ancho variable
+  (`_TABLE_COL_WIDTHS`, el nombre casi la mitad) y nombres de más de
+  `_TABLE_NAME_MAX` caracteres acortados con "…". Antes las cinco columnas
+  medían igual y el nombre se cortaba.
+
+  Afecta también a `export_pdf`, cuyos gráficos antes salían en el tamaño
+  de pantalla. La portada y las tablas dicen "Último informe de
+  laboratorio".
+- `gui._export_custom_pdf` es el diálogo (`_new_dialog`). Las pruebas son
+  casillas dentro de `_scrollable_frame`, no una `Listbox` con Ctrl+clic;
+  "Marcar alterados" y "Desmarcar todo", con `_same_width` en cada grupo
+  de botones:
+  - secciones (tabla, "Qué ha cambiado" vía `_changes_rows`, compartido
+    con la pestaña Resumen, y mapa de calor de `HEATMAP_OUT_OF_RANGE`);
+  - casillas con las pruebas de 2 o más analíticas;
+  - un desplegable para el conjunto del mapa de calor (los mismos de la
+    pantalla: alguna vez fuera de rango, todos o un panel de
+    `HEATMAP_SETS`);
+  - "Qué ha cambiado" (ordenado por magnitud de cambio antes de partirlo)
+    y el mapa de calor se reparten en páginas de `PDF_ROWS_PER_PAGE` (25)
+    filas con `_pages_of` (título "(n/total)"), y `_same_size` da a todas
+    las páginas de la sección el tamaño de la primera, para que conserven
+    la misma orientación A4;
+  - casillas de los paneles de `PDF_PANELS`. Cada panel pasa por
+    `_panel_pdf_pages`: el texto de `text_<clave>_summary` y un gráfico por
+    índice de `_<clave>_indices`, o el combinado de `PDF_COMBINED_PANELS`
+    en Inflamación y Tiroides;
+  - ⚠ = `out_of_range` en la prueba, o algún punto alto o bajo en las
+    series del panel.
+  
+  Los gráficos salen de `_evolution_figure`, así que aplican el umbral de
+  pocos datos, el RCV y el rango personal si su interruptor está activo.
+  El filtro de laboratorios se añade a `tipo_informe`.
+
 ### `charts.py`
 
 Figuras de ejemplo generadas con datos ficticios por `scripts/doc_screenshots.py`
@@ -1405,8 +1463,11 @@ ha cambiado".
   dos cálidos). Al depender solo del rango de cada informe, es
   independiente de la unidad. Sin rango -> `HEATMAP_NO_RANGE` con un
   punto; sin analítica -> `HEATMAP_SURFACE`. Separación de 2 px entre
-  casillas con la rejilla menor; valores escritos solo en casillas fuera de
-  rango y solo con ≤ `HEATMAP_MAX_LABELED_COLUMNS` columnas. Guarda en
+  casillas con la rejilla menor. Valores escritos solo en casillas fuera de
+  rango: todas con ≤ `HEATMAP_MAX_LABELED_COLUMNS` columnas; con más, solo
+  los extremos de cada fila (máximo por encima del rango y mínimo por
+  debajo). Color del texto por contraste con la casilla (`_ink_for`,
+  luminancia relativa WCAG: blanco sobre oscuro, tinta sobre claro). Guarda en
   `ax.analitix_heatmap` filas/fechas/celdas para el tooltip
   (`gui._attach_heatmap_hover`, `motion_notify_event`).
 - **Control común de pocos datos** (`data_sufficiency(n, min_points)` →

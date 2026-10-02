@@ -38,8 +38,10 @@ from analitix.charts import (
     DEFAULT_MIN_POINTS,
     LAB_UNKNOWN,
     MAX_COMPARISON_TESTS,
+    change_status,
     changes_figure,
     comparison_figure,
+    data_sufficiency,
     evolution_figure,
     heatmap_figure,
     trend_arrow,
@@ -47,7 +49,7 @@ from analitix.charts import (
 from analitix import __version__
 from analitix.config import DB_PATH, FROZEN, PROJECT_ROOT, REPORTS_DIR, copy_home, set_installed_home_dir
 from analitix.db import rekey
-from analitix.export import export_csv, export_excel, export_pdf
+from analitix.export import export_csv, export_excel, export_pages_pdf, export_pdf, table_page, text_page
 from analitix.glycemic_risk import (
     ADA_NORMAL_HIGH,
     ADA_DIABETES_LOW,
@@ -210,6 +212,41 @@ def _rcv_tooltip(rcv: Optional[dict]) -> str:
 # Contacto preferente del proyecto ("Acerca de"): alias de correo propio del
 # proyecto, que no expone ningún correo personal.
 CONTACT_EMAIL = "contact@analitix.slmail.me"
+
+# Paneles que se pueden incluir en el informe PDF personalizado: clave de sus
+# atributos en `AnalitixApp` (`text_<clave>_summary`, `_<clave>_series`,
+# `_<clave>_indices`) y nombre del menú Paneles clínicos.
+PDF_PANELS = (
+    ("lipid", "Riesgo cardiovascular"), ("hepatic", "Salud hepática"), ("renal", "Función renal"),
+    ("hemogram", "Hemograma"), ("iron", "Metabolismo del hierro"), ("inflammation", "Inflamación"),
+    ("uric_acid", "Ácido úrico"), ("calcio", "Calcio corregido"), ("glucemia", "Glucosa (eAG y TyG)"),
+    ("thyroid", "Tiroides"),
+)
+# Máximo de parámetros por página en el PDF personalizado ("Qué ha cambiado"
+# y mapa de calor): con más se reparten en varias páginas, cada una con su
+# título "(1/2)", su leyenda y su eje, para que quepan legibles en un A4.
+PDF_ROWS_PER_PAGE = 25
+
+# Paneles sin lista de índices: su gráfico es el combinado (serie → nombre).
+PDF_COMBINED_PANELS = {"inflammation": {"pcr": "PCR", "vsg": "VSG"}, "thyroid": {"tsh": "TSH", "t4l": "T4 libre"}}
+
+def _pages_of(filas: list) -> list[tuple[list, str]]:
+    """Reparte `filas` en trozos de `PDF_ROWS_PER_PAGE` para el PDF, con el
+    sufijo de título de cada uno (" (1/2)"...; vacío si cabe en una)."""
+    trozos = [filas[i:i + PDF_ROWS_PER_PAGE] for i in range(0, len(filas), PDF_ROWS_PER_PAGE)]
+    if len(trozos) <= 1:
+        return [(t, "") for t in trozos]
+    return [(t, f" ({n}/{len(trozos)})") for n, t in enumerate(trozos, start=1)]
+
+
+def _same_size(figuras: list) -> list:
+    """Las páginas de una misma sección repartida (`_pages_of`) toman el
+    tamaño de la primera: así todas salen con la misma orientación A4 y la
+    última, con menos filas, no cambia de vertical a apaisado."""
+    for fig in figuras[1:]:
+        fig.set_size_inches(*figuras[0].get_size_inches())
+    return figuras
+
 
 # Ayuda → documentación (rutas dentro del repositorio público, `REPO_URL`).
 DOC_LINKS = (
@@ -853,6 +890,38 @@ class AnalitixApp(ttk.Window):
         x = self.winfo_rootx() + (self.winfo_width() - dialog.winfo_reqwidth()) // 2
         y = self.winfo_rooty() + (self.winfo_height() - dialog.winfo_reqheight()) // 3
         dialog.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+
+    @staticmethod
+    def _same_width(*buttons) -> None:
+        """Mismo ancho para un grupo de botones de una pantalla: el del texto
+        más largo (en caracteres), ver docs/GUIA_DIALOGOS.md."""
+        ancho = max(len(b.cget("text")) for b in buttons) + 2
+        for b in buttons:
+            b.configure(width=ancho)
+
+    def _scrollable_frame(self, parent, height: int = 180) -> ttk.Frame:
+        """Marco con barra de desplazamiento vertical para listas largas de
+        casillas (más cómodo que una lista con Ctrl+clic, donde un clic sin
+        Ctrl desmarca todo). Devuelve el marco interior donde poner los
+        widgets. La rueda del ratón solo actúa con el puntero encima."""
+        contenedor = ttk.Frame(parent)
+        contenedor.pack(fill="both", expand=True)
+        canvas = tk.Canvas(contenedor, height=height, highlightthickness=0, background=self.style.colors.bg)
+        barra = ttk.Scrollbar(contenedor, orient="vertical", command=canvas.yview)
+        interior = ttk.Frame(canvas)
+        ventana = canvas.create_window((0, 0), window=interior, anchor="nw")
+        canvas.configure(yscrollcommand=barra.set)
+        interior.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(ventana, width=e.width))
+        canvas.pack(side="left", fill="both", expand=True)
+        barra.pack(side="left", fill="y")
+
+        def _rueda(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", _rueda))
+        canvas.bind("<Leave>", lambda _e: canvas.unbind_all("<MouseWheel>"))
+        return interior
 
     def _ask_active_patient(self) -> int | None:
         """Diálogo modal que lista SOLO el nombre completo de cada paciente
@@ -1834,17 +1903,22 @@ class AnalitixApp(ttk.Window):
                 tags=(tag,) if tag else (),
             )
 
-    def _draw_changes(self, summary: dict) -> None:
-        """Gráfico "Qué ha cambiado" (`charts.changes_figure`) del último
-        informe frente al anterior de cada parámetro."""
+    def _changes_rows(self, summary: dict) -> list[dict]:
+        """Filas de "Qué ha cambiado" (con su RCV), compartidas por la
+        pestaña Resumen y el informe PDF personalizado."""
         sex = get_patient_sex(self.con, self.current_patient_id)
-        filas = [
+        return [
             dict(label=f["raw_name"], value=f["value_num"], previous=f["valor_anterior"], unit=f["unit"],
                  ref_low=f["ref_low"], ref_high=f["ref_high"], pct=f["pct"],
                  rcv=classify_change(f["canonical_id"], f["valor_anterior"], f["value_num"], sex,
                                      f.get("lab_anterior"), f.get("lab")))
             for f in self._classify_latest_report(summary)
         ]
+
+    def _draw_changes(self, summary: dict) -> None:
+        """Gráfico "Qué ha cambiado" (`charts.changes_figure`) del último
+        informe frente al anterior de cada parámetro."""
+        filas = self._changes_rows(summary)
         con_anterior = [f for f in filas if f["previous"] is not None]
         medibles = [f for f in con_anterior if f["ref_low"] is not None or f["ref_high"] is not None]
         omitidos = []
@@ -3519,12 +3593,15 @@ class AnalitixApp(ttk.Window):
         ttk.Label(
             frame, text="Exporta todos los resultados del paciente seleccionado.", font=("Segoe UI", 11)
         ).pack(anchor="w", padx=PAD, pady=PAD)
-        ttk.Button(
+        boton_excel = ttk.Button(
             frame, text="Exportar a Excel...", bootstyle="success", command=lambda: self._export("xlsx")
-        ).pack(anchor="w", padx=PAD, pady=5)
-        ttk.Button(
+        )
+        boton_excel.pack(anchor="w", padx=PAD, pady=5)
+        boton_csv = ttk.Button(
             frame, text="Exportar a CSV...", bootstyle="success-outline", command=lambda: self._export("csv")
-        ).pack(anchor="w", padx=PAD, pady=5)
+        )
+        boton_csv.pack(anchor="w", padx=PAD, pady=5)
+        self._same_width(boton_excel, boton_csv)
         ttk.Label(
             frame,
             text="Informes de seguimiento en PDF — en los dos: portada (logo, paciente, fecha), una "
@@ -3533,24 +3610,39 @@ class AnalitixApp(ttk.Window):
             "uno con un solo valor registrado).",
             bootstyle="secondary", wraplength=700, justify="left",
         ).pack(anchor="w", padx=PAD, pady=(PAD, 0))
-        ttk.Button(
+        boton_completo = ttk.Button(
             frame, text="Exportar informe completo (PDF)...", bootstyle="danger",
             command=lambda: self._export_pdf("completo"),
-        ).pack(anchor="w", padx=PAD, pady=(5, 0))
+        )
+        boton_completo.pack(anchor="w", padx=PAD, pady=(5, 0))
         ttk.Label(
             frame,
             text="Todos los parámetros del último informe.",
             bootstyle="secondary", wraplength=700, justify="left",
         ).pack(anchor="w", padx=PAD, pady=(0, 5))
-        ttk.Button(
+        boton_alterados = ttk.Button(
             frame, text="Exportar informe de alterados (PDF)...", bootstyle="danger-outline",
             command=lambda: self._export_pdf("alterados"),
-        ).pack(anchor="w", padx=PAD, pady=(5, 0))
+        )
+        boton_alterados.pack(anchor="w", padx=PAD, pady=(5, 0))
         ttk.Label(
             frame,
             text="Solo los parámetros que alguna vez han estado fuera de rango en todo el histórico "
             "del paciente (aunque en el informe más reciente ya estén normales), con su valor más "
             "reciente.",
+            bootstyle="secondary", wraplength=700, justify="left",
+        ).pack(anchor="w", padx=PAD, pady=(0, 5))
+        boton_personalizado = ttk.Button(
+            frame, text="Informe PDF personalizado...", bootstyle="danger-outline",
+            command=self._export_custom_pdf,
+        )
+        boton_personalizado.pack(anchor="w", padx=PAD, pady=(5, 0))
+        self._same_width(boton_completo, boton_alterados, boton_personalizado)
+        ttk.Label(
+            frame,
+            text="Eliges qué incluir: la tabla del último informe, \"Qué ha cambiado\", el mapa de "
+            "calor, la evolución de los parámetros que quieras y los paneles clínicos (su resumen y "
+            "sus gráficos). Lo alterado se marca con ⚠ para encontrarlo fácilmente.",
             bootstyle="secondary", wraplength=700, justify="left",
         ).pack(anchor="w", padx=PAD, pady=(0, 5))
 
@@ -3619,6 +3711,163 @@ class AnalitixApp(ttk.Window):
             f"Informe generado con {len(filas)} parámetros y {paginas} gráficos en:\n{path}",
             parent=self,
         )
+
+    def _panel_pdf_pages(self, key: str, label: str) -> list:
+        """Páginas de un panel clínico para el PDF personalizado: su
+        resumen tal como se ve en pantalla y un gráfico por índice (o el
+        gráfico combinado en Inflamación y Tiroides)."""
+        paginas = [text_page(label, getattr(self, f"text_{key}_summary").get("1.0", "end"))]
+        series = getattr(self, f"_{key}_series")
+        if key in PDF_COMBINED_PANELS:
+            combinadas = {nombre: series[k] for k, nombre in PDF_COMBINED_PANELS[key].items() if series.get(k)}
+            if combinadas:
+                paginas.append(comparison_figure(combinadas, self.min_points))
+            return paginas
+        for cid, nombre in getattr(self, f"_{key}_indices"):
+            if cid and data_sufficiency(len(series.get(cid, [])), self.min_points) not in ("sin_datos", "un_punto"):
+                paginas.append(self._evolution_figure(series[cid], nombre, cid))
+        return paginas
+
+    def _export_custom_pdf(self) -> None:
+        """Exportar → "Informe PDF personalizado...": el usuario elige las
+        secciones (tabla del último informe, "Qué ha cambiado", mapa de
+        calor, evolución de parámetros concretos, paneles clínicos). ⚠ marca
+        lo que alguna vez ha estado fuera de rango o por encima del umbral
+        orientativo de un panel. Mismas reglas que la pantalla: filtro de
+        laboratorios, aviso de pocos datos, RCV y rango personal si su
+        interruptor está activo."""
+        if self.current_patient_id is None:
+            messagebox.showwarning("Sin paciente", "Selecciona antes un paciente en la pestaña Pacientes.", parent=self)
+            return
+        summary = get_latest_report_summary(self.con, self.current_patient_id)
+        if not summary:
+            messagebox.showinfo("Sin datos", "No hay resultados numéricos para exportar.", parent=self)
+            return
+        dialog, body = self._new_dialog("Informe PDF personalizado", resizable=True)
+        ttk.Label(
+            body,
+            text="Elige qué incluir en el informe. ⚠ = alguna vez fuera de rango (o por encima del umbral "
+            "orientativo de un panel). El informe usa los mismos laboratorios y ajustes que la pantalla.",
+            wraplength=560, justify="left",
+        ).pack(anchor="w", pady=(0, 6))
+
+        secciones = ttk.Labelframe(body, text="Secciones", padding=6)
+        secciones.pack(fill="x")
+        alterado_ahora = any(f["flag_calc"] in ("alto", "bajo") for f in summary["resultados"])
+        var_tabla = tk.BooleanVar(value=True)
+        var_cambios = tk.BooleanVar(value=False)
+        var_mapa = tk.BooleanVar(value=False)
+        for var, texto in (
+            (var_tabla, f"{'⚠ ' if alterado_ahora else ''}Tabla del último informe ({summary['fecha'][:10]})"),
+            (var_cambios, "Qué ha cambiado (respecto al informe anterior)"),
+        ):
+            ttk.Checkbutton(secciones, text=texto, variable=var).pack(anchor="w", padx=8, pady=1)
+        fila_mapa = ttk.Frame(secciones)
+        fila_mapa.pack(anchor="w", padx=8, pady=1)
+        ttk.Checkbutton(fila_mapa, text="Mapa de calor:", variable=var_mapa).pack(side="left")
+        var_conjunto_mapa = tk.StringVar(value=HEATMAP_OUT_OF_RANGE)
+        ttk.Combobox(
+            fila_mapa, textvariable=var_conjunto_mapa, values=[HEATMAP_OUT_OF_RANGE, HEATMAP_ALL, *HEATMAP_SETS],
+            state="readonly", width=40,
+        ).pack(side="left", padx=(6, 0))
+
+        parametros = ttk.Labelframe(body, text="Evolución de parámetros", padding=6)
+        parametros.pack(fill="both", expand=True, pady=(6, 0))
+        tests = [t for t in list_canonical_tests(self.con, self.current_patient_id) if t["num_points"] >= 2]
+        lista = self._scrollable_frame(parametros)
+        vars_tests = []
+        for t in tests:
+            var = tk.BooleanVar(value=False)
+            vars_tests.append(var)
+            ttk.Checkbutton(
+                lista, text=f"{'⚠ ' if t['out_of_range'] else ''}{t['raw_name']} (n={t['num_points']})", variable=var,
+            ).pack(anchor="w", padx=8, pady=1)
+
+        paneles = ttk.Labelframe(body, text="Paneles clínicos (resumen y gráficos)", padding=6)
+        paneles.pack(fill="x", pady=(6, 0))
+        vars_paneles = {}
+        for i, (key, label) in enumerate(PDF_PANELS):
+            series = getattr(self, f"_{key}_series")
+            alterado = any(p.get("flag_calc") in ("alto", "bajo") for s in series.values() for p in s)
+            vars_paneles[key] = (tk.BooleanVar(value=False), label, alterado)
+            ttk.Checkbutton(
+                paneles, text=f"{'⚠ ' if alterado else ''}{label}", variable=vars_paneles[key][0],
+                state="normal" if series else "disabled",
+            ).grid(row=i // 2, column=i % 2, sticky="w", padx=8, pady=1)
+
+        def _marcar_alterados() -> None:
+            for t, var in zip(tests, vars_tests):
+                var.set(bool(t["out_of_range"]))
+            for var, _label, alterado in vars_paneles.values():
+                var.set(alterado)
+
+        def _desmarcar() -> None:
+            for var in [var_tabla, var_cambios, var_mapa, *vars_tests, *(v for v, _l, _a in vars_paneles.values())]:
+                var.set(False)
+
+        def _generar() -> None:
+            seleccion = [t for t, var in zip(tests, vars_tests) if var.get()]
+            elegidos = [(key, label) for key, (var, label, _a) in vars_paneles.items() if var.get()]
+            if not (var_tabla.get() or var_cambios.get() or var_mapa.get() or seleccion or elegidos):
+                messagebox.showwarning("Informe personalizado", "Elige al menos una sección.", parent=dialog)
+                return
+            paginas = []
+            if var_tabla.get():
+                filas = self._classify_latest_report(summary)
+                paginas.append(table_page(summary["fecha"], [f for f in filas if f["flag_calc"] in ("alto", "bajo")],
+                                          CAMBIO_BRUSCO_PCT, "Parámetros alterados en la última analítica"))
+                paginas.append(table_page(summary["fecha"], [f for f in filas if f["flag_calc"] not in ("alto", "bajo")],
+                                          CAMBIO_BRUSCO_PCT, "Resto de parámetros"))
+            if var_cambios.get():
+                medibles = [f for f in self._changes_rows(summary) if f["previous"] is not None
+                            and (f["ref_low"] is not None or f["ref_high"] is not None)]
+                # Orden global de mayor a menor cambio antes de repartir en
+                # páginas (cada página conserva ese orden).
+                def _magnitud(f):
+                    status = change_status(f["previous"], f["value"], f["ref_low"], f["ref_high"])
+                    return abs(status[0]) if status else 0.0
+                medibles.sort(key=_magnitud, reverse=True)
+                titulo = f"Qué ha cambiado — último informe ({summary['fecha'][:10]})"
+                paginas.extend(_same_size([changes_figure(trozo, titulo + sufijo) for trozo, sufijo in _pages_of(medibles)]))
+            if var_mapa.get():
+                conjunto = var_conjunto_mapa.get()
+                paginas.extend(_same_size([heatmap_figure(trozo, conjunto + sufijo)
+                                           for trozo, sufijo in _pages_of(self._heatmap_rows(conjunto))]))
+            for t in seleccion:
+                serie = get_series(self.con, t["canonical_id"], self.current_patient_id)
+                paginas.append(self._evolution_figure(serie, t["raw_name"], t["canonical_id"], with_personal=True))
+            for key, label in elegidos:
+                paginas.extend(self._panel_pdf_pages(key, label))
+            if not paginas:
+                messagebox.showinfo("Informe personalizado", "Las secciones elegidas no tienen datos.", parent=dialog)
+                return
+            path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[(".pdf", "*.pdf")], parent=dialog)
+            if not path:
+                return
+            tipo_informe = "Informe personalizado"
+            filtro = self._lab_filter_text()
+            if filtro:
+                tipo_informe = f"{tipo_informe} · {filtro}"
+            patient = next((p for p in self.patients if p["id"] == self.current_patient_id), None)
+            total = export_pages_pdf(patient["full_name"] if patient else "—", summary["fecha"], paginas, Path(path),
+                                     tipo_informe=tipo_informe)
+            dialog.destroy()
+            messagebox.showinfo("Exportado", f"Informe personalizado de {total} páginas en:\n{path}", parent=self)
+
+        botones = ttk.Frame(body)
+        botones.pack(fill="x", pady=(PAD, 0))
+        boton_alterados = ttk.Button(botones, text="Marcar alterados", bootstyle="secondary-outline",
+                                     command=_marcar_alterados)
+        boton_alterados.pack(side="left")
+        boton_ninguno = ttk.Button(botones, text="Desmarcar todo", bootstyle="secondary-outline", command=_desmarcar)
+        boton_ninguno.pack(side="left", padx=(8, 0))
+        self._same_width(boton_alterados, boton_ninguno)
+        boton_cancelar = ttk.Button(botones, text="Cancelar", command=dialog.destroy)
+        boton_cancelar.pack(side="right")
+        boton_generar = ttk.Button(botones, text="Generar PDF...", bootstyle="primary", command=_generar)
+        boton_generar.pack(side="right", padx=(0, 8))
+        self._same_width(boton_cancelar, boton_generar)
+        self._center_dialog(dialog)
 
     def _build_altered_rows(self, patient_id: int) -> tuple[list[dict], str | None]:
         """Una fila por cada `canonical_id` que alguna vez ha estado fuera

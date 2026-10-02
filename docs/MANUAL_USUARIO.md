@@ -643,8 +643,11 @@ valor respecto al rango de referencia de ese informe:
 
 - **Gris** = dentro del rango.
 - **Azul** = por debajo; **rojo** = por encima. Cuanto más intenso, más
-  lejos del rango (el valor aparece escrito dentro de la casilla cuando hay
-  pocas columnas).
+  lejos del rango. El valor aparece escrito dentro de las casillas fuera de
+  rango cuando hay pocas analíticas. Si hay muchas (más de 24), solo se
+  escriben los extremos de cada parámetro: su valor más alto por encima del
+  rango y el más bajo por debajo, para ver hasta dónde ha llegado. El color
+  del texto se elige para que contraste con el de la casilla.
 - **Gris oscuro con un punto** = hay valor, pero el informe no traía rango.
 - **En blanco** = ese día no se midió ese parámetro.
 
@@ -1075,6 +1078,41 @@ Limitación conocida en los dos: si hay muchísimos parámetros fuera de
 rango (o alterados) a la vez, esa página de tabla concreta podría no
 caber entera (no pagina automáticamente dentro de una misma categoría en
 esta versión).
+
+**Informe PDF personalizado...** Eliges tú qué incluir, por ejemplo solo
+el mapa de calor, la evolución de uno o dos parámetros concretos o un
+panel clínico para llevar a una consulta:
+
+- **Secciones**:
+  - la tabla del último informe (alterados y resto, como en los informes
+    anteriores);
+  - **Qué ha cambiado** respecto al informe anterior;
+  - el **mapa de calor**, eligiendo en el desplegable qué parámetros
+    incluye: los alguna vez fuera de rango, todos, o los de un panel
+    concreto (igual que en la pantalla Mapa de calor).
+- **Evolución de parámetros**: marca las casillas de los que quieras, en
+  una lista que se desplaza con la barra o con la rueda del ratón. Solo
+  aparecen las pruebas con al menos 2 analíticas.
+- **Paneles clínicos**: cada panel incluye su resumen, tal como lo ves en
+  pantalla, y sus gráficos. Los paneles sin datos aparecen desactivados.
+- **⚠ marca lo alterado**: los parámetros que alguna vez han estado fuera
+  de rango y los paneles con algún índice por encima del umbral
+  orientativo. **Marcar alterados** los selecciona todos de una vez y
+  **Desmarcar todo** deja el informe en blanco para empezar de cero.
+- El informe usa **los mismos ajustes que la pantalla**: los laboratorios
+  incluidos (el filtro aparece en la portada y en el pie), el aviso de
+  pocas analíticas, la banda de variación esperable y, si tienes activado
+  el interruptor en Evolución, tu rango personal en los gráficos de
+  parámetros.
+- Empieza siempre con la portada y el aviso de que no es un diagnóstico, y
+  cada página lleva su pie con el número de página.
+- **Todas las páginas son A4**, también en los otros dos informes PDF: los
+  gráficos se adaptan a una hoja vertical u horizontal, según su forma, y
+  aprovechan todo el ancho para imprimirlos.
+- **Secciones largas en varias páginas**: "Qué ha cambiado" y el mapa de
+  calor muestran como mucho 25 parámetros por página. Si hay más, siguen en
+  la página siguiente con el título marcado "(1/2)", "(2/2)"…, su leyenda
+  y su eje, y con la misma orientación en todas.
 
 ### 2.18 🔍 Explorador BD (menú Herramientas → Explorador BD)
 

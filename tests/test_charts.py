@@ -193,3 +193,17 @@ def test_changes_figure_orders_and_skips():
     items = changes_figure(rows, "x").axes[0].analitix_changes
     # Solo los medibles; el mayor cambio (en anchos de rango) queda arriba (último índice).
     assert [r["label"] for r in items] == ["Plaquetas", "Creatinina"]
+
+
+def test_heatmap_labels_only_row_extremes_with_many_columns():
+    from analitix.charts import HEATMAP_MAX_LABELED_COLUMNS, _ink_for, heatmap_figure
+
+    n = HEATMAP_MAX_LABELED_COLUMNS + 6  # más columnas de las que caben etiquetadas
+    valores = [14.0] * n
+    valores[3], valores[10], valores[20] = 18.0, 21.0, 9.0  # dos altos y un bajo (rango 12-16)
+    serie = [_row(f"2024-{1 + i // 28:02d}-{1 + i % 28:02d}", v, "A") for i, v in enumerate(valores)]
+    textos = sorted(t.get_text() for t in heatmap_figure([("Hb", serie)], "x").axes[0].texts)
+    assert textos == ["21", "9"]  # el máximo por encima y el mínimo por debajo, no el 18
+    # Contraste: blanco sobre oscuro, tinta oscura sobre claro.
+    assert _ink_for((0.1, 0.1, 0.4, 1)) == "white"
+    assert _ink_for((0.95, 0.9, 0.9, 1)) != "white"

@@ -10,8 +10,16 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ## [Sin publicar]
 
+### Cambiado
+
+- Todas las páginas de los informes PDF son A4: los gráficos se adaptan a hoja vertical u horizontal y aprovechan todo el ancho para imprimirlos, sin textos cortados por los bordes. La portada indica «Último informe de laboratorio».
+- En las tablas de los informes PDF, la columna del parámetro es más ancha y su nombre ya no se corta.
+- El mapa de calor con muchas analíticas muestra el valor de los extremos de cada parámetro (el más alto por encima del rango y el más bajo por debajo), con un color de texto que contrasta con la casilla.
+- Los botones de la pantalla Exportar tienen el mismo ancho en cada grupo.
+
 ### Añadido
 
+- Informe PDF personalizado (Exportar → «Informe PDF personalizado...»): eliges qué incluir —tabla del último informe, «Qué ha cambiado», mapa de calor, la evolución de los parámetros que quieras y los paneles clínicos con su resumen y gráficos—, con ⚠ en lo que alguna vez ha estado alterado.
 - «Acerca de» muestra el correo de contacto del proyecto (contact@analitix.slmail.me).
 - Rango personal opcional en el gráfico de Evolución (interruptor «Mostrar mi rango personal»): tu propio rango «normal», calculado con tus analíticas anteriores dentro de rango y la variación biológica publicada (método de Coşkun 2021).
 

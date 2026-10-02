@@ -39,6 +39,10 @@ self.wait_window(dialog)  # solo si el diálogo devuelve un resultado
 
 ## 2. Botones
 
+- **Los botones de un mismo grupo tienen el mismo ancho**: el del texto
+  más largo (`self._same_width(boton1, boton2, ...)`). Vale para los de
+  una fila de un diálogo y para los que van apilados en una pantalla (p.
+  ej. los de exportar a Excel y CSV, o los tres informes PDF).
 - Todos en **una fila al pie** (`botones = ttk.Frame(body)`), alineados a
   la **derecha**.
 - **Cancelar** va en el extremo derecho, con el estilo por defecto (sin
@@ -70,6 +74,11 @@ self.wait_window(dialog)  # solo si el diálogo devuelve un resultado
   `self._style_plain_widget(widget)` para que usen los colores del tema.
 - Listas largas o texto extenso: con `ttk.Scrollbar`. Solo entonces tiene
   sentido `_new_dialog(..., resizable=True)`.
+- **Para elegir varias opciones de una lista larga, casillas
+  (`ttk.Checkbutton`) dentro de `self._scrollable_frame(padre)`**, nunca
+  una `Listbox` de selección múltiple. Con Ctrl+clic, un solo clic sin Ctrl
+  desmarca todo lo elegido. Si la lista es larga, añade "Desmarcar todo"
+  (y, si tiene sentido, un atajo como "Marcar alterados").
 
 ## 5. Privacidad
 
