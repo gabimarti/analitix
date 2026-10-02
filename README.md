@@ -114,7 +114,9 @@ uso, profesionales de la salud ayudando a interpretar pruebas/unidades,
 gente reportando errores o simplemente con ideas. Ver
 [`CONTRIBUTING.md`](CONTRIBUTING.md) para las distintas formas de
 participar (incluye un aviso importante sobre privacidad si vas a
-compartir un PDF de ejemplo).
+compartir un PDF de ejemplo) y la
+[política de contribuciones](docs/POLITICA_CONTRIBUCIONES.md) con las reglas
+de seguridad, privacidad e integridad que debe cumplir toda aportación.
 
 ## Formatos de informe soportados
 
