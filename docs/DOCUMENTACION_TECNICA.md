@@ -2979,6 +2979,13 @@ versión **publicada**, no una a medio hacer:
 - **Corrección urgente de una versión publicada**: rama `hotfix/X.Y.Z`
   desde `main`, PR a `main`, publicar el parche (pasos 3-5) y después
   fusionar `main` en `develop`.
+- **Documentación que no puede esperar a la próxima versión** (p. ej. las
+  normas de contribución), siempre que no cambie el programa: rama
+  `docs/<tema>` desde `main` con solo esos ficheros (`git cherry-pick` del
+  commit de `develop`), PR a `main` con los checks en verde y *merge
+  commit*, **sin nueva versión ni etiqueta**, y después
+  `git merge origin/main` en `develop`, para que las dos ramas compartan
+  el cambio y la siguiente Release no tenga conflictos.
 
 Las versiones las compila y publica GitHub Actions
 (`.github/workflows/release.yml`), no el equipo de desarrollo: un Windows
