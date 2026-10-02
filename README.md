@@ -117,6 +117,8 @@ participar (incluye un aviso importante sobre privacidad si vas a
 compartir un PDF de ejemplo) y la
 [política de contribuciones](docs/POLITICA_CONTRIBUCIONES.md) con las reglas
 de seguridad, privacidad e integridad que debe cumplir toda aportación.
+Para cualquier consulta sobre la aplicación, escribe a
+[contact@analitix.slmail.me](mailto:contact@analitix.slmail.me).
 
 ## Formatos de informe soportados
 

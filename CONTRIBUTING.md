@@ -29,14 +29,18 @@ programar**. Todo tipo de ayuda suma:
 
 ## Formas de participar
 
+- **Escribe a [contact@analitix.slmail.me](mailto:contact@analitix.slmail.me)** (contacto preferente) para
+  cualquier consulta sobre la aplicación, si prefieres comentarlo antes de
+  abrir nada formal o para acordar el envío privado de un PDF de muestra.
+- **Pregunta o propón una idea en el foro público**, [Discussions](https://github.com/gabimarti/analitix/discussions):
+  para dudas de uso, ideas o comentarios que puedan servir a más gente.
 - **Abre un issue** describiendo el problema, la idea o la pregunta.
 - **Envía un pull request** si ya tienes un cambio de código o
   documentación, **contra la rama `develop`** (no `main`). `main` contiene
   solo la última versión publicada; `develop` se fusiona en `main` al
   publicar cada versión (ver la documentación técnica, §8.1).
-- **Escríbeme directamente** por [GitHub](https://github.com/gabimarti) o
-  [X/Twitter](https://x.com/gmarti) si prefieres comentarlo antes de abrir
-  nada formal.
+- También me encontrarás en [GitHub](https://github.com/gabimarti) y en
+  [X/Twitter](https://x.com/gmarti).
 
 Si tu cambio añade o modifica una ventana o un cuadro de diálogo, sigue la
 [guía de diseño de diálogos](docs/GUIA_DIALOGOS.md) para que toda la
@@ -130,8 +134,9 @@ Al reportar un problema o compartir un PDF de ejemplo:
   que identifique a la persona) o, mejor aún, recréalo con datos
   ficticios que reproduzcan el mismo formato/estructura.
 - Si prefieres compartir un PDF real sin anonimizar para que se pueda
-  depurar con precisión, hazlo **en privado** (por email o mensaje directo,
-  nunca en un issue público), y dilo explícitamente para acordar cómo.
+  depurar con precisión, hazlo **en privado**: escribe a
+  [contact@analitix.slmail.me](mailto:contact@analitix.slmail.me) (nunca en un issue público) y
+  acordaremos cómo enviarlo de forma segura.
 
 ## Licencia
 

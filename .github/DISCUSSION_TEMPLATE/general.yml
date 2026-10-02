@@ -1,0 +1,20 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **Privacidad**: este foro es público. **No publiques informes PDF, capturas
+        con datos de salud ni datos personales.** Para algo privado, escribe a
+        contact@analitix.slmail.me.
+  - type: textarea
+    id: mensaje
+    attributes:
+      label: Mensaje
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacidad
+      options:
+        - label: He comprobado que mi mensaje no contiene datos de salud ni datos personales reales.
+          required: true

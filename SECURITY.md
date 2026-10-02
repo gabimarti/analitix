@@ -13,10 +13,11 @@ correcciones de seguridad.
 
 **No abras una issue pública** para un problema de seguridad.
 
-Usa el aviso privado de GitHub: pestaña **Security → Report a
-vulnerability** de este repositorio
-(<https://github.com/gabimarti/analitix/security/advisories/new>). Solo lo
-verá el mantenedor.
+Escribe a **[contact@analitix.slmail.me](mailto:contact@analitix.slmail.me)** (contacto preferente)
+indicando «Seguridad» en el asunto, o usa el aviso privado de GitHub:
+pestaña **Security → Report a vulnerability** de este repositorio
+(<https://github.com/gabimarti/analitix/security/advisories/new>). En los
+dos casos solo lo verá el mantenedor.
 
 Incluye, si puedes:
 
