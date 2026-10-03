@@ -44,8 +44,8 @@ programar**. Todo tipo de ayuda suma:
 - También me encontrarás en [GitHub](https://github.com/gabimarti) y en
   [X/Twitter](https://x.com/gmarti).
 
-Si tu cambio añade o modifica una ventana o un cuadro de diálogo, sigue la
-[guía de diseño de diálogos](docs/GUIA_DIALOGOS.md) para que toda la
+Si tu cambio añade o modifica una pantalla, una ventana o un cuadro de
+diálogo, sigue la [guía de diseño de la interfaz](docs/GUIA_INTERFAZ.md) para que toda la
 aplicación se vea igual.
 
 ## Sobre añadir soporte para otro laboratorio/hospital

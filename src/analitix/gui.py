@@ -304,6 +304,9 @@ def _smoking_summary(patient: dict) -> str:
 
 THEME = "flatly"
 PAD = 12
+# Ancho (en caracteres) de la lista de la columna izquierda de Análisis y
+# Paneles clínicos: fija el ancho de toda la columna (ver `_list_column`).
+LIST_COLUMN_CHARS = 38
 
 # Umbral de "cambio brusco" de la pestaña Resumen y la exportación a PDF
 # ("±30%"). Elección de interfaz, no un punto de corte clínico — no
@@ -710,6 +713,7 @@ class AnalitixApp(ttk.Window):
             top, text="Buscar e importar informes nuevos", bootstyle="success", command=self._run_ingest
         )
         self.btn_import.pack(side="right")
+        self._same_width(self.btn_import, self.btn_reimport_forced)
 
         progreso = ttk.Frame(frame)
         progreso.pack(fill="x", padx=PAD, pady=(0, PAD))
@@ -830,18 +834,22 @@ class AnalitixApp(ttk.Window):
 
         botones = ttk.Frame(frame)
         botones.pack(fill="x", padx=PAD, pady=(4, PAD))
-        ttk.Button(
+        boton_editar = ttk.Button(
             botones, text="Editar ficha...", bootstyle="info-outline",
             command=self._edit_selected_patient,
-        ).pack(side="left", padx=(0, 8))
-        ttk.Button(
+        )
+        boton_editar.pack(side="left", padx=(0, 8))
+        boton_eliminar = ttk.Button(
             botones, text="Eliminar paciente seleccionado...", bootstyle="danger-outline",
             command=self._delete_selected_patient,
-        ).pack(side="left")
-        ttk.Button(
+        )
+        boton_eliminar.pack(side="left")
+        boton_fusionar = ttk.Button(
             botones, text="Fusionar seleccionados...", bootstyle="primary",
             command=self._merge_selected_patients,
-        ).pack(side="left", padx=(8, 0))
+        )
+        boton_fusionar.pack(side="left", padx=(8, 0))
+        self._same_width(boton_editar, boton_eliminar, boton_fusionar)
 
     def _selected_patient(self) -> dict | None:
         """Ficha de la fila seleccionada en la tabla Pacientes (la primera si hay varias)."""
@@ -867,7 +875,7 @@ class AnalitixApp(ttk.Window):
             self._refresh_patients()
 
     def _new_dialog(self, title: str, resizable: bool = False) -> tuple[tk.Toplevel, ttk.Frame]:
-        """Ventana de diálogo modal homogénea (ver docs/GUIA_DIALOGOS.md):
+        """Ventana de diálogo modal homogénea (ver docs/GUIA_INTERFAZ.md):
         devuelve la ventana y un único `ttk.Frame` de cuerpo con `PAD` de
         margen, donde va TODO el contenido. Nada directamente sobre el
         `tk.Toplevel`: su fondo es el gris del sistema y los widgets ttk se
@@ -894,10 +902,33 @@ class AnalitixApp(ttk.Window):
     @staticmethod
     def _same_width(*buttons) -> None:
         """Mismo ancho para un grupo de botones de una pantalla: el del texto
-        más largo (en caracteres), ver docs/GUIA_DIALOGOS.md."""
+        más largo (en caracteres), ver docs/GUIA_INTERFAZ.md."""
         ancho = max(len(b.cget("text")) for b in buttons) + 2
         for b in buttons:
             b.configure(width=ancho)
+
+    def _list_column(self, left: ttk.Frame, text: str, height: int, **opts) -> tk.Listbox:
+        """Etiqueta + lista de la columna izquierda de Análisis y Paneles
+        clínicos. La etiqueta se parte en líneas al ancho de la lista para no
+        ensanchar la columna: así etiqueta, lista y botones quedan alineados a
+        la izquierda y todas las columnas miden lo mismo (docs/GUIA_INTERFAZ.md)."""
+        label = ttk.Label(left, text=text, justify="left")
+        label.pack(anchor="w")
+        lista = tk.Listbox(
+            left, height=height, width=LIST_COLUMN_CHARS, exportselection=False, relief="flat", **opts
+        )
+        lista.pack(fill="y", expand=True, pady=(4, 0))
+        self._style_plain_widget(lista)
+        label.configure(wraplength=lista.winfo_reqwidth())
+        return lista
+
+    def _fixed_column(self, left: ttk.Frame) -> None:
+        """Columna izquierda sin lista (solo botones): mismo ancho que las que
+        tienen lista (`_list_column`), para que no cambie de una pantalla a otra."""
+        probe = tk.Listbox(self, width=LIST_COLUMN_CHARS, relief="flat", highlightthickness=0)
+        left.configure(width=probe.winfo_reqwidth())
+        probe.destroy()
+        left.pack_propagate(False)
 
     def _scrollable_frame(self, parent, height: int = 180) -> ttk.Frame:
         """Marco con barra de desplazamiento vertical para listas largas de
@@ -958,8 +989,11 @@ class AnalitixApp(ttk.Window):
         listbox.bind("<Return>", _confirm)
         botones = ttk.Frame(body)
         botones.pack(fill="x", pady=(PAD, 0))
-        ttk.Button(botones, text="Cancelar", command=dialog.destroy).pack(side="right")
-        ttk.Button(botones, text="Aceptar", bootstyle="primary", command=_confirm).pack(side="right", padx=(0, 8))
+        boton_cancelar = ttk.Button(botones, text="Cancelar", command=dialog.destroy)
+        boton_cancelar.pack(side="right")
+        boton_ok = ttk.Button(botones, text="Aceptar", bootstyle="primary", command=_confirm)
+        boton_ok.pack(side="right", padx=(0, 8))
+        self._same_width(boton_cancelar, boton_ok)
         self._center_dialog(dialog)
         self.wait_window(dialog)
         return result["value"]
@@ -1097,8 +1131,11 @@ class AnalitixApp(ttk.Window):
 
         botones = ttk.Frame(outer)
         botones.pack(fill="x", pady=(PAD, 0))
-        ttk.Button(botones, text="Cancelar", command=dialog.destroy).pack(side="right")
-        ttk.Button(botones, text="Guardar", bootstyle="primary", command=_save).pack(side="right", padx=(0, 8))
+        boton_cancelar = ttk.Button(botones, text="Cancelar", command=dialog.destroy)
+        boton_cancelar.pack(side="right")
+        boton_ok = ttk.Button(botones, text="Guardar", bootstyle="primary", command=_save)
+        boton_ok.pack(side="right", padx=(0, 8))
+        self._same_width(boton_cancelar, boton_ok)
         self._center_dialog(dialog)
         self.wait_window(dialog)
 
@@ -1158,8 +1195,11 @@ class AnalitixApp(ttk.Window):
 
         botones = ttk.Frame(body)
         botones.pack(fill="x", pady=(PAD, 0))
-        ttk.Button(botones, text="Cancelar", command=dialog.destroy).pack(side="right")
-        ttk.Button(botones, text="Fusionar", bootstyle="primary", command=_confirm).pack(side="right", padx=(0, 8))
+        boton_cancelar = ttk.Button(botones, text="Cancelar", command=dialog.destroy)
+        boton_cancelar.pack(side="right")
+        boton_ok = ttk.Button(botones, text="Fusionar", bootstyle="primary", command=_confirm)
+        boton_ok.pack(side="right", padx=(0, 8))
+        self._same_width(boton_cancelar, boton_ok)
         self._center_dialog(dialog)
         self.wait_window(dialog)
         return result["value"]
@@ -1262,8 +1302,11 @@ class AnalitixApp(ttk.Window):
         botones.pack(fill="x", pady=(PAD, 0))
         ttk.Button(botones, text="Marcar todos", bootstyle="secondary-outline",
                    command=lambda: [v.set(True) for v in variables.values()]).pack(side="left")
-        ttk.Button(botones, text="Cancelar", command=dialog.destroy).pack(side="right")
-        ttk.Button(botones, text="Aceptar", bootstyle="primary", command=_aceptar).pack(side="right", padx=(0, 8))
+        boton_cancelar = ttk.Button(botones, text="Cancelar", command=dialog.destroy)
+        boton_cancelar.pack(side="right")
+        boton_ok = ttk.Button(botones, text="Aceptar", bootstyle="primary", command=_aceptar)
+        boton_ok.pack(side="right", padx=(0, 8))
+        self._same_width(boton_cancelar, boton_ok)
         self._center_dialog(dialog)
 
     # -- Entrada manual -----------------------------------------------------
@@ -1455,10 +1498,7 @@ class AnalitixApp(ttk.Window):
         frame = self.tab_evolucion
         left = ttk.Frame(frame)
         left.pack(side="left", fill="y", padx=PAD, pady=PAD)
-        ttk.Label(left, text="Prueba (⚠ = alguna vez fuera de rango):").pack(anchor="w")
-        self.list_tests_evolucion = tk.Listbox(left, height=28, width=38, exportselection=False, relief="flat")
-        self.list_tests_evolucion.pack(fill="y", expand=True, pady=(4, 0))
-        self._style_plain_widget(self.list_tests_evolucion)
+        self.list_tests_evolucion = self._list_column(left, "Prueba (⚠ = alguna vez fuera de rango):", height=28)
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_evolution
         ).pack(pady=(8, 4), fill="x")
@@ -1614,14 +1654,10 @@ class AnalitixApp(ttk.Window):
         frame = self.tab_comparativa
         left = ttk.Frame(frame)
         left.pack(side="left", fill="y", padx=PAD, pady=PAD)
-        ttk.Label(
-            left, text=f"Pruebas (Ctrl/Shift, máx. {MAX_COMPARISON_TESTS}; ⚠ = alguna vez fuera de rango):"
-        ).pack(anchor="w")
-        self.list_tests_comparativa = tk.Listbox(
-            left, height=28, width=38, selectmode="extended", exportselection=False, relief="flat"
+        self.list_tests_comparativa = self._list_column(
+            left, f"Pruebas (Ctrl/Shift, máx. {MAX_COMPARISON_TESTS}; ⚠ = alguna vez fuera de rango):",
+            height=28, selectmode="extended",
         )
-        self.list_tests_comparativa.pack(fill="y", expand=True, pady=(4, 0))
-        self._style_plain_widget(self.list_tests_comparativa)
         self.list_tests_comparativa.bind("<<ListboxSelect>>", self._on_comparativa_selection)
         self._comparativa_prev_selection: tuple[int, ...] = ()
         ttk.Button(
@@ -2013,12 +2049,7 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        ttk.Label(left, text="Índice (⚠ = alguna vez por encima del umbral orientativo):").pack(anchor="w")
-        self.list_lipid_indices = tk.Listbox(
-            left, height=10, width=38, exportselection=False, relief="flat"
-        )
-        self.list_lipid_indices.pack(fill="y", expand=True, pady=(4, 0))
-        self._style_plain_widget(self.list_lipid_indices)
+        self.list_lipid_indices = self._list_column(left, "Índice (⚠ = alguna vez por encima del umbral orientativo):", height=10)
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_lipid_index
         ).pack(pady=(8, 4), fill="x")
@@ -2145,12 +2176,7 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        ttk.Label(left, text="Índice (⚠ = alguna vez por encima del umbral orientativo):").pack(anchor="w")
-        self.list_hepatic_indices = tk.Listbox(
-            left, height=10, width=38, exportselection=False, relief="flat"
-        )
-        self.list_hepatic_indices.pack(fill="y", expand=True, pady=(4, 0))
-        self._style_plain_widget(self.list_hepatic_indices)
+        self.list_hepatic_indices = self._list_column(left, "Índice (⚠ = alguna vez por encima del umbral orientativo):", height=10)
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_hepatic_index
         ).pack(pady=(8, 4), fill="x")
@@ -2293,12 +2319,7 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        ttk.Label(left, text="Índice (⚠ = alguna vez por encima/debajo del umbral orientativo):").pack(anchor="w")
-        self.list_renal_indices = tk.Listbox(
-            left, height=10, width=38, exportselection=False, relief="flat"
-        )
-        self.list_renal_indices.pack(fill="y", expand=True, pady=(4, 0))
-        self._style_plain_widget(self.list_renal_indices)
+        self.list_renal_indices = self._list_column(left, "Índice (⚠ = alguna vez por encima/debajo del umbral orientativo):", height=10)
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_renal_index
         ).pack(pady=(8, 4), fill="x")
@@ -2452,12 +2473,7 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        ttk.Label(left, text="Índice (⚠ = alguna vez por encima del umbral orientativo):").pack(anchor="w")
-        self.list_hemogram_indices = tk.Listbox(
-            left, height=10, width=38, exportselection=False, relief="flat"
-        )
-        self.list_hemogram_indices.pack(fill="y", expand=True, pady=(4, 0))
-        self._style_plain_widget(self.list_hemogram_indices)
+        self.list_hemogram_indices = self._list_column(left, "Índice (⚠ = alguna vez por encima del umbral orientativo):", height=10)
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_hemogram_index
         ).pack(pady=(8, 4), fill="x")
@@ -2640,12 +2656,7 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        ttk.Label(left, text="Índice (⚠ = alguna vez fuera del rango orientativo):").pack(anchor="w")
-        self.list_iron_indices = tk.Listbox(
-            left, height=10, width=38, exportselection=False, relief="flat"
-        )
-        self.list_iron_indices.pack(fill="y", expand=True, pady=(4, 0))
-        self._style_plain_widget(self.list_iron_indices)
+        self.list_iron_indices = self._list_column(left, "Índice (⚠ = alguna vez fuera del rango orientativo):", height=10)
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_iron_index
         ).pack(pady=(8, 4), fill="x")
@@ -2786,6 +2797,7 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
+        self._fixed_column(left)
         ttk.Button(
             left, text="Ver evolución (PCR + VSG)", bootstyle="primary",
             command=self._show_inflammation_chart,
@@ -2897,12 +2909,7 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        ttk.Label(left, text="Índice (⚠ = alguna vez por encima del umbral orientativo):").pack(anchor="w")
-        self.list_uric_acid_indices = tk.Listbox(
-            left, height=10, width=38, exportselection=False, relief="flat"
-        )
-        self.list_uric_acid_indices.pack(fill="y", expand=True, pady=(4, 0))
-        self._style_plain_widget(self.list_uric_acid_indices)
+        self.list_uric_acid_indices = self._list_column(left, "Índice (⚠ = alguna vez por encima del umbral orientativo):", height=10)
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_uric_acid_index
         ).pack(pady=(8, 4), fill="x")
@@ -3018,12 +3025,7 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        ttk.Label(left, text="Índice (⚠ = alguna vez fuera del rango de referencia):").pack(anchor="w")
-        self.list_calcio_indices = tk.Listbox(
-            left, height=10, width=38, exportselection=False, relief="flat"
-        )
-        self.list_calcio_indices.pack(fill="y", expand=True, pady=(4, 0))
-        self._style_plain_widget(self.list_calcio_indices)
+        self.list_calcio_indices = self._list_column(left, "Índice (⚠ = alguna vez fuera del rango de referencia):", height=10)
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_calcio_index
         ).pack(pady=(8, 4), fill="x")
@@ -3155,12 +3157,7 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        ttk.Label(left, text="Índice (⚠ = alguna vez en rango de diabetes):").pack(anchor="w")
-        self.list_glucemia_indices = tk.Listbox(
-            left, height=10, width=38, exportselection=False, relief="flat"
-        )
-        self.list_glucemia_indices.pack(fill="y", expand=True, pady=(4, 0))
-        self._style_plain_widget(self.list_glucemia_indices)
+        self.list_glucemia_indices = self._list_column(left, "Índice (⚠ = alguna vez en rango de diabetes):", height=10)
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_glucemia_index
         ).pack(pady=(8, 4), fill="x")
@@ -3319,6 +3316,7 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
+        self._fixed_column(left)
         ttk.Button(
             left, text="Ver evolución (TSH + T4L)", bootstyle="primary",
             command=self._show_thyroid_chart,
@@ -3982,10 +3980,13 @@ class AnalitixApp(ttk.Window):
 
         top = ttk.Frame(frame)
         top.pack(fill="x", padx=PAD, pady=(0, 6))
-        ttk.Button(top, text="Actualizar", command=self._refresh_catalogo).pack(side="left")
-        ttk.Button(
+        boton_actualizar = ttk.Button(top, text="Actualizar", command=self._refresh_catalogo)
+        boton_actualizar.pack(side="left")
+        boton_fusionar = ttk.Button(
             top, text="Fusionar seleccionadas...", bootstyle="primary", command=self._merge_selected_groups
-        ).pack(side="left", padx=(8, 0))
+        )
+        boton_fusionar.pack(side="left", padx=(8, 0))
+        self._same_width(boton_actualizar, boton_fusionar)
 
         columns = ("nombre", "canonical_id", "num_results", "labs", "variantes")
         # `show="tree headings"`: cada prueba se despliega (▸) en una fila por
@@ -4080,8 +4081,11 @@ class AnalitixApp(ttk.Window):
 
         botones = ttk.Frame(body)
         botones.pack(fill="x", pady=(PAD, 0))
-        ttk.Button(botones, text="Cancelar", command=dialog.destroy).pack(side="right")
-        ttk.Button(botones, text="Fusionar", bootstyle="primary", command=_confirm).pack(side="right", padx=(0, 8))
+        boton_cancelar = ttk.Button(botones, text="Cancelar", command=dialog.destroy)
+        boton_cancelar.pack(side="right")
+        boton_ok = ttk.Button(botones, text="Fusionar", bootstyle="primary", command=_confirm)
+        boton_ok.pack(side="right", padx=(0, 8))
+        self._same_width(boton_cancelar, boton_ok)
         self._center_dialog(dialog)
         self.wait_window(dialog)
         return result["value"]
@@ -4192,11 +4196,14 @@ class AnalitixApp(ttk.Window):
         ).pack(anchor="w")
         top_huerfanos = ttk.Frame(huerfanos)
         top_huerfanos.pack(fill="x", pady=(8, 4))
-        ttk.Button(top_huerfanos, text="Actualizar", command=self._refresh_orphans).pack(side="left")
-        ttk.Button(
+        boton_actualizar = ttk.Button(top_huerfanos, text="Actualizar", command=self._refresh_orphans)
+        boton_actualizar.pack(side="left")
+        boton_eliminar = ttk.Button(
             top_huerfanos, text="Eliminar seleccionados...", bootstyle="danger-outline",
             command=self._delete_selected_orphans,
-        ).pack(side="left", padx=(8, 0))
+        )
+        boton_eliminar.pack(side="left", padx=(8, 0))
+        self._same_width(boton_actualizar, boton_eliminar)
         columns = ("full_name", "fecha", "source_file", "num_results", "missing_file")
         self.tree_orphans = ttk.Treeview(
             huerfanos, columns=columns, show="headings", selectmode="extended", height=6,
@@ -4321,6 +4328,7 @@ class AnalitixApp(ttk.Window):
                 buttons, text="Cambiar ubicación de los datos...", bootstyle="warning-outline",
                 command=self._change_data_home,
             ).pack(side="left", padx=(8, 0))
+        self._same_width(*buttons.winfo_children())
         self._refresh_stats()
 
     def _change_data_home(self) -> None:

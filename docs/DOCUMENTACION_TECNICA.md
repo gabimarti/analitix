@@ -2128,8 +2128,9 @@ parámetros excluidos a propósito.
   `(dialog, body)`, con todo el contenido dentro de `body`, un único
   `ttk.Frame` con margen `PAD`. Así nunca se ve el gris del `tk.Toplevel`
   detrás de los widgets ttk. Se centran con `_center_dialog`. Reglas
-  completas (botones, textos, privacidad, cómo probarlos):
-  [`docs/GUIA_DIALOGOS.md`](GUIA_DIALOGOS.md).
+  completas de pantallas y diálogos (estructura, columna izquierda de
+  Análisis/Paneles con `_list_column`, botones, colores, textos,
+  privacidad, cómo probarlos): [`docs/GUIA_INTERFAZ.md`](GUIA_INTERFAZ.md).
 - Pestaña Resumen con dos subpestañas (`ttk.Notebook`): "Tabla" (la de
   siempre) y "Qué ha cambiado" (`_draw_changes`, que se redibuja en
   `_refresh_resumen_panel`, es decir, en cada cambio de paciente; a partir de
