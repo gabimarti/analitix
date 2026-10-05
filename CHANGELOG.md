@@ -15,6 +15,7 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 - Todas las páginas de los informes PDF son A4: los gráficos se adaptan a hoja vertical u horizontal y aprovechan todo el ancho para imprimirlos, sin textos cortados por los bordes. La portada indica «Último informe de laboratorio».
 - En las tablas de los informes PDF, la columna del parámetro es más ancha y su nombre ya no se corta.
 - El mapa de calor con muchas analíticas muestra el valor de los extremos de cada parámetro (el más alto por encima del rango y el más bajo por debajo), con un color de texto que contrasta con la casilla.
+- Para marcar varias filas ya no hace falta Ctrl/Shift: Comparativa muestra casillas (con «Desmarcar todo») y las tablas de Pacientes, Normalizar pruebas e Informes huérfanos tienen una casilla ☐/☑ por fila que se marca o desmarca con un clic.
 - La columna de la izquierda (lista y botones) mide lo mismo y queda alineada a la izquierda en Evolución, Comparativa y todos los paneles clínicos: antes, en Comparativa y en los paneles la lista quedaba centrada y los botones salían más anchos.
 - Los botones de un mismo grupo tienen el mismo ancho en todas las pantallas (Importar, Pacientes, Exportar, Normalizar pruebas, Configuración) y en el pie de los cuadros de diálogo.
 

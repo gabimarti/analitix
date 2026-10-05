@@ -367,8 +367,8 @@ filas — pasa sobre todo con PDF antiguos que traen el nombre abreviado (sin
 algún nombre intermedio) y, además, un número de historia clínica de otra
 numeración (el NHC cambia entre plantillas del laboratorio a lo largo de
 los años, así que por sí solo no basta para reconocer al paciente).
-Selecciona las filas a fusionar (Ctrl/Shift para varias, ahora que se
-pueden marcar varias a la vez) y pulsa el botón: se te pedirá elegir cuál
+Marca la casilla (☐) de cada fila a fusionar —un clic marca o desmarca,
+sin necesidad de Ctrl— y pulsa el botón: se te pedirá elegir cuál
 de ellas conserva su identidad — el resto se funde en ella, sus informes
 pasan a pertenecerle y el DNI/fecha de nacimiento que le falten se rellenan
 con los del resto si los tienen. La columna "Informes" te ayuda a detectar
@@ -528,8 +528,8 @@ fecha (misma escala de tiempo en ambas) pero cada una con su propia escala
 de valores — así se puede ver qué pasaba en una prueba cuando la otra tenía
 un valor concreto, sin mezclar unidades ni rangos distintos en un mismo eje.
 
-- Marca hasta 2 pruebas en la lista (Ctrl/Shift para seleccionar varias); si
-  intentas marcar una tercera, se avisa y se mantiene la selección anterior.
+- Marca la casilla de hasta 2 pruebas; si intentas marcar una tercera, se
+  avisa y no se marca. **Desmarcar todo** quita todas las marcas.
 - Pulsa **Comparar**. Cada panel incluye también el margen, la variación
   porcentual y la tendencia descritos en Evolución (§2.4). Si el gráfico
   combinado no cabe entero en la ventana, aparece una barra de scroll para
@@ -1151,8 +1151,9 @@ son la misma. Esta sección deja corregirlo:
    flecha **▸** a la izquierda de una prueba para desplegarla: verás una
    línea por cada nombre y **laboratorio** que lo usa, con sus resultados,
    para comparar cómo llama cada laboratorio a la misma prueba.
-2. Selecciona dos o más filas que sean en realidad la misma determinación
-   (Ctrl/Shift para varias) y pulsa **Fusionar seleccionadas...**.
+2. Marca la casilla (☐) de dos o más filas que sean en realidad la misma
+   determinación y pulsa **Fusionar seleccionadas...**. La flecha ▸ solo
+   despliega la fila, sin cambiar lo marcado.
 3. Elige cuál de ellas es el nombre "bueno" a conservar (por defecto, la que
    más resultados tiene) y confirma.
 
@@ -1337,7 +1338,7 @@ necesidad de ampliar la ventana ni usar barras de desplazamiento.
 - **Informes huérfanos**: lista los informes que no aportan nada —
   **sin ningún resultado**, o cuyo PDF **ya no está** en la carpeta de
   informes (lo borraste, no lo renombraste: uno renombrado se sigue
-  reconociendo solo). Marca los que quieras (Ctrl/Shift para varios) y
+  reconociendo solo). Marca la casilla de los que quieras y
   **Eliminar seleccionados...** — pide confirmación, no se puede deshacer,
   y no toca ningún PDF de la carpeta. Útil, por ejemplo, si en algún
   momento borraste de la carpeta un PDF que nunca llegó a reconocerse bien:

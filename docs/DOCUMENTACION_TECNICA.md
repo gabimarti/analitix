@@ -1385,7 +1385,8 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
   de pantalla. La portada y las tablas dicen "Último informe de
   laboratorio".
 - `gui._export_custom_pdf` es el diálogo (`_new_dialog`). Las pruebas son
-  casillas dentro de `_scrollable_frame`, no una `Listbox` con Ctrl+clic;
+  casillas dentro de `_scrollable_frame`, no una `Listbox` con Ctrl+clic
+  (igual que Comparativa);
   "Marcar alterados" y "Desmarcar todo", con `_same_width` en cada grupo
   de botones:
   - secciones (tabla, "Qué ha cambiado" vía `_changes_rows`, compartido
@@ -2220,9 +2221,13 @@ Notas de implementación:
   `self._active_cursor` porque si se recolecta por el GC deja de funcionar,
   y hay que `.remove()` el anterior antes de crear uno nuevo al cambiar de
   gráfico.
-- `_on_comparativa_selection`: limita la selección del `Listbox` de
-  Comparativa a `MAX_COMPARISON_TESTS`, revirtiendo a la última selección
-  válida y avisando si se excede.
+- Comparativa usa casillas (`ttk.Checkbutton` en `_scrollable_frame`, una
+  por fila de `_evolution_tests`, `None` en la separadora) en una columna
+  `_fixed_column`. `_comparativa_selection()` devuelve los índices marcados
+  y `_on_comparativa_check` desmarca la casilla y avisa si se supera
+  `MAX_COMPARISON_TESTS`. Colores con los estilos `Alterado.TCheckbutton` y
+  `Gris.TCheckbutton` (`COLOR_ALTERADO`/`COLOR_GRIS`, los mismos de las
+  listas).
 - `_refresh_test_lists`: separa las pruebas con `num_points < self.min_points`
   (ajustable en Configuración, por defecto `charts.DEFAULT_MIN_POINTS=4`) del resto,
   insertando una fila separadora no seleccionable entre ambos grupos. Para
@@ -2246,8 +2251,8 @@ Notas de implementación:
   vaciado ahí cubre todos los casos sin tocar cada uno por separado.
 - `_show_test_info(selection)`: botón "ℹ ¿Qué es este parámetro?"
   (Evolución/Comparativa; "¿Qué son estos parámetros?" en Comparativa).
-  Recibe directamente la tupla de índices de `Listbox.curselection()`
-  (misma llamada en ambas pestañas, solo cambia qué `Listbox` se pasa), los
+  Recibe la tupla de índices seleccionados (`Listbox.curselection()` en
+  Evolución, `_comparativa_selection()` en Comparativa), los
   traduce vía `self._evolution_tests` y muestra, para cada parámetro
   seleccionado, `catalog.get_description` (`"Todavía no hay una ficha para
   este parámetro."` si `None`) en un `tk.Text` de solo lectura dentro de un
@@ -2508,7 +2513,7 @@ Notas de implementación:
   vez. "Seguridad": cambio de contraseña
   (`db.rekey`). "Datos": vaciar toda la base de datos
   (`repository.delete_all_data`, pide escribir "BORRAR" para confirmar) e
-  "Informes huérfanos" (`tree_orphans`, `selectmode="extended"`) —
+  "Informes huérfanos" (`tree_orphans`, tabla con casillas `_checkbox_tree`) —
   `_refresh_orphans` calcula `existing_filenames` con
   `ingest.known_pdf_filenames(self.reports_dir)` (recursivo, no solo la
   carpeta activa — ver `ingest.py` más arriba, imprescindible con el uso
@@ -2536,8 +2541,9 @@ Notas de implementación:
   confirmación; borra el paciente y todos sus informes/resultados (también
   sus `processed_files`, así que los PDF correspondientes se reprocesan
   desde cero en la siguiente importación — sirve como "importación limpia"
-  de ese paciente). `tree_patients` usa `selectmode="extended"` (antes
-  `"browse"`) para poder seleccionar varias filas a la vez.
+  de ese paciente). `tree_patients` es una tabla con casillas
+  (`_checkbox_tree`) para poder marcar varias filas a la vez; el doble clic
+  abre la ficha de esa fila.
 - Pestaña Pacientes: botón "Fusionar seleccionados..."
   (`_merge_selected_patients` → `repository.merge_patients`), para el caso
   de un mismo paciente partido en dos filas (nombre abreviado + NHC de otra
@@ -2651,7 +2657,7 @@ muestra en la tabla de Pacientes con una ★ en una columna dedicada
 (`label_active_patient`/`label_manual_patient`, actualizados juntos por
 `_update_active_patient_display`).
 - Pestaña "🔗 Normalizar pruebas" (`_build_tab_catalogo`): `ttk.Treeview`
-  (`selectmode="extended"`) con un grupo por `canonical_id`
+  con casillas (`_checkbox_tree`) y un grupo por `canonical_id`
   (`repository.list_canonical_groups`), mostrando el nombre más frecuente,
   el identificador interno y todas las variantes de `raw_name` vistas con su
   recuento, más la columna de laboratorios (`labs`). Con `show="tree

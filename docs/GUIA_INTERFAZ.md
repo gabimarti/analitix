@@ -37,6 +37,7 @@ aquí.
 | `self._list_column(left, texto, height=...)` | Etiqueta + lista de la columna izquierda (§4). |
 | `self._fixed_column(left)` | Columna izquierda sin lista, con el mismo ancho (§4). |
 | `self._scrollable_frame(padre)` | Zona desplazable para listas de casillas. |
+| `self._checkbox_tree(tree)` + `self._sync_checks(tree)` | Tabla (`ttk.Treeview`) con casillas ☐/☑ para marcar varias filas (§8). |
 | `self._style_plain_widget(w)` | Colores del tema para `tk.Listbox`/`tk.Text`. |
 | `self._build_disclaimer_button(...)` | Botón «⚠️ Aviso e información científica» de los paneles. |
 
@@ -60,7 +61,9 @@ Cada pestaña es un `ttk.Frame` dentro de `self.content`, registrado en
 ## 4. Pantallas de lista + gráfico (Análisis y Paneles clínicos)
 
 Evolución, Comparativa y todos los paneles clínicos tienen una **columna
-izquierda** (lista y botones) y el gráfico a la derecha:
+izquierda** (lista y botones) y el gráfico a la derecha. Si la lista permite
+marcar varias opciones (Comparativa), son casillas en una columna
+`_fixed_column` (§8), con el mismo ancho:
 
 ```python
 left = ttk.Frame(body)
@@ -181,6 +184,10 @@ self.wait_window(dialog)  # solo si el diálogo devuelve un resultado
   una selección múltiple con Ctrl: un solo clic sin Ctrl desmarca todo lo
   elegido. Si la lista es larga, añade «Desmarcar todo» (y, si tiene
   sentido, un atajo como «Marcar alterados»).
+- **Tablas en las que se marcan varias filas**: `self._checkbox_tree(tree)`
+  al crearlas y `self._sync_checks(tree)` al final de cada recarga. Un clic
+  marca o desmarca la fila (☐/☑) y `tree.selection()` sigue devolviendo las
+  marcadas; la flecha ▸ de las filas desplegables solo despliega.
 - Informes PDF: siempre en A4.
 - Muestra solo los datos personales imprescindibles para la tarea (p. ej.
   el selector de paciente activo enseña solo el nombre). Ningún dato del
@@ -208,6 +215,3 @@ Ejecuta además la suite completa (`python -m pytest`).
   habitual de los PDF, no porque sean destructivos.
 - **Entrada manual**: «Quitar fila seleccionada» (izquierda) y «Guardar
   analítica» (derecha) son grupos distintos y conservan su ancho natural.
-- **Pendiente de adaptar a §8 (casillas en vez de selección con Ctrl)**:
-  la lista de Comparativa y las tablas de Pacientes, Normalizar pruebas e
-  Informes huérfanos.
