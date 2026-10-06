@@ -1493,7 +1493,11 @@ ha cambiado".
   bermellón, bajo = `COLOR_BAJO` azul; paleta apta para daltonismo de
   Okabe-Ito, ver `docs/GUIA_INTERFAZ.md` §5.1). Etiqueta con el valor los
   puntos fuera de rango, precedido de ▲/▼ (`SIMBOLO_ESTADO`): el color
-  nunca va solo, y la forma del punto ya codifica el laboratorio. Guarda
+  nunca va solo, y la forma del punto ya codifica el laboratorio. El último
+  punto se destaca con un anillo (color de su estado) y la etiqueta
+  "Último: valor", en el lado contrario a las etiquetas de los fuera de
+  rango (debajo si es alto, encima si es bajo) para no solaparse; ese punto
+  no lleva además la etiqueta normal. Guarda
   `scatter.analitix_series = series` para que `gui._attach_hover` pueda
   mostrar el tooltip correcto en el punto correspondiente. Devuelve los
   `handles` de leyenda de esa serie. Calcula el ajuste de tendencia
@@ -2122,6 +2126,21 @@ parámetros excluidos a propósito.
   Evolución (`_show_evolution`), que es donde está su interruptor
   (`var_personal_range`, persistido en `settings.personal_range`); los
   paneles no lo muestran.
+- **Ventana de años** (`gui.HISTORY_YEARS = 5`): `_evolution_figure` y
+  `_comparison_figure` (envoltorio de `charts.comparison_figure` que usan
+  Comparativa, Inflamación, Tiroides, Glucosa y el PDF personalizado)
+  pasan cada serie por `_windowed`, que deja los `HISTORY_YEARS` años
+  anteriores a la **última** analítica de la serie (no a hoy, para que un
+  historial antiguo no quede vacío), salvo con "Ver todo el histórico"
+  (`var_full_history`, persistido en `settings.full_history`; interruptor
+  en Evolución y opción del menú Análisis, `_toggle_full_history`; la
+  opción es un `add_command` cuyo texto cambia, `_history_menu_label`, y no
+  un `add_checkbutton`, porque en Windows la marca ✔ de Tk tapa la primera
+  letra).
+  `_mark_window` escribe en la figura cuántas analíticas quedan ocultas.
+  `export.export_pdf` (informes completo y de alterados) no pasa por aquí:
+  siempre todo el histórico. Elección de interfaz (Zikmund-Fisher, AHRQ
+  2017, no revisado por pares), no un criterio clínico.
 - **Solo datos abiertos**: cada fila del CSV cita su artículo (DOI y
   tabla); ningún valor procede de la web de la EFLM Biological Variation
   Database, cuyos términos no permiten redistribuirla.

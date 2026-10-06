@@ -508,6 +508,9 @@ Gráfico de una prueba concreta a lo largo del tiempo.
     del gráfico ni a la leyenda. Los colores están elegidos para
     distinguirse también con daltonismo, y el símbolo permite leerlos sin
     color (por ejemplo, impresos en blanco y negro).
+  - El **último valor** destacado con un anillo y la etiqueta
+    **"Último: valor"** (con ▲/▼ si está fuera de rango), para ver de un
+    vistazo cómo estás ahora, sin que se pierda entre el histórico.
   - Pasando el cursor sobre cualquier punto (también los normales) aparece
     la fecha, el valor y la unidad.
   - Debajo del gráfico, un **resumen en texto**: en cuántas analíticas ha
@@ -532,6 +535,18 @@ Gráfico de una prueba concreta a lo largo del tiempo.
     recuerda. Solo está en esta pantalla, no en los paneles clínicos.
     Fuente y limitaciones en Ayuda → Referencias científicas
     ("referencias_rcv").
+  - **Últimos 5 años o todo el histórico**: por defecto, cada gráfico
+    muestra los **5 años anteriores a la última analítica** de ese
+    parámetro, para que los valores muy antiguos no compriman el estado
+    actual. Si eso oculta analíticas, el gráfico lo indica arriba a la
+    derecha ("Últimos 5 años · N analíticas anteriores ocultas"). Activa
+    **Ver todo el histórico** (interruptor debajo de la lista, o menú
+    **Análisis → Ver todo el histórico**; con él activo, esa opción del
+    menú pasa a **Ver solo los últimos 5 años**) para verlo entero. Vale para
+    Evolución, Comparativa y los paneles clínicos (en los paneles se
+    aplica al elegir el siguiente índice); la elección se recuerda. Los
+    informes PDF completo y de alterados incluyen siempre todo el
+    histórico.
   - **Banda gris en el último punto** (pruebas con variación biológica
     conocida, ver "¿Cambio real o variación normal?" en §2.6): el margen
     de variación esperable desde el valor anterior. Si el último punto cae

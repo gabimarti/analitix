@@ -217,3 +217,12 @@ def test_out_of_range_labels_carry_symbol_not_only_color():
              _row("2024-03-01", 11.0, "A"), _row("2024-04-01", 14.5, "A")]
     textos = [t.get_text() for t in evolution_figure(serie, "x").axes[0].texts]
     assert "▲ 17" in textos and "▼ 11" in textos
+
+
+def test_last_value_highlighted_once():
+    from analitix.charts import evolution_figure
+
+    serie = [_row("2024-01-01", 14.0, "A"), _row("2024-02-01", 15.0, "A"),
+             _row("2024-03-01", 14.5, "A"), _row("2024-04-01", 17.2, "A")]
+    textos = [t.get_text() for t in evolution_figure(serie, "x").axes[0].texts]
+    assert "Último: ▲ 17.2" in textos and "▲ 17.2" not in textos  # sin etiqueta duplicada

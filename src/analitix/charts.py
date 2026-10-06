@@ -402,7 +402,27 @@ def _plot_series_on_ax(
         # Datos para el tooltip al pasar el cursor (ver gui._attach_hover).
         scatter.analitix_series = series
 
-    for fecha, valor, s in zip(fechas, valores, series):
+    # Último valor destacado (anillo + etiqueta): el estado actual es lo que
+    # más se busca y no debe perderse entre el histórico ni la tendencia
+    # (recomendación de Zikmund-Fisher, AHRQ 2017, no revisada por pares:
+    # elección de interfaz, no un criterio clínico).
+    ultimo = series[-1]
+    color_ultimo = {"alto": COLOR_ALTO, "bajo": COLOR_BAJO}.get(ultimo["flag_calc"], COLOR_INK_SECONDARY)
+    ax.scatter([fechas[-1]], [valores[-1]], s=170, facecolors="none", edgecolors=color_ultimo,
+               linewidths=1.6, zorder=3)
+    simbolo = SIMBOLO_ESTADO.get(ultimo["flag_calc"])
+    # Al lado contrario de las etiquetas de los anteriores fuera de rango
+    # (encima si alto, debajo si bajo), para no solaparse con ellas.
+    xytext, ha, va = {"alto": ((0, -12), "center", "top"),
+                      "bajo": ((0, 12), "center", "bottom")}.get(ultimo["flag_calc"], ((-10, 10), "right", "bottom"))
+    ax.annotate(
+        f"Último: {simbolo + ' ' if simbolo else ''}{valores[-1]:g}",
+        (fechas[-1], valores[-1]), textcoords="offset points", xytext=xytext, ha=ha, va=va,
+        fontsize=8, fontweight="bold", color=color_ultimo, zorder=4,
+        bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8),
+    )
+
+    for fecha, valor, s in zip(fechas[:-1], valores[:-1], series[:-1]):  # el último ya lleva etiqueta
         if s["flag_calc"] not in ("alto", "bajo"):
             continue
         alto = s["flag_calc"] == "alto"

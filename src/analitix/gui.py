@@ -319,6 +319,13 @@ COLOR_ALTERADO, COLOR_GRIS = COLOR_ALTO, "#999999"
 # `export.export_pdf`).
 CAMBIO_BRUSCO_PCT = 30.0
 
+# Años que muestran por defecto los gráficos de evolución (contados hacia
+# atrás desde la última analítica de cada parámetro); el interruptor "Ver
+# todo el histórico" los amplía. Elección de interfaz para que el estado
+# actual no quede comprimido por valores muy antiguos (recomendación de
+# Zikmund-Fisher, AHRQ 2017, no revisada por pares), no un criterio clínico.
+HISTORY_YEARS = 5
+
 STATS_LABELS = [
     ("num_patients", "Pacientes"),
     ("num_reports", "Informes importados"),
@@ -373,6 +380,7 @@ class AnalitixApp(ttk.Window):
         # Rango personal (`rcv.personal_range`) en el gráfico de Evolución:
         # desactivado por defecto, se activa con su interruptor en esa pantalla.
         self.var_personal_range = tk.BooleanVar(value=get_setting(self.con, "personal_range", "0") == "1")
+        self.var_full_history = tk.BooleanVar(value=get_setting(self.con, "full_history", "0") == "1")
         # Laboratorios excluidos de gráficos y paneles (Análisis → Laboratorios
         # incluidos...): se guardan en `settings` y se cargan en la tabla
         # temporal de la conexión que filtra las consultas (`repository`).
@@ -410,6 +418,14 @@ class AnalitixApp(ttk.Window):
         analisis_menu.add_command(label="Mapa de calor", command=lambda: self._show_page("mapa_calor"))
         analisis_menu.add_separator()
         analisis_menu.add_command(label="Laboratorios incluidos...", command=self._choose_labs)
+        # Opción normal con texto que cambia, no `add_checkbutton`: en Windows
+        # la marca ✔ de Tk se dibuja encima de la primera letra.
+        analisis_menu.add_command(
+            label=self._history_menu_label(),
+            command=lambda: (self.var_full_history.set(not self.var_full_history.get()),
+                             self._toggle_full_history()),
+        )
+        self._history_menu = (analisis_menu, analisis_menu.index("end"))
         menubar.add_cascade(label="Análisis", menu=analisis_menu)
 
         # Menú separado de "Análisis" (que son gráficos puros de uno o dos
@@ -1556,6 +1572,10 @@ class AnalitixApp(ttk.Window):
             left, text="Mostrar mi rango personal", variable=self.var_personal_range,
             command=self._toggle_personal_range, bootstyle="round-toggle",
         ).pack(anchor="w", pady=(10, 0))
+        ttk.Checkbutton(
+            left, text=f"Ver todo el histórico (si no, {HISTORY_YEARS} años)", variable=self.var_full_history,
+            command=self._toggle_full_history, bootstyle="round-toggle",
+        ).pack(anchor="w", pady=(6, 0))
 
         self.chart_frame_evolucion = ttk.Frame(frame)
         self.chart_frame_evolucion.pack(side="left", fill="both", expand=True, padx=PAD, pady=PAD)
@@ -1744,7 +1764,7 @@ class AnalitixApp(ttk.Window):
             series_by_test[label] = get_series(self.con, canonical_id, self.current_patient_id)
         if not series_by_test:
             return
-        fig = comparison_figure(series_by_test, self.min_points)
+        fig = self._comparison_figure(series_by_test)
         self._embed_figure(fig, self.chart_canvas_comparativa)
 
     def _on_comparativa_check(self, var: tk.BooleanVar) -> None:
@@ -2879,7 +2899,7 @@ class AnalitixApp(ttk.Window):
             series_by_test["VSG"] = self._inflammation_series["vsg"]
         if not series_by_test:
             return
-        fig = comparison_figure(series_by_test, self.min_points)
+        fig = self._comparison_figure(series_by_test)
         self._embed_figure(fig, self.chart_canvas_inflamacion)
 
     def _format_inflammation_summary(self, s: dict) -> str:
@@ -3254,7 +3274,7 @@ class AnalitixApp(ttk.Window):
             series_by_test["eAG (desde HbA1c)"] = self._glucemia_series["idx_eag"]
         if not series_by_test:
             return
-        fig = comparison_figure(series_by_test, self.min_points)
+        fig = self._comparison_figure(series_by_test)
         self._embed_figure(fig, self.chart_canvas_glucemia)
 
     def _show_glucemia_index(self) -> None:
@@ -3398,7 +3418,7 @@ class AnalitixApp(ttk.Window):
             series_by_test["T4 libre"] = self._thyroid_series["t4l"]
         if not series_by_test:
             return
-        fig = comparison_figure(series_by_test, self.min_points)
+        fig = self._comparison_figure(series_by_test)
         self._embed_figure(fig, self.chart_canvas_tiroides)
 
     def _format_thyroid_summary(self, s: dict) -> str:
@@ -3546,6 +3566,9 @@ class AnalitixApp(ttk.Window):
         biológica (`rcv.py`; los índices calculados de los paneles no la
         tienen y se dibujan sin banda). El rango personal solo en Evolución
         (`with_personal`), donde está su interruptor."""
+        hidden = len(series)
+        series = self._windowed(series)
+        hidden -= len(series)
         sex = get_patient_sex(self.con, self.current_patient_id)
         rcv = None
         if len(series) >= 2:
@@ -3556,7 +3579,51 @@ class AnalitixApp(ttk.Window):
         personal = (
             personal_range(canonical_id, series, sex) if with_personal and self.var_personal_range.get() else None
         )
-        return evolution_figure(series, label, self.min_points, rcv=rcv, personal=personal)
+        return self._mark_window(evolution_figure(series, label, self.min_points, rcv=rcv, personal=personal), hidden)
+
+    def _comparison_figure(self, series_by_test: dict[str, list[dict]]):
+        """`charts.comparison_figure` con la misma ventana de años que
+        `_evolution_figure` (Comparativa e Inflamación/Tiroides/Glucosa)."""
+        hidden = sum(len(s) for s in series_by_test.values())
+        series_by_test = {label: self._windowed(s) for label, s in series_by_test.items()}
+        hidden -= sum(len(s) for s in series_by_test.values())
+        return self._mark_window(comparison_figure(series_by_test, self.min_points), hidden)
+
+    def _windowed(self, series: list[dict]) -> list[dict]:
+        """Los `HISTORY_YEARS` años anteriores a la última analítica de la
+        serie (no a hoy: un historial antiguo no queda vacío), salvo con
+        "Ver todo el histórico". `fecha` es "AAAA-MM-DD[ HH:MM:SS]"."""
+        if self.var_full_history.get() or not series:
+            return series
+        last = series[-1]["fecha"][:10]
+        cutoff = f"{int(last[:4]) - HISTORY_YEARS}{last[4:]}"
+        return [s for s in series if s["fecha"][:10] >= cutoff]
+
+    @staticmethod
+    def _mark_window(fig, hidden: int):
+        """Aviso en el gráfico cuando la ventana de años oculta analíticas."""
+        if hidden:
+            fig.text(
+                0.99, 0.99, f"Últimos {HISTORY_YEARS} años · {hidden} analíticas anteriores ocultas "
+                "(Análisis → Ver todo el histórico)", ha="right", va="top", fontsize=7, color="#777777",
+            )
+        return fig
+
+    def _history_menu_label(self) -> str:
+        """Texto de la opción del menú Análisis: lo que hará al pulsarla."""
+        return f"Ver solo los últimos {HISTORY_YEARS} años" if self.var_full_history.get() else "Ver todo el histórico"
+
+    def _toggle_full_history(self) -> None:
+        """Interruptor "Ver todo el histórico" (Evolución y menú Análisis):
+        se recuerda y redibuja Evolución/Comparativa si tienen algo elegido;
+        los paneles lo aplican al elegir su siguiente índice."""
+        set_setting(self.con, "full_history", "1" if self.var_full_history.get() else "0")
+        menu, index = self._history_menu
+        menu.entryconfigure(index, label=self._history_menu_label())
+        if self.list_tests_evolucion.curselection():
+            self._show_evolution()
+        if self._comparativa_selection():
+            self._show_comparison()
 
     def _toggle_personal_range(self) -> None:
         """Interruptor "Mostrar mi rango personal" de Evolución: se recuerda
@@ -3792,7 +3859,7 @@ class AnalitixApp(ttk.Window):
         if key in PDF_COMBINED_PANELS:
             combinadas = {nombre: series[k] for k, nombre in PDF_COMBINED_PANELS[key].items() if series.get(k)}
             if combinadas:
-                paginas.append(comparison_figure(combinadas, self.min_points))
+                paginas.append(self._comparison_figure(combinadas))
             return paginas
         for cid, nombre in getattr(self, f"_{key}_indices"):
             if cid and data_sufficiency(len(series.get(cid, [])), self.min_points) not in ("sin_datos", "un_punto"):
