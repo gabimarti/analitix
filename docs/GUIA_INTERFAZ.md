@@ -102,6 +102,28 @@ ttk.Button(left, text="ℹ️ ¿Qué es este índice?", bootstyle="info", comman
 | `secondary` / `secondary-outline` | Acciones secundarias y textos explicativos. |
 | *(sin estilo)* | Cancelar, Cerrar, Actualizar. |
 
+### 5.1 Colores de estado (gráficos, Resumen, PDF)
+
+Paleta apta para daltonismo, definida solo en `charts.py` (colores de
+Okabe & Ito; ver el comentario junto a las constantes):
+
+| Constante | Color | Uso |
+| --- | --- | --- |
+| `COLOR_NORMAL` | verde azulado `#009E73` | Dentro de rango; «se acerca al rango» en Qué ha cambiado. |
+| `COLOR_ALTO` | bermellón `#D55E00` | Por encima del rango; «se aleja del rango»; texto de lo alterado (`COLOR_ALTERADO`). |
+| `COLOR_BAJO` | azul `#0072B2` | Por debajo del rango (misma polaridad que el mapa de calor). |
+| `COLOR_BRUSCO` | granate `#882255` | Cambio brusco dentro de rango. |
+
+Reglas:
+
+- **El color nunca va solo**: alto/bajo llevan ▲/▼ (`SIMBOLO_ESTADO`) y
+  texto; en Qué ha cambiado, ✗/✓; lo alterado en listas, ⚠.
+- **No usar emojis de color** (🔴/🟠/🟢) para estados: no se distinguen con
+  daltonismo.
+- Nada de parejas verde/rojo o rojo/naranja como única diferencia. Un
+  color nuevo se toma de Okabe-Ito o de las paletas de Paul Tol, y si va
+  como texto sobre blanco, con contraste ≥ 4.5:1.
+
 ## 6. Botones
 
 - **Los botones de un mismo grupo tienen el mismo ancho**: el del texto más

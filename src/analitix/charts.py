@@ -3,7 +3,7 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-07
-# Última actualización: 2026-09-25
+# Última actualización: 2026-10-06
 # ---------------------------------------------------------------------------
 """Construcción de gráficos de evolución, comparativas y mapa de calor con matplotlib."""
 from __future__ import annotations
@@ -17,17 +17,28 @@ from matplotlib.colors import LinearSegmentedColormap, to_rgba
 from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
-COLOR_NORMAL = "#2a7f3f"
-COLOR_ALTO = "#c0392b"
-COLOR_BAJO = "#d68910"
+# Paleta apta para daltonismo (2026-10-06): colores de Okabe & Ito, "Color
+# Universal Design" (2002, https://jfly.uni-koeln.de/color/), distinguibles
+# con deuteranopía, protanopía y tritanopía. Sin la pareja verde/rojo ni
+# rojo/naranja: alto = bermellón, bajo = azul (misma polaridad que el mapa
+# de calor). El color nunca va solo: alto/bajo llevan también ▲/▼ y texto.
+COLOR_NORMAL = "#009E73"  # verde azulado
+COLOR_ALTO = "#D55E00"    # bermellón
+COLOR_BAJO = "#0072B2"    # azul
 COLOR_TREND = "#555555"
 # Cambio brusco dentro de rango (pestaña Resumen y exportación a PDF,
 # `gui.CAMBIO_BRUSCO_PCT`) — no es un color de estado clínico como los de
 # arriba, solo distingue visualmente ese caso de "alto"/"bajo"/"normal".
-COLOR_BRUSCO = "#2b6cb0"
+# "Wine" de la paleta "muted" de Paul Tol (también apta para daltonismo,
+# https://personal.sron.nl/~pault/): el púrpura de Okabe-Ito no llega al
+# contraste 4.5:1 como texto sobre blanco.
+COLOR_BRUSCO = "#882255"
+# Símbolo que acompaña al color de alto/bajo (Evolución, Resumen, PDF).
+SIMBOLO_ESTADO = {"alto": "▲", "bajo": "▼"}
 
-# Colores base para distinguir cada eje/prueba en la comparativa de dos ejes.
-COMPARISON_COLORS = ["#2b6cb0", "#6b46c1"]
+# Colores base de cada panel de la comparativa (paneles separados: solo
+# decorativos, pero sin coincidir con el azul de "bajo").
+COMPARISON_COLORS = [COLOR_NORMAL, "#CC79A7"]
 
 MAX_COMPARISON_TESTS = 2
 
@@ -395,8 +406,10 @@ def _plot_series_on_ax(
         if s["flag_calc"] not in ("alto", "bajo"):
             continue
         alto = s["flag_calc"] == "alto"
+        # ▲/▼ además del color (paleta apta para daltonismo): la forma del
+        # punto ya está ocupada por el laboratorio, así que va en la etiqueta.
         ax.annotate(
-            f"{valor:g}",
+            f"{SIMBOLO_ESTADO[s['flag_calc']]} {valor:g}",
             (fecha, valor),
             textcoords="offset points",
             xytext=(0, 8 if alto else -10),
@@ -529,8 +542,8 @@ def comparison_figure(
 # Escala divergente (azul = por debajo del rango, gris neutro = dentro, rojo
 # = por encima), una intensidad por lado. Codifica polaridad + distancia al
 # rango, no estado clínico: por eso no reutiliza COLOR_ALTO/COLOR_BAJO de
-# los puntos de Evolución (naranja y rojo son los dos cálidos y no se leen
-# como opuestos).
+# los puntos de Evolución, aunque comparte su polaridad (azul = bajo, rojo
+# = alto). Azul↔rojo ya es apto para daltonismo.
 HEATMAP_CMAP = LinearSegmentedColormap.from_list(
     "analitix_rango",
     [(0.0, "#184f95"), (0.35, "#9ec5f4"), (0.5, "#f0efec"), (0.65, "#f4b4b3"), (1.0, "#a3282a")],
@@ -690,10 +703,13 @@ def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> 
 # -- "Qué ha cambiado": último informe frente al anterior ------------------
 # Colores de estado (paleta de estado, reservada: no se usa para nada más en
 # este gráfico) y siempre acompañados de símbolo + etiqueta, nunca solo color.
-CHANGE_WORSE = "#d03b3b"     # se aleja del rango o sale de él
-CHANGE_BETTER = "#0ca30c"    # se acerca al rango o vuelve a él
-CHANGE_NEUTRAL = "#b9b8b0"   # dentro del rango antes y ahora
-CHANGE_SYMBOL = {"empeora": "▲", "mejora": "✓", "igual": ""}
+# Misma paleta apta para daltonismo que los puntos de Evolución. "✗" y no
+# "▲" para empeora: ▲ ya significa "alto", y alejarse del rango también
+# puede ser bajar.
+CHANGE_WORSE = COLOR_ALTO     # se aleja del rango o sale de él
+CHANGE_BETTER = COLOR_NORMAL  # se acerca al rango o vuelve a él
+CHANGE_NEUTRAL = "#b9b8b0"    # dentro del rango antes y ahora
+CHANGE_SYMBOL = {"empeora": "✗", "mejora": "✓", "igual": ""}
 # Opacidad de las barras cuyo cambio cabe en la variación esperable (RCV,
 # `rcv.py`): se ven, pero dejan destacar los cambios probablemente reales.
 RCV_ESPERABLE_ALPHA = 0.35
@@ -783,7 +799,7 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
                   color="#52514e")
     ax.set_title(title, fontsize=11, loc="left", pad=34)  # leyenda en 2 filas: cabe también en un A4 vertical
     legend = [
-        Patch(facecolor=CHANGE_WORSE, label="▲ Se aleja del rango o sale de él"),
+        Patch(facecolor=CHANGE_WORSE, label="✗ Se aleja del rango o sale de él"),
         Patch(facecolor=CHANGE_BETTER, label="✓ Se acerca al rango o vuelve a él"),
         Patch(facecolor=CHANGE_NEUTRAL, label="Dentro del rango antes y ahora"),
     ]

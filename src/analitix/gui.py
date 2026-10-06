@@ -3,7 +3,7 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-07
-# Última actualización: 2026-09-30
+# Última actualización: 2026-10-06
 # ---------------------------------------------------------------------------
 """Interfaz gráfica (Tkinter/ttkbootstrap) de Analitix."""
 from __future__ import annotations
@@ -310,7 +310,7 @@ LIST_COLUMN_CHARS = 38
 # Casillas de las tablas con selección múltiple (ver `_checkbox_tree`).
 CHECK_ON, CHECK_OFF = "☑", "☐"
 # Texto de lo alguna vez fuera de rango y de lo secundario en las listas.
-COLOR_ALTERADO, COLOR_GRIS = "#c0392b", "#999999"
+COLOR_ALTERADO, COLOR_GRIS = COLOR_ALTO, "#999999"
 
 # Umbral de "cambio brusco" de la pestaña Resumen y la exportación a PDF
 # ("±30%"). Elección de interfaz, no un punto de corte clínico — no
@@ -1902,7 +1902,7 @@ class AnalitixApp(ttk.Window):
             cambios,
             text="Cada barra es el cambio de un parámetro respecto al informe anterior, medido en "
             "anchos de su rango de referencia (1 = moverse todo el ancho del rango normal), para "
-            "poder comparar parámetros de escalas muy distintas. Rojo ▲ = se aleja del rango o sale "
+            "poder comparar parámetros de escalas muy distintas. Rojo ✗ = se aleja del rango o sale "
             "de él; verde ✓ = se acerca o vuelve; gris = dentro del rango antes y ahora. Barra "
             "atenuada = el cambio cabe en la variación esperable (RCV: variación biológica de la "
             "propia persona + imprecisión del análisis, según estudios publicados); no se valora si "
@@ -1979,7 +1979,8 @@ class AnalitixApp(ttk.Window):
             flag, pct, brusco = f["flag_calc"], f["pct"], f["brusco"]
             ref_low, ref_high = f["ref_low"], f["ref_high"]
             referencia = f"{ref_low:g} - {ref_high:g}" if ref_low is not None and ref_high is not None else "—"
-            estado = {"alto": "🔴 Alto", "bajo": "🟠 Bajo"}.get(flag, "🟢 Normal")
+            # ▲/▼ en vez de 🔴/🟠/🟢: los emojis de color no se distinguen con daltonismo.
+            estado = {"alto": "▲ Alto", "bajo": "▼ Bajo"}.get(flag, "Normal")
             variacion = "—" if pct is None else f"{'⚡ ' if brusco else ''}{pct:+.1f}%"
             serie = get_series(self.con, f["canonical_id"], self.current_patient_id) if f["canonical_id"] else []
             tendencia = trend_arrow(serie, ref_low, ref_high) or "—"

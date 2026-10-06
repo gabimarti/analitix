@@ -207,3 +207,13 @@ def test_heatmap_labels_only_row_extremes_with_many_columns():
     # Contraste: blanco sobre oscuro, tinta oscura sobre claro.
     assert _ink_for((0.1, 0.1, 0.4, 1)) == "white"
     assert _ink_for((0.95, 0.9, 0.9, 1)) != "white"
+
+
+def test_out_of_range_labels_carry_symbol_not_only_color():
+    # Paleta apta para daltonismo: alto/bajo se leen también sin color.
+    from analitix.charts import evolution_figure
+
+    serie = [_row("2024-01-01", 17.0, "A"), _row("2024-02-01", 14.0, "A"),
+             _row("2024-03-01", 11.0, "A"), _row("2024-04-01", 14.5, "A")]
+    textos = [t.get_text() for t in evolution_figure(serie, "x").axes[0].texts]
+    assert "▲ 17" in textos and "▼ 11" in textos

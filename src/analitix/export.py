@@ -3,7 +3,7 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-07
-# Última actualización: 2026-09-30
+# Última actualización: 2026-10-06
 # ---------------------------------------------------------------------------
 """Exportación de resultados a Excel, CSV y PDF."""
 from __future__ import annotations
@@ -84,7 +84,7 @@ def export_excel(rows: list[dict[str, Any]], path: Path, sheet_name: str = "Resu
 # brusco: a diferencia de la pestaña Resumen (Tkinter + Segoe UI Emoji), el
 # backend PDF de matplotlib no garantiza tener una fuente con glifos de
 # emoji en color.
-_ESTADO_TEXTO = {"alto": "Alto", "bajo": "Bajo"}
+_ESTADO_TEXTO = {"alto": "▲ Alto", "bajo": "▼ Bajo"}  # ▲/▼ además del color (apto para daltonismo)
 _ESTADO_COLOR = {"alto": COLOR_ALTO, "bajo": COLOR_BAJO}
 _PDF_DISCLAIMER = (
     "Apoyo informativo y de seguimiento, generado automáticamente por Analitix a partir de "

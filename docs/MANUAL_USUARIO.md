@@ -449,7 +449,7 @@ Gráfico de una prueba concreta a lo largo del tiempo.
   cambio real; al pasar el ratón por el punto también se ve el laboratorio.
 - La lista de la izquierda muestra todas las pruebas con resultado numérico
   del paciente seleccionado. Las que **alguna vez** han estado fuera de
-  rango llevan el icono ⚠ y aparecen en rojo, para poder localizarlas de un
+  rango llevan el icono ⚠ y aparecen en color rojo anaranjado, para poder localizarlas de un
   vistazo y estudiar su evolución.
 - Las pruebas con **pocos valores registrados** (por defecto, menos de 4;
   ajustable en Configuración, §2.20) se agrupan aparte, al final de la lista
@@ -466,9 +466,12 @@ Gráfico de una prueba concreta a lo largo del tiempo.
   - La línea de valores en el tiempo, con un punto por análisis.
   - Las líneas discontinuas de mínimo y máximo del rango de referencia (más
     la banda sombreada entre ambas).
-  - Los puntos **fuera de rango** en rojo (alto) o naranja (bajo), con el
-    valor exacto escrito junto al punto, con margen suficiente para que no
-    quede pegado al borde del gráfico ni a la leyenda.
+  - Los puntos **fuera de rango** en rojo anaranjado (alto) o azul (bajo),
+    con el valor exacto escrito junto al punto precedido de **▲** (alto) o
+    **▼** (bajo), con margen suficiente para que no quede pegado al borde
+    del gráfico ni a la leyenda. Los colores están elegidos para
+    distinguirse también con daltonismo, y el símbolo permite leerlos sin
+    color (por ejemplo, impresos en blanco y negro).
   - Pasando el cursor sobre cualquier punto (también los normales) aparece
     la fecha, el valor y la unidad.
   - Debajo del gráfico, un **resumen en texto**: en cuántas analíticas ha
@@ -551,7 +554,7 @@ Evolución parámetro a parámetro. **Apoyo informativo y de seguimiento,
 nunca un diagnóstico.**
 
 - **Estado**: cada fila usa el mismo rango de referencia ya calculado por
-  el laboratorio para ese informe (🔴 Alto / 🟠 Bajo / 🟢 Normal) — no es
+  el laboratorio para ese informe (▲ Alto / ▼ Bajo / Normal) — no es
   un umbral nuevo inventado por Analitix.
 - **Variación vs. informe anterior**: el cambio porcentual respecto al
   valor anterior del mismo parámetro (o "—" si es la primera vez que se
@@ -590,8 +593,8 @@ en %, para poder comparar parámetros de escalas muy distintas: pasar la
 creatinina de 0,9 a 1,1 y las plaquetas de 200 a 244 es un +22 % en los dos
 casos, pero lo primero es mucho más relevante respecto a su rango. Color:
 
-- **Rojo ▲** = se aleja del rango o sale de él.
-- **Verde ✓** = se acerca al rango o vuelve a él.
+- **Rojo anaranjado ✗** = se aleja del rango o sale de él.
+- **Verde azulado ✓** = se acerca al rango o vuelve a él.
 - **Gris** = estaba dentro del rango y sigue dentro.
 
 Las barras de colores llevan escrito "anterior → actual"; al pasar el ratón
@@ -1061,7 +1064,7 @@ un diagnóstico**. Los dos siguen la misma estructura de página:
 
 Cada página lleva un pie con el tipo de informe a la izquierda y el
 número de página a la derecha. En la tabla, cada fila muestra valor,
-rango de referencia, estado (Alto/Bajo/Normal, coloreado) y variación
+rango de referencia, estado (▲ Alto/▼ Bajo/Normal, coloreado) y variación
 respecto al informe anterior, marcada con "(*)" si es un cambio brusco.
 
 - **Exportar informe completo (PDF)...**: **todos** los parámetros del

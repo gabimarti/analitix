@@ -1343,7 +1343,8 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
   - Usa "(*)" como marca de cambio brusco en vez del emoji "⚡" de la
     pestaña Resumen: a diferencia de Tkinter (con Segoe UI Emoji), el
     backend PDF de matplotlib no garantiza tener una fuente con glifos
-    de emoji en color. Colorea el texto de la columna "Estado"
+    de emoji en color. La columna "Estado" dice "▲ Alto"/"▼ Bajo"/"Normal"
+    (▲/▼ sí están en DejaVu Sans). Colorea su texto
     reutilizando `charts.COLOR_ALTO`/`COLOR_BAJO`/`COLOR_BRUSCO` (mismos
     colores que la pestaña Resumen y los gráficos). Tamaño A4 vertical
     (`figsize=(8.27, 11.69)`, `dpi=100`) en todas las páginas. Limitación
@@ -1447,7 +1448,8 @@ ha cambiado".
   informe actual: "empeora" (aumenta la distancia al rango, incluido salir
   de él), "mejora" (disminuye), "igual" (dentro antes y ahora); tolerancia
   `CHANGE_EPSILON`. Colores de estado reservados (`CHANGE_WORSE`/`BETTER`/
-  `NEUTRAL`) siempre con símbolo ▲/✓ y etiqueta "anterior → actual". Omite
+  `NEUTRAL`, misma paleta que los puntos de Evolución) siempre con símbolo
+  ✗/✓ (no ▲, que ya significa "alto") y etiqueta "anterior → actual". Omite
   los cambios nulos (cuenta en `ax.analitix_changes_unchanged`); guarda las
   filas dibujadas en `ax.analitix_changes` para el tooltip
   (`gui._attach_changes_hover`).
@@ -1460,8 +1462,8 @@ ha cambiado".
   confunda con el gris) hasta 1 a `HEATMAP_FULL_AT` (0.5) anchos de rango
   de distancia; con un único límite, la distancia se mide en fracciones
   de ese límite. Escala divergente `HEATMAP_CMAP` azul ↔ gris neutro ↔ rojo
-  (polaridad y distancia; no reutiliza `COLOR_ALTO`/`COLOR_BAJO`, que son
-  dos cálidos). Al depender solo del rango de cada informe, es
+  (polaridad y distancia; no reutiliza `COLOR_ALTO`/`COLOR_BAJO` aunque
+  comparte su polaridad: azul = bajo, rojo = alto). Al depender solo del rango de cada informe, es
   independiente de la unidad. Sin rango -> `HEATMAP_NO_RANGE` con un
   punto; sin analítica -> `HEATMAP_SURFACE`. Separación de 2 px entre
   casillas con la rejilla menor. Valores escritos solo en casillas fuera de
@@ -1487,8 +1489,11 @@ ha cambiado".
 - `_plot_series_on_ax(ax, series, label, base_color, min_points)`: helper compartido por
   evolución y comparativa. Dibuja la banda + líneas discontinuas de
   mínimo/máximo de referencia, la línea de evolución y los puntos (color
-  según `flag_calc`: normal = `base_color`, alto = rojo, bajo = naranja).
-  Etiqueta con el valor los puntos fuera de rango. Guarda
+  según `flag_calc`: normal = `base_color`, alto = `COLOR_ALTO`
+  bermellón, bajo = `COLOR_BAJO` azul; paleta apta para daltonismo de
+  Okabe-Ito, ver `docs/GUIA_INTERFAZ.md` §5.1). Etiqueta con el valor los
+  puntos fuera de rango, precedido de ▲/▼ (`SIMBOLO_ESTADO`): el color
+  nunca va solo, y la forma del punto ya codifica el laboratorio. Guarda
   `scatter.analitix_series = series` para que `gui._attach_hover` pueda
   mostrar el tooltip correcto en el punto correspondiente. Devuelve los
   `handles` de leyenda de esa serie. Calcula el ajuste de tendencia
