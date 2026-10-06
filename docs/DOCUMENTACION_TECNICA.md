@@ -2788,15 +2788,26 @@ indicador: crea widgets, así que tiene que ir en el hilo principal.
 `venv\Scripts\python.exe scripts\doc_screenshots.py`) regenera todas las
 imágenes de `docs/images/` cuando cambia la interfaz. Nunca toca
 `data/analitix.db` ni ningún PDF: crea una BD cifrada temporal con
-"PACIENTE FICTICIO" (ficha, tabaquismo y 10 analíticas sintéticas de tres
+"PACIENTE FICTICIO" (ficha, tabaquismo y 14 analíticas sintéticas de tres
 laboratorios, con los `canonical_id` de todos los paneles y nombres de
-prueba distintos por laboratorio), abre `AnalitixApp` sobre ella, recorre
-las pestañas y captura cada una con `PIL.ImageGrab` (la ventana se trae al
-frente con `lift()` + `-topmost` justo antes de cada captura; no hay que
-tocar el ratón mientras dura), y genera las figuras técnicas directamente
-con matplotlib. Las capturas se guardan en paleta de 256 colores para que
-pesen poco. Si se añade una pestaña, añadir su captura en `capture_app`.
-Revisar siempre las imágenes resultantes antes de publicarlas.
+prueba distintos por laboratorio). Los valores los genera `oscillate`:
+suben y bajan alrededor de un centro, casi siempre alternando el lado, con
+altos y bajos y sin tendencia marcada; semilla fija por parámetro, así cada
+ejecución da las mismas capturas. Captura primero el arranque
+(`capture_startup`: aviso legal, ventana de carga y los dos diálogos de
+creación de contraseña, con `main.DB_PATH` apuntando a una BD inexistente),
+después abre `AnalitixApp` sobre la BD de ejemplo, recorre todas las
+pantallas, los paneles clínicos y los diálogos (ficha, Acerca de) y captura
+cada una con `PIL.ImageGrab` (la ventana se trae al frente con `lift()` +
+`-topmost` justo antes de cada captura; no hay que tocar el ratón mientras
+dura, ~1 minuto). Por último exporta el informe de parámetros alterados a
+`docs/ejemplos/informe_alterados_ficticio.pdf` (el único PDF permitido en
+el repositorio, en `PERMITIDOS` de `scripts/check_privacy.py`) e imágenes
+de su portada, su tabla y un gráfico. Las figuras técnicas se generan
+directamente con matplotlib. Las capturas se guardan en paleta de 256
+colores para que pesen poco. Si se añade una pestaña, añadir su captura en
+`capture_app`. Revisar siempre las imágenes resultantes antes de
+publicarlas.
 
 ### 6.1 Suite automatizada
 

@@ -130,13 +130,33 @@ Antes de nada verás el aviso legal/de uso (uso personal, nunca un
 diagnóstico médico) — hay que pulsar **Aceptar** para continuar; se muestra
 en cada arranque.
 
+<p align="center">
+  <img src="images/splash.png" width="45%" alt="Aviso legal de uso que se muestra en cada arranque">
+</p>
+
+<p align="center">
+  <img src="images/cargando.png" width="45%" alt="Ventana de carga de Analitix">
+</p>
+
 La primera vez, la app te pedirá **crear una contraseña maestra**. Esa
 contraseña cifra toda tu base de datos (`analitix.db`):
 - Guárdala en un lugar seguro. **No hay forma de recuperarla si la
   olvidas**; sin ella, los datos ya importados quedan inaccesibles.
 - No la compartas ni la envíes a nadie.
 
+<p align="center">
+  <img src="images/contrasena_crear.png" width="45%" alt="Diálogo para crear la contraseña de una base de datos nueva">
+</p>
+
+<p align="center">
+  <img src="images/contrasena_repetir.png" width="30%" alt="Diálogo para repetir la contraseña">
+</p>
+
 Después, cada día solo hace falta abrir Analitix e introducir tu contraseña.
+
+<p align="center">
+  <img src="images/inicio.png" width="80%" alt="Ventana principal de Analitix al abrirla">
+</p>
 
 Si en la base de datos hay **varios pacientes**, al abrir la aplicación se
 muestra una ventana **Seleccionar paciente activo** con solo el nombre
@@ -197,6 +217,12 @@ Cada apartado de esta guía indica entre paréntesis en qué menú está.
 
 Aquí se analizan los PDF de la carpeta configurada y se añaden a la base de
 datos.
+
+<p align="center">
+  <img src="images/importar.png" width="80%" alt="Pantalla Importar con la carpeta de informes">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 **Fecha de cada analítica:** la de **recepción** de la muestra en el
 laboratorio ("Recepció", "Data recepció mostra", "Fecha Recepción"...). Si
@@ -400,6 +426,12 @@ Para registrar una analítica cuando el PDF no se ha podido interpretar (o
 cuando simplemente no viene en PDF). No sustituye a la importación
 automática: es el respaldo para esos casos puntuales.
 
+<p align="center">
+  <img src="images/entrada_manual.png" width="80%" alt="Pantalla de Entrada manual de una analítica">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
 Los datos que añadas aquí son siempre para el **paciente activo** (§1.3,
 Pacientes → Cambiar paciente activo...) — esta pestaña no tiene su
 propio desplegable de paciente, precisamente para no correr el riesgo de
@@ -440,7 +472,11 @@ Gráfico de una prueba concreta a lo largo del tiempo.
   <img src="images/evolucion.png" width="80%" alt="Evolución de la hemoglobina con rango de referencia, tendencia y forma del punto por laboratorio">
 </p>
 
-> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+<p align="center">
+  <img src="images/evolucion_ldl.png" width="80%" alt="Evolución del colesterol LDL con valores por encima del límite marcados con ▲">
+</p>
+
+> Capturas con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 - Si la prueba viene de **varios laboratorios**, cada punto tiene la
   **forma** de su laboratorio (● ■ ▲ ◆…, con leyenda), y el color sigue
@@ -747,6 +783,12 @@ diagnóstico**; un resultado alterado no sustituye una prueba de imagen, una
 biopsia ni la valoración de un hepatólogo. Misma disposición que "❤ Riesgo
 cardiovascular" (§2.7).
 
+<p align="center">
+  <img src="images/panel_hepatico.png" width="80%" alt="Panel de salud hepática con el ratio AST/ALT">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup, no queda siempre visible) que muestra **en qué estudios se basa cada índice**
   (De Ritis 1957 para el ratio AST/ALT; Wai et al. 2003 para APRI; Sterling
@@ -782,6 +824,12 @@ creatinina ya guardados — **apoyo informativo y de seguimiento, nunca un
 diagnóstico**; la interpretación clínica final es siempre del médico o
 nefrólogo. Misma disposición que "❤ Riesgo cardiovascular" (§2.7) y
 "🧪 Salud hepática" (§2.8).
+
+<p align="center">
+  <img src="images/panel_renal.png" width="80%" alt="Panel de función renal con el ratio urea/creatinina">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup, no queda siempre visible) que muestra **en qué estudios se basa cada cálculo**:
@@ -926,6 +974,12 @@ Distinta del resto de paneles: **no hay ningún índice combinado**, porque
 no existe ninguno validado científicamente que junte PCR y VSG en un solo
 número (sus "velocidades" de reacción son demasiado distintas).
 
+<p align="center">
+  <img src="images/panel_inflamacion.png" width="80%" alt="Panel de inflamación con la evolución de PCR y VSG">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup) explicando, con sus estudios, por qué no hay un
   índice combinado: la PCR reacciona en horas y baja rápido, la VSG tarda
@@ -949,6 +1003,12 @@ informativo y de seguimiento, nunca un diagnóstico**; la interpretación
 clínica final es siempre del médico. El panel clínico más simple de
 todos: un único parámetro con un único umbral citado.
 
+<p align="center">
+  <img src="images/panel_acido_urico.png" width="80%" alt="Panel de ácido úrico">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup, no queda siempre visible) que muestra el umbral usado (≥6.8 mg/dL, guía de la
   American College of Rheumatology de 2020), aclarando que un valor alto
@@ -971,6 +1031,12 @@ nunca un diagnóstico**; la interpretación clínica final es siempre del
 médico. Solo aparece en informes donde el laboratorio midió calcio y
 albúmina el mismo día.
 
+<p align="center">
+  <img src="images/panel_calcio.png" width="80%" alt="Panel de calcio corregido por albúmina">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup, no queda siempre visible) que muestra la fórmula (Payne et al. 1973), aclarando
   que se clasifica con el mismo rango de referencia que el laboratorio ya
@@ -990,6 +1056,12 @@ Traduce la HbA1c (%) a una glucosa media estimada en mg/dL, directamente
 comparable con las lecturas de glucosa — **apoyo informativo y de
 seguimiento, nunca un diagnóstico**; la interpretación clínica final es
 siempre del médico.
+
+<p align="center">
+  <img src="images/panel_glucemia.png" width="80%" alt="Panel de glucosa con la glucosa media estimada (eAG)">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup, no queda siempre visible) que muestra la fórmula ADAG y los puntos de corte
@@ -1027,6 +1099,12 @@ patrón** (hipotiroidismo/hipertiroidismo): esa clasificación es
 literalmente el criterio médico diagnóstico estándar y depende de si hay
 embarazo, algo que Analitix no registra.
 
+<p align="center">
+  <img src="images/panel_tiroides.png" width="80%" alt="Panel de tiroides con TSH y T4 libre">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup) explicando por qué no hay clasificación por
   cuadrante, con la fuente de la relación fisiológica inversa entre TSH y
@@ -1042,6 +1120,12 @@ embarazo, algo que Analitix no registra.
 ### 2.17 💾 Exportar (menú Archivo → Exportar)
 
 Exporta los resultados del paciente seleccionado a un fichero:
+
+<p align="center">
+  <img src="images/exportar.png" width="80%" alt="Pantalla Exportar con Excel, CSV e informes PDF">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 - **Exportar a Excel...**: genera un `.xlsx` con una fila por resultado
   de **todos** los informes (fecha, prueba, valor, unidad, rango de
@@ -1076,6 +1160,18 @@ respecto al informe anterior, marcada con "(*)" si es un cambio brusco.
   valor más reciente (que puede venir de un informe distinto al último,
   si ese parámetro concreto no se repitió en él). Útil para un
   seguimiento centrado solo en lo que alguna vez dio problema.
+
+Ejemplo de **informe de alterados** con el paciente ficticio (portada, tabla
+de parámetros fuera de rango y uno de los gráficos de evolución). El PDF
+completo está en [`docs/ejemplos/informe_alterados_ficticio.pdf`](ejemplos/informe_alterados_ficticio.pdf).
+
+<p align="center">
+  <img src="images/pdf_alterados_portada.png" width="32%" alt="Portada del informe PDF de parámetros alterados">
+  <img src="images/pdf_alterados_tabla.png" width="32%" alt="Tabla de parámetros alterados del informe PDF">
+  <img src="images/pdf_alterados_grafico.png" width="32%" alt="Gráfico de evolución del informe PDF">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 Limitación conocida en los dos: si hay muchísimos parámetros fuera de
 rango (o alterados) a la vez, esa página de tabla concreta podría no
@@ -1122,6 +1218,12 @@ panel clínico para llevar a una consulta:
 Muestra el contenido tal cual de la base de datos, tabla por tabla, para
 poder comprobar exactamente qué se ha guardado — es de **solo lectura**, no
 se puede cambiar nada desde aquí.
+
+<p align="center">
+  <img src="images/explorador_bd.png" width="80%" alt="Explorador BD con la tabla de pacientes">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 - Elige una tabla en el desplegable (pacientes, informes, resultados,
   ficheros importados o preferencias) y pulsa **Actualizar** para
@@ -1306,6 +1408,10 @@ Este panel se organiza a su vez en cuatro subpestañas (**General**,
 **Seguridad**, **Datos**, **Estadísticas**), para que quepa todo sin
 necesidad de ampliar la ventana ni usar barras de desplazamiento.
 
+<p align="center">
+  <img src="images/configuracion.png" width="80%" alt="Configuración, subpestaña General">
+</p>
+
 **General**
 
 - **Carpeta de informes**: qué carpeta escanea el botón "Importar". Pulsa
@@ -1376,6 +1482,10 @@ Muestra el logo de Analitix, el nombre de la aplicación, el autor (Gabriel
 Marti), el **correo de contacto del proyecto** (contact@analitix.slmail.me; pulsable,
 abre tu programa de correo) y un enlace a su perfil de GitHub (pulsable,
 abre el navegador).
+
+<p align="center">
+  <img src="images/acerca_de.png" width="35%" alt="Ventana Acerca de Analitix">
+</p>
 
 ### 2.22 🔄 Ayuda → Buscar actualizaciones...
 
