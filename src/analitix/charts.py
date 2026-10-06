@@ -3,7 +3,7 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-07
-# Última actualización: 2026-09-25
+# Última actualización: 2026-10-06
 # ---------------------------------------------------------------------------
 """Construcción de gráficos de evolución, comparativas y mapa de calor con matplotlib."""
 from __future__ import annotations
@@ -17,17 +17,28 @@ from matplotlib.colors import LinearSegmentedColormap, to_rgba
 from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
-COLOR_NORMAL = "#2a7f3f"
-COLOR_ALTO = "#c0392b"
-COLOR_BAJO = "#d68910"
+# Paleta apta para daltonismo (2026-10-06): colores de Okabe & Ito, "Color
+# Universal Design" (2002, https://jfly.uni-koeln.de/color/), distinguibles
+# con deuteranopía, protanopía y tritanopía. Sin la pareja verde/rojo ni
+# rojo/naranja: alto = bermellón, bajo = azul (misma polaridad que el mapa
+# de calor). El color nunca va solo: alto/bajo llevan también ▲/▼ y texto.
+COLOR_NORMAL = "#009E73"  # verde azulado
+COLOR_ALTO = "#D55E00"    # bermellón
+COLOR_BAJO = "#0072B2"    # azul
 COLOR_TREND = "#555555"
 # Cambio brusco dentro de rango (pestaña Resumen y exportación a PDF,
 # `gui.CAMBIO_BRUSCO_PCT`) — no es un color de estado clínico como los de
 # arriba, solo distingue visualmente ese caso de "alto"/"bajo"/"normal".
-COLOR_BRUSCO = "#2b6cb0"
+# "Wine" de la paleta "muted" de Paul Tol (también apta para daltonismo,
+# https://personal.sron.nl/~pault/): el púrpura de Okabe-Ito no llega al
+# contraste 4.5:1 como texto sobre blanco.
+COLOR_BRUSCO = "#882255"
+# Símbolo que acompaña al color de alto/bajo (Evolución, Resumen, PDF).
+SIMBOLO_ESTADO = {"alto": "▲", "bajo": "▼"}
 
-# Colores base para distinguir cada eje/prueba en la comparativa de dos ejes.
-COMPARISON_COLORS = ["#2b6cb0", "#6b46c1"]
+# Colores base de cada panel de la comparativa (paneles separados: solo
+# decorativos, pero sin coincidir con el azul de "bajo").
+COMPARISON_COLORS = [COLOR_NORMAL, "#CC79A7"]
 
 MAX_COMPARISON_TESTS = 2
 
@@ -391,12 +402,34 @@ def _plot_series_on_ax(
         # Datos para el tooltip al pasar el cursor (ver gui._attach_hover).
         scatter.analitix_series = series
 
-    for fecha, valor, s in zip(fechas, valores, series):
+    # Último valor destacado (anillo + etiqueta): el estado actual es lo que
+    # más se busca y no debe perderse entre el histórico ni la tendencia
+    # (recomendación de Zikmund-Fisher, AHRQ 2017, no revisada por pares:
+    # elección de interfaz, no un criterio clínico).
+    ultimo = series[-1]
+    color_ultimo = {"alto": COLOR_ALTO, "bajo": COLOR_BAJO}.get(ultimo["flag_calc"], COLOR_INK_SECONDARY)
+    ax.scatter([fechas[-1]], [valores[-1]], s=170, facecolors="none", edgecolors=color_ultimo,
+               linewidths=1.6, zorder=3)
+    simbolo = SIMBOLO_ESTADO.get(ultimo["flag_calc"])
+    # Al lado contrario de las etiquetas de los anteriores fuera de rango
+    # (encima si alto, debajo si bajo), para no solaparse con ellas.
+    xytext, ha, va = {"alto": ((0, -12), "center", "top"),
+                      "bajo": ((0, 12), "center", "bottom")}.get(ultimo["flag_calc"], ((-10, 10), "right", "bottom"))
+    ax.annotate(
+        f"Último: {simbolo + ' ' if simbolo else ''}{valores[-1]:g}",
+        (fechas[-1], valores[-1]), textcoords="offset points", xytext=xytext, ha=ha, va=va,
+        fontsize=8, fontweight="bold", color=color_ultimo, zorder=4,
+        bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8),
+    )
+
+    for fecha, valor, s in zip(fechas[:-1], valores[:-1], series[:-1]):  # el último ya lleva etiqueta
         if s["flag_calc"] not in ("alto", "bajo"):
             continue
         alto = s["flag_calc"] == "alto"
+        # ▲/▼ además del color (paleta apta para daltonismo): la forma del
+        # punto ya está ocupada por el laboratorio, así que va en la etiqueta.
         ax.annotate(
-            f"{valor:g}",
+            f"{SIMBOLO_ESTADO[s['flag_calc']]} {valor:g}",
             (fecha, valor),
             textcoords="offset points",
             xytext=(0, 8 if alto else -10),
@@ -442,17 +475,40 @@ def _draw_rcv_band(ax, series: list[dict[str, Any]], rcv: dict[str, Any]) -> Non
     ax.set_ylim(min(ymin, bajo), max(ymax, alto))
 
 
+COLOR_PERSONAL = "#6b46c1"  # rango personal: distinto del verde/azul del rango del laboratorio
+
+
+def _draw_personal_band(ax, series: list[dict[str, Any]], pr: dict[str, Any]) -> None:
+    """Banda rayada del rango personal (`rcv.personal_range`) a lo ancho del
+    periodo: más estrecha que la del laboratorio, porque mide cuánto
+    varías TÚ. Salirse de ella no significa enfermedad si sigues dentro
+    del rango del laboratorio."""
+    fechas = [_parse_fecha(series[0]["fecha"]), _parse_fecha(series[-1]["fecha"])]
+    varios = " · mezcla laboratorios" if pr["labs"] > 1 else ""
+    ax.fill_between(
+        fechas, [pr["bajo"]] * 2, [pr["alto"]] * 2, facecolor="none", edgecolor=COLOR_PERSONAL,
+        hatch="///", linewidth=0.8, alpha=0.45, zorder=0,
+        label=f"Tu rango personal {pr['bajo']:.3g}–{pr['alto']:.3g} (n={pr['n']}){varios}",
+    )
+    ymin, ymax = ax.get_ylim()
+    ax.set_ylim(min(ymin, pr["bajo"]), max(ymax, pr["alto"]))
+
+
 def evolution_figure(
     series: list[dict[str, Any]], title: str, min_points: int = DEFAULT_MIN_POINTS,
-    rcv: Optional[dict[str, Any]] = None,
+    rcv: Optional[dict[str, Any]] = None, personal: Optional[dict[str, Any]] = None,
 ) -> Figure:
     """Gráfico de evolución de una prueba en el tiempo, con las líneas de
     mínimo/máximo de referencia y los valores fuera de rango resaltados.
     `rcv` (opcional, `rcv.classify_change` de los dos últimos valores):
-    añade la banda de variación esperable (`_draw_rcv_band`)."""
+    añade la banda de variación esperable (`_draw_rcv_band`). `personal`
+    (opcional, `rcv.personal_range`): añade la banda del rango personal
+    (`_draw_personal_band`)."""
     fig = Figure(figsize=(8, 4.5), dpi=100)
     ax = fig.add_subplot(111)
     handles = _plot_series_on_ax(ax, series, title, min_points=min_points)
+    if handles and personal:
+        _draw_personal_band(ax, series, personal)
     if handles and rcv and len(series) >= 2:
         _draw_rcv_band(ax, series, rcv)
     ax.set_title(title)
@@ -506,8 +562,8 @@ def comparison_figure(
 # Escala divergente (azul = por debajo del rango, gris neutro = dentro, rojo
 # = por encima), una intensidad por lado. Codifica polaridad + distancia al
 # rango, no estado clínico: por eso no reutiliza COLOR_ALTO/COLOR_BAJO de
-# los puntos de Evolución (naranja y rojo son los dos cálidos y no se leen
-# como opuestos).
+# los puntos de Evolución, aunque comparte su polaridad (azul = bajo, rojo
+# = alto). Azul↔rojo ya es apto para daltonismo.
 HEATMAP_CMAP = LinearSegmentedColormap.from_list(
     "analitix_rango",
     [(0.0, "#184f95"), (0.35, "#9ec5f4"), (0.5, "#f0efec"), (0.65, "#f4b4b3"), (1.0, "#a3282a")],
@@ -568,6 +624,15 @@ def range_distance(value: Optional[float], ref_low: Optional[float], ref_high: O
     return 0.0
 
 
+def _ink_for(rgba) -> str:
+    """Color de texto que contrasta con el de la casilla: blanco sobre
+    colores oscuros, casi negro sobre claros (luminancia relativa WCAG)."""
+    def canal(c: float) -> float:
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (canal(float(c)) for c in rgba[:3])
+    return "white" if 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.35 else HEATMAP_INK
+
+
 def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> Figure:
     """Mapa de calor del historial: una fila por parámetro, una columna por
     fecha de analítica, color según la posición del valor respecto a su
@@ -613,12 +678,25 @@ def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> 
     ax.set_xticklabels([f"{d[8:10]}/{d[5:7]}/{d[2:4]}" for d in dates[::step]], rotation=90, fontsize=7)
     ax.tick_params(axis="both", length=0, colors="#52514e")
 
-    # Etiquetas selectivas: solo el valor de las casillas fuera de rango.
+    # Etiquetas selectivas: el valor de las casillas fuera de rango. Con
+    # muchas columnas no caben todas: solo los extremos de cada fila (el
+    # valor más alto por encima del rango y el más bajo por debajo), para ver
+    # hasta dónde ha llegado cada parámetro.
     if n_cols <= HEATMAP_MAX_LABELED_COLUMNS:
-        for (i, j), pos in positions.items():
-            if pos:
-                ax.text(j, i, f"{cells[(i, j)]['value_num']:g}", ha="center", va="center", fontsize=6.5,
-                        color="white" if abs(pos) > 0.6 else HEATMAP_INK)
+        etiquetadas = [k for k, pos in positions.items() if pos]
+    else:
+        etiquetadas = []
+        for i in range(len(rows)):
+            fuera = [(k, cells[k]["value_num"]) for k, pos in positions.items() if k[0] == i and pos]
+            altos = [kv for kv in fuera if positions[kv[0]] > 0]
+            bajos = [kv for kv in fuera if positions[kv[0]] < 0]
+            if altos:
+                etiquetadas.append(max(altos, key=lambda kv: kv[1])[0])
+            if bajos:
+                etiquetadas.append(min(bajos, key=lambda kv: kv[1])[0])
+    for i, j in etiquetadas:
+        ax.text(j, i, f"{cells[(i, j)]['value_num']:g}", ha="center", va="center", fontsize=6.5,
+                color=_ink_for(rgba[i, j]), weight="bold")
     for (i, j), pos in positions.items():
         if pos is None:
             ax.plot(j, i, marker="o", markersize=2.5, color="#898781", linestyle="none")
@@ -635,6 +713,9 @@ def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> 
     ]
     fig.legend(handles=legend, loc="lower center", ncol=len(legend), fontsize=7, frameon=False)
     fig.tight_layout(rect=(0, 0.1, 1, 1))
+    # Al pasarla a A4 (`export._fit_page_a4`) se recalculan los márgenes con
+    # este mismo `rect`: las etiquetas largas de las filas no se cortan.
+    fig.analitix_tight_rect = (0, 0.1, 1, 1)
     ax.analitix_heatmap = {"rows": [label for label, _ in rows], "dates": dates, "cells": cells}
     return fig
 
@@ -642,10 +723,13 @@ def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> 
 # -- "Qué ha cambiado": último informe frente al anterior ------------------
 # Colores de estado (paleta de estado, reservada: no se usa para nada más en
 # este gráfico) y siempre acompañados de símbolo + etiqueta, nunca solo color.
-CHANGE_WORSE = "#d03b3b"     # se aleja del rango o sale de él
-CHANGE_BETTER = "#0ca30c"    # se acerca al rango o vuelve a él
-CHANGE_NEUTRAL = "#b9b8b0"   # dentro del rango antes y ahora
-CHANGE_SYMBOL = {"empeora": "▲", "mejora": "✓", "igual": ""}
+# Misma paleta apta para daltonismo que los puntos de Evolución. "✗" y no
+# "▲" para empeora: ▲ ya significa "alto", y alejarse del rango también
+# puede ser bajar.
+CHANGE_WORSE = COLOR_ALTO     # se aleja del rango o sale de él
+CHANGE_BETTER = COLOR_NORMAL  # se acerca al rango o vuelve a él
+CHANGE_NEUTRAL = "#b9b8b0"    # dentro del rango antes y ahora
+CHANGE_SYMBOL = {"empeora": "✗", "mejora": "✓", "igual": ""}
 # Opacidad de las barras cuyo cambio cabe en la variación esperable (RCV,
 # `rcv.py`): se ven, pero dejan destacar los cambios probablemente reales.
 RCV_ESPERABLE_ALPHA = 0.35
@@ -733,9 +817,9 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
     ax.tick_params(axis="both", colors="#52514e", length=0)
     ax.set_xlabel("Cambio respecto al informe anterior (1 = el ancho del rango de referencia)", fontsize=8,
                   color="#52514e")
-    ax.set_title(title, fontsize=11, loc="left", pad=34 if any(esperable) else 22)  # leyenda de 2 filas
+    ax.set_title(title, fontsize=11, loc="left", pad=34)  # leyenda en 2 filas: cabe también en un A4 vertical
     legend = [
-        Patch(facecolor=CHANGE_WORSE, label="▲ Se aleja del rango o sale de él"),
+        Patch(facecolor=CHANGE_WORSE, label="✗ Se aleja del rango o sale de él"),
         Patch(facecolor=CHANGE_BETTER, label="✓ Se acerca al rango o vuelve a él"),
         Patch(facecolor=CHANGE_NEUTRAL, label="Dentro del rango antes y ahora"),
     ]
@@ -744,10 +828,11 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
                             label="Atenuada = dentro de la variación esperable (RCV)"))
     # Leyenda arriba, junto al título: con muchas filas la figura es alta y
     # abajo quedaría lejos de lo que explica.
-    ax.legend(handles=legend, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2 if len(legend) > 3 else 3,
+    ax.legend(handles=legend, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2,
               fontsize=7, frameon=False,
               borderaxespad=0.2)
     fig.tight_layout()
+    fig.analitix_tight_rect = (0, 0, 1, 1)  # ver heatmap_figure
     ax.analitix_changes = items
     ax.analitix_changes_unchanged = unchanged
     return fig

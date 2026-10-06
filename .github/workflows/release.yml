@@ -71,9 +71,13 @@ jobs:
         run: |
           # Formato de sha256sum ("<hash>  <fichero>"): se verifica con
           # `sha256sum -c` o comparando con `Get-FileHash` en Windows.
-          Get-ChildItem dist\Analitix-Setup-*.exe | ForEach-Object {
+          # Saltos de línea LF (no CRLF, el de `Set-Content` en Windows):
+          # con CRLF, `sha256sum -c` busca un fichero con "\r" al final del
+          # nombre y falla (pasó en la Release 0.10.0).
+          $lineas = Get-ChildItem dist\Analitix-Setup-*.exe | ForEach-Object {
             "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
-          } | Set-Content dist\SHA256SUMS.txt -Encoding ascii
+          }
+          [IO.File]::WriteAllText("$PWD\dist\SHA256SUMS.txt", (($lineas -join "`n") + "`n"))
 
       - name: Attest build provenance
         if: github.ref_type == 'tag'

@@ -1,12 +1,34 @@
 # Registro de cambios
 
-Todos los cambios relevantes de Analitix se documentan en este fichero.
+Todos los cambios relevantes de la aplicación Analitix se documentan en este
+fichero. Solo recoge cambios del programa (lo que nota quien lo usa); los de
+la operativa de desarrollo o la gestión del repositorio no se anotan aquí.
 
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 [`docs/DOCUMENTACION_TECNICA.md`](docs/DOCUMENTACION_TECNICA.md) §8.2).
 
 ## [Sin publicar]
+
+## [0.11.0] - 2026-10-06
+
+### Cambiado
+
+- Todas las páginas de los informes PDF son A4: los gráficos se adaptan a hoja vertical u horizontal y aprovechan todo el ancho para imprimirlos, sin textos cortados por los bordes. La portada indica «Último informe de laboratorio».
+- En las tablas de los informes PDF, la columna del parámetro es más ancha y su nombre ya no se corta.
+- El mapa de calor con muchas analíticas muestra el valor de los extremos de cada parámetro (el más alto por encima del rango y el más bajo por debajo), con un color de texto que contrasta con la casilla.
+- Colores aptos para daltonismo: los valores altos se muestran en rojo anaranjado y los bajos en azul (antes rojo y naranja, difíciles de distinguir), y el color ya nunca va solo: ▲/▼ junto al valor fuera de rango en Evolución y en el estado de la pestaña Resumen y de los informes PDF (que ya no usa emojis de colores); en «Qué ha cambiado», ✗ para lo que se aleja del rango y ✓ para lo que se acerca. El cambio brusco pasa de azul a granate.
+- Para marcar varias filas ya no hace falta Ctrl/Shift: Comparativa muestra casillas (con «Desmarcar todo») y las tablas de Pacientes, Normalizar pruebas e Informes huérfanos tienen una casilla ☐/☑ por fila que se marca o desmarca con un clic.
+- La columna de la izquierda (lista y botones) mide lo mismo y queda alineada a la izquierda en Evolución, Comparativa y todos los paneles clínicos: antes, en Comparativa y en los paneles la lista quedaba centrada y los botones salían más anchos.
+- Los botones de un mismo grupo tienen el mismo ancho en todas las pantallas (Importar, Pacientes, Exportar, Normalizar pruebas, Configuración) y en el pie de los cuadros de diálogo.
+
+### Añadido
+
+- En los gráficos de evolución (también Comparativa, paneles clínicos y PDF), el último valor se destaca con un anillo y la etiqueta «Último: valor», para ver de un vistazo el estado actual.
+- Los gráficos de evolución, Comparativa y los paneles clínicos muestran por defecto los 5 años anteriores a la última analítica, con un aviso si quedan analíticas ocultas; el interruptor «Ver todo el histórico» (en Evolución y en el menú Análisis) muestra el histórico entero y se recuerda. Los informes PDF completo y de alterados siguen incluyendo todo el histórico.
+- Informe PDF personalizado (Exportar → «Informe PDF personalizado...»): eliges qué incluir —tabla del último informe, «Qué ha cambiado», mapa de calor, la evolución de los parámetros que quieras y los paneles clínicos con su resumen y gráficos—, con ⚠ en lo que alguna vez ha estado alterado.
+- «Acerca de» muestra el correo de contacto del proyecto (contact@analitix.slmail.me).
+- Rango personal opcional en el gráfico de Evolución (interruptor «Mostrar mi rango personal»): tu propio rango «normal», calculado con tus analíticas anteriores dentro de rango y la variación biológica publicada (método de Coşkun 2021).
 
 ## [0.10.0] - 2026-10-01
 

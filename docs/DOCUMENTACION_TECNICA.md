@@ -1343,7 +1343,8 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
   - Usa "(*)" como marca de cambio brusco en vez del emoji "⚡" de la
     pestaña Resumen: a diferencia de Tkinter (con Segoe UI Emoji), el
     backend PDF de matplotlib no garantiza tener una fuente con glifos
-    de emoji en color. Colorea el texto de la columna "Estado"
+    de emoji en color. La columna "Estado" dice "▲ Alto"/"▼ Bajo"/"Normal"
+    (▲/▼ sí están en DejaVu Sans). Colorea su texto
     reutilizando `charts.COLOR_ALTO`/`COLOR_BAJO`/`COLOR_BRUSCO` (mismos
     colores que la pestaña Resumen y los gráficos). Tamaño A4 vertical
     (`figsize=(8.27, 11.69)`, `dpi=100`) en todas las páginas. Limitación
@@ -1351,6 +1352,65 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
     fuera de rango a la vez, esa página de tabla concreta podría seguir
     sin caber entera (sin paginación automática dentro de una misma
     categoría).
+
+**Informe PDF personalizado** (Exportar → "Informe PDF personalizado..."):
+
+- `export.py` solo monta el documento:
+  - `export_pages_pdf(patient_name, fecha, paginas, path, tipo_informe=...)`
+    escribe la portada (`_cover_page`, con el aviso de que no es un
+    diagnóstico) y las figuras recibidas, en orden y con pie;
+  - `table_page` es la misma tabla de `export_pdf`;
+  - `text_page(titulo, texto)` es una página A4 de texto ajustado (resumen
+    de un panel).
+- `_add_footer` llama antes a `_fit_page_a4`, que pone **todas** las
+  páginas en A4:
+  - las figuras que no lo son (gráficos de evolución, mapa de calor, "Qué
+    ha cambiado") pasan a A4 vertical si son más altas que anchas, o
+    apaisado si no, ocupando todo el ancho;
+  - se reserva abajo una franja de `_FOOTER_STRIP_IN` para el pie y se
+    comprimen en vertical ejes, textos y leyendas de figura, para que el
+    pie no se superponga a nada. Antes, el pie se montaba sobre la leyenda
+    del mapa de calor;
+  - las figuras de altura variable ("Qué ha cambiado", mapa de calor)
+    llevan `fig.analitix_tight_rect`: al pasar a A4 se recalculan sus
+    márgenes con `tight_layout` al tamaño final, en vez de comprimirlas.
+    Sin esto, las etiquetas largas de las filas y la leyenda superior
+    quedaban cortadas por el borde de la hoja;
+  - las páginas que ya son A4 (portada, tablas, textos) no se tocan.
+- Tabla de parámetros (`_table_page`): columnas de ancho variable
+  (`_TABLE_COL_WIDTHS`, el nombre casi la mitad) y nombres de más de
+  `_TABLE_NAME_MAX` caracteres acortados con "…". Antes las cinco columnas
+  medían igual y el nombre se cortaba.
+
+  Afecta también a `export_pdf`, cuyos gráficos antes salían en el tamaño
+  de pantalla. La portada y las tablas dicen "Último informe de
+  laboratorio".
+- `gui._export_custom_pdf` es el diálogo (`_new_dialog`). Las pruebas son
+  casillas dentro de `_scrollable_frame`, no una `Listbox` con Ctrl+clic
+  (igual que Comparativa);
+  "Marcar alterados" y "Desmarcar todo", con `_same_width` en cada grupo
+  de botones:
+  - secciones (tabla, "Qué ha cambiado" vía `_changes_rows`, compartido
+    con la pestaña Resumen, y mapa de calor de `HEATMAP_OUT_OF_RANGE`);
+  - casillas con las pruebas de 2 o más analíticas;
+  - un desplegable para el conjunto del mapa de calor (los mismos de la
+    pantalla: alguna vez fuera de rango, todos o un panel de
+    `HEATMAP_SETS`);
+  - "Qué ha cambiado" (ordenado por magnitud de cambio antes de partirlo)
+    y el mapa de calor se reparten en páginas de `PDF_ROWS_PER_PAGE` (25)
+    filas con `_pages_of` (título "(n/total)"), y `_same_size` da a todas
+    las páginas de la sección el tamaño de la primera, para que conserven
+    la misma orientación A4;
+  - casillas de los paneles de `PDF_PANELS`. Cada panel pasa por
+    `_panel_pdf_pages`: el texto de `text_<clave>_summary` y un gráfico por
+    índice de `_<clave>_indices`, o el combinado de `PDF_COMBINED_PANELS`
+    en Inflamación y Tiroides;
+  - ⚠ = `out_of_range` en la prueba, o algún punto alto o bajo en las
+    series del panel.
+  
+  Los gráficos salen de `_evolution_figure`, así que aplican el umbral de
+  pocos datos, el RCV y el rango personal si su interruptor está activo.
+  El filtro de laboratorios se añade a `tipo_informe`.
 
 ### `charts.py`
 
@@ -1388,7 +1448,8 @@ ha cambiado".
   informe actual: "empeora" (aumenta la distancia al rango, incluido salir
   de él), "mejora" (disminuye), "igual" (dentro antes y ahora); tolerancia
   `CHANGE_EPSILON`. Colores de estado reservados (`CHANGE_WORSE`/`BETTER`/
-  `NEUTRAL`) siempre con símbolo ▲/✓ y etiqueta "anterior → actual". Omite
+  `NEUTRAL`, misma paleta que los puntos de Evolución) siempre con símbolo
+  ✗/✓ (no ▲, que ya significa "alto") y etiqueta "anterior → actual". Omite
   los cambios nulos (cuenta en `ax.analitix_changes_unchanged`); guarda las
   filas dibujadas en `ax.analitix_changes` para el tooltip
   (`gui._attach_changes_hover`).
@@ -1401,12 +1462,15 @@ ha cambiado".
   confunda con el gris) hasta 1 a `HEATMAP_FULL_AT` (0.5) anchos de rango
   de distancia; con un único límite, la distancia se mide en fracciones
   de ese límite. Escala divergente `HEATMAP_CMAP` azul ↔ gris neutro ↔ rojo
-  (polaridad y distancia; no reutiliza `COLOR_ALTO`/`COLOR_BAJO`, que son
-  dos cálidos). Al depender solo del rango de cada informe, es
+  (polaridad y distancia; no reutiliza `COLOR_ALTO`/`COLOR_BAJO` aunque
+  comparte su polaridad: azul = bajo, rojo = alto). Al depender solo del rango de cada informe, es
   independiente de la unidad. Sin rango -> `HEATMAP_NO_RANGE` con un
   punto; sin analítica -> `HEATMAP_SURFACE`. Separación de 2 px entre
-  casillas con la rejilla menor; valores escritos solo en casillas fuera de
-  rango y solo con ≤ `HEATMAP_MAX_LABELED_COLUMNS` columnas. Guarda en
+  casillas con la rejilla menor. Valores escritos solo en casillas fuera de
+  rango: todas con ≤ `HEATMAP_MAX_LABELED_COLUMNS` columnas; con más, solo
+  los extremos de cada fila (máximo por encima del rango y mínimo por
+  debajo). Color del texto por contraste con la casilla (`_ink_for`,
+  luminancia relativa WCAG: blanco sobre oscuro, tinta sobre claro). Guarda en
   `ax.analitix_heatmap` filas/fechas/celdas para el tooltip
   (`gui._attach_heatmap_hover`, `motion_notify_event`).
 - **Control común de pocos datos** (`data_sufficiency(n, min_points)` →
@@ -1425,8 +1489,15 @@ ha cambiado".
 - `_plot_series_on_ax(ax, series, label, base_color, min_points)`: helper compartido por
   evolución y comparativa. Dibuja la banda + líneas discontinuas de
   mínimo/máximo de referencia, la línea de evolución y los puntos (color
-  según `flag_calc`: normal = `base_color`, alto = rojo, bajo = naranja).
-  Etiqueta con el valor los puntos fuera de rango. Guarda
+  según `flag_calc`: normal = `base_color`, alto = `COLOR_ALTO`
+  bermellón, bajo = `COLOR_BAJO` azul; paleta apta para daltonismo de
+  Okabe-Ito, ver `docs/GUIA_INTERFAZ.md` §5.1). Etiqueta con el valor los
+  puntos fuera de rango, precedido de ▲/▼ (`SIMBOLO_ESTADO`): el color
+  nunca va solo, y la forma del punto ya codifica el laboratorio. El último
+  punto se destaca con un anillo (color de su estado) y la etiqueta
+  "Último: valor", en el lado contrario a las etiquetas de los fuera de
+  rango (debajo si es alto, encima si es bajo) para no solaparse; ese punto
+  no lleva además la etiqueta normal. Guarda
   `scatter.analitix_series = series` para que `gui._attach_hover` pueda
   mostrar el tooltip correcto en el punto correspondiente. Devuelve los
   `handles` de leyenda de esa serie. Calcula el ajuste de tendencia
@@ -2044,6 +2115,32 @@ parámetros excluidos a propósito.
   (`repository.get_patient_sex`); sin sexo, el mayor.
 - `load_table()` (`lru_cache`, se lee una vez por sesión) = capa de la app
   + capa del usuario. `read_table` ignora las líneas que empiezan por "#".
+- `personal_range(canonical_id, series, sex)` (rango personal, Coşkun 2021,
+  ecuación 4): SP = media de los valores anteriores al último que tienen
+  rango y no están fuera de él (mínimo `PERSONAL_MIN_POINTS = 3`); semiancho
+  = Z·√((n+1)/n)·√(CVI² + CVA²) % de SP, con el mismo CVA efectivo que el
+  RCV, y límite inferior ≥ 0. Devuelve también `labs` (cuántos laboratorios
+  aportan valores). Lo dibuja `charts._draw_personal_band` (banda rayada
+  `COLOR_PERSONAL` a lo ancho del periodo) vía `evolution_figure(personal=...)`;
+  `gui._evolution_figure(..., with_personal=True)` lo calcula solo desde
+  Evolución (`_show_evolution`), que es donde está su interruptor
+  (`var_personal_range`, persistido en `settings.personal_range`); los
+  paneles no lo muestran.
+- **Ventana de años** (`gui.HISTORY_YEARS = 5`): `_evolution_figure` y
+  `_comparison_figure` (envoltorio de `charts.comparison_figure` que usan
+  Comparativa, Inflamación, Tiroides, Glucosa y el PDF personalizado)
+  pasan cada serie por `_windowed`, que deja los `HISTORY_YEARS` años
+  anteriores a la **última** analítica de la serie (no a hoy, para que un
+  historial antiguo no quede vacío), salvo con "Ver todo el histórico"
+  (`var_full_history`, persistido en `settings.full_history`; interruptor
+  en Evolución y opción del menú Análisis, `_toggle_full_history`; la
+  opción es un `add_command` cuyo texto cambia, `_history_menu_label`, y no
+  un `add_checkbutton`, porque en Windows la marca ✔ de Tk tapa la primera
+  letra).
+  `_mark_window` escribe en la figura cuántas analíticas quedan ocultas.
+  `export.export_pdf` (informes completo y de alterados) no pasa por aquí:
+  siempre todo el histórico. Elección de interfaz (Zikmund-Fisher, AHRQ
+  2017, no revisado por pares), no un criterio clínico.
 - **Solo datos abiertos**: cada fila del CSV cita su artículo (DOI y
   tabla); ningún valor procede de la web de la EFLM Biological Variation
   Database, cuyos términos no permiten redistribuirla.
@@ -2056,8 +2153,9 @@ parámetros excluidos a propósito.
   `(dialog, body)`, con todo el contenido dentro de `body`, un único
   `ttk.Frame` con margen `PAD`. Así nunca se ve el gris del `tk.Toplevel`
   detrás de los widgets ttk. Se centran con `_center_dialog`. Reglas
-  completas (botones, textos, privacidad, cómo probarlos):
-  [`docs/GUIA_DIALOGOS.md`](GUIA_DIALOGOS.md).
+  completas de pantallas y diálogos (estructura, columna izquierda de
+  Análisis/Paneles con `_list_column`, botones, colores, textos,
+  privacidad, cómo probarlos): [`docs/GUIA_INTERFAZ.md`](GUIA_INTERFAZ.md).
 - Pestaña Resumen con dos subpestañas (`ttk.Notebook`): "Tabla" (la de
   siempre) y "Qué ha cambiado" (`_draw_changes`, que se redibuja en
   `_refresh_resumen_panel`, es decir, en cada cambio de paciente; a partir de
@@ -2147,9 +2245,13 @@ Notas de implementación:
   `self._active_cursor` porque si se recolecta por el GC deja de funcionar,
   y hay que `.remove()` el anterior antes de crear uno nuevo al cambiar de
   gráfico.
-- `_on_comparativa_selection`: limita la selección del `Listbox` de
-  Comparativa a `MAX_COMPARISON_TESTS`, revirtiendo a la última selección
-  válida y avisando si se excede.
+- Comparativa usa casillas (`ttk.Checkbutton` en `_scrollable_frame`, una
+  por fila de `_evolution_tests`, `None` en la separadora) en una columna
+  `_fixed_column`. `_comparativa_selection()` devuelve los índices marcados
+  y `_on_comparativa_check` desmarca la casilla y avisa si se supera
+  `MAX_COMPARISON_TESTS`. Colores con los estilos `Alterado.TCheckbutton` y
+  `Gris.TCheckbutton` (`COLOR_ALTERADO`/`COLOR_GRIS`, los mismos de las
+  listas).
 - `_refresh_test_lists`: separa las pruebas con `num_points < self.min_points`
   (ajustable en Configuración, por defecto `charts.DEFAULT_MIN_POINTS=4`) del resto,
   insertando una fila separadora no seleccionable entre ambos grupos. Para
@@ -2173,8 +2275,8 @@ Notas de implementación:
   vaciado ahí cubre todos los casos sin tocar cada uno por separado.
 - `_show_test_info(selection)`: botón "ℹ ¿Qué es este parámetro?"
   (Evolución/Comparativa; "¿Qué son estos parámetros?" en Comparativa).
-  Recibe directamente la tupla de índices de `Listbox.curselection()`
-  (misma llamada en ambas pestañas, solo cambia qué `Listbox` se pasa), los
+  Recibe la tupla de índices seleccionados (`Listbox.curselection()` en
+  Evolución, `_comparativa_selection()` en Comparativa), los
   traduce vía `self._evolution_tests` y muestra, para cada parámetro
   seleccionado, `catalog.get_description` (`"Todavía no hay una ficha para
   este parámetro."` si `None`) en un `tk.Text` de solo lectura dentro de un
@@ -2435,7 +2537,7 @@ Notas de implementación:
   vez. "Seguridad": cambio de contraseña
   (`db.rekey`). "Datos": vaciar toda la base de datos
   (`repository.delete_all_data`, pide escribir "BORRAR" para confirmar) e
-  "Informes huérfanos" (`tree_orphans`, `selectmode="extended"`) —
+  "Informes huérfanos" (`tree_orphans`, tabla con casillas `_checkbox_tree`) —
   `_refresh_orphans` calcula `existing_filenames` con
   `ingest.known_pdf_filenames(self.reports_dir)` (recursivo, no solo la
   carpeta activa — ver `ingest.py` más arriba, imprescindible con el uso
@@ -2463,8 +2565,9 @@ Notas de implementación:
   confirmación; borra el paciente y todos sus informes/resultados (también
   sus `processed_files`, así que los PDF correspondientes se reprocesan
   desde cero en la siguiente importación — sirve como "importación limpia"
-  de ese paciente). `tree_patients` usa `selectmode="extended"` (antes
-  `"browse"`) para poder seleccionar varias filas a la vez.
+  de ese paciente). `tree_patients` es una tabla con casillas
+  (`_checkbox_tree`) para poder marcar varias filas a la vez; el doble clic
+  abre la ficha de esa fila.
 - Pestaña Pacientes: botón "Fusionar seleccionados..."
   (`_merge_selected_patients` → `repository.merge_patients`), para el caso
   de un mismo paciente partido en dos filas (nombre abreviado + NHC de otra
@@ -2578,7 +2681,7 @@ muestra en la tabla de Pacientes con una ★ en una columna dedicada
 (`label_active_patient`/`label_manual_patient`, actualizados juntos por
 `_update_active_patient_display`).
 - Pestaña "🔗 Normalizar pruebas" (`_build_tab_catalogo`): `ttk.Treeview`
-  (`selectmode="extended"`) con un grupo por `canonical_id`
+  con casillas (`_checkbox_tree`) y un grupo por `canonical_id`
   (`repository.list_canonical_groups`), mostrando el nombre más frecuente,
   el identificador interno y todas las variantes de `raw_name` vistas con su
   recuento, más la columna de laboratorios (`labs`). Con `show="tree
@@ -2704,15 +2807,26 @@ indicador: crea widgets, así que tiene que ir en el hilo principal.
 `venv\Scripts\python.exe scripts\doc_screenshots.py`) regenera todas las
 imágenes de `docs/images/` cuando cambia la interfaz. Nunca toca
 `data/analitix.db` ni ningún PDF: crea una BD cifrada temporal con
-"PACIENTE FICTICIO" (ficha, tabaquismo y 10 analíticas sintéticas de tres
+"PACIENTE FICTICIO" (ficha, tabaquismo y 14 analíticas sintéticas de tres
 laboratorios, con los `canonical_id` de todos los paneles y nombres de
-prueba distintos por laboratorio), abre `AnalitixApp` sobre ella, recorre
-las pestañas y captura cada una con `PIL.ImageGrab` (la ventana se trae al
-frente con `lift()` + `-topmost` justo antes de cada captura; no hay que
-tocar el ratón mientras dura), y genera las figuras técnicas directamente
-con matplotlib. Las capturas se guardan en paleta de 256 colores para que
-pesen poco. Si se añade una pestaña, añadir su captura en `capture_app`.
-Revisar siempre las imágenes resultantes antes de publicarlas.
+prueba distintos por laboratorio). Los valores los genera `oscillate`:
+suben y bajan alrededor de un centro, casi siempre alternando el lado, con
+altos y bajos y sin tendencia marcada; semilla fija por parámetro, así cada
+ejecución da las mismas capturas. Captura primero el arranque
+(`capture_startup`: aviso legal, ventana de carga y los dos diálogos de
+creación de contraseña, con `main.DB_PATH` apuntando a una BD inexistente),
+después abre `AnalitixApp` sobre la BD de ejemplo, recorre todas las
+pantallas, los paneles clínicos y los diálogos (ficha, Acerca de) y captura
+cada una con `PIL.ImageGrab` (la ventana se trae al frente con `lift()` +
+`-topmost` justo antes de cada captura; no hay que tocar el ratón mientras
+dura, ~1 minuto). Por último exporta el informe de parámetros alterados a
+`docs/ejemplos/informe_alterados_ficticio.pdf` (el único PDF permitido en
+el repositorio, en `PERMITIDOS` de `scripts/check_privacy.py`) e imágenes
+de su portada, su tabla y un gráfico. Las figuras técnicas se generan
+directamente con matplotlib. Las capturas se guardan en paleta de 256
+colores para que pesen poco. Si se añade una pestaña, añadir su captura en
+`capture_app`. Revisar siempre las imágenes resultantes antes de
+publicarlas.
 
 ### 6.1 Suite automatizada
 
@@ -2760,7 +2874,8 @@ Otros controles automáticos del repositorio (público):
   o hacer force-push, y un PR solo se integra con "Python tests", "Privacy
   check" y "Secret scan" en verde; las etiquetas `v*` solo las puede crear,
   mover o borrar un administrador (así nadie más lanza una Release). En
-  `develop`, prohibido borrarla o hacer force-push. El administrador puede
+  `develop`, prohibido borrarla o hacer force-push, y un PR solo se integra
+  con los mismos tres checks en verde. El administrador puede
   saltarse las reglas (aviso "Bypassed rule violations"), pero el
   procedimiento de §8.1 no hace push directo a `main`: solo se usa en una
   emergencia.
@@ -2971,12 +3086,40 @@ versión **publicada**, no una a medio hacer:
   directos en `main`; solo recibe la fusión de `develop` al publicar una
   versión (o una corrección urgente, ver abajo).
 - **`develop` = el trabajo en curso.** Todos los cambios, propios y pull
-  requests de colaboradores, van a `develop`, cada uno con su entrada en
-  `## [Sin publicar]` del CHANGELOG. Los tests y los controles de
+  requests de colaboradores, van a `develop`. Los que cambian el programa
+  llevan su entrada en `## [Sin publicar]` del CHANGELOG; los de la
+  operativa de desarrollo o la gestión del repositorio (workflows, reglas,
+  procedimientos) no se anotan en el CHANGELOG. Los tests y los controles de
   privacidad se ejecutan igual en cada push a `develop`.
+- **Pull requests de colaboradores**: van contra `develop` desde una rama
+  de su *fork*. El PR ya es la separación: nada entra en `develop` hasta
+  que el mantenedor lo revisa y lo integra, y el ruleset de `develop` exige
+  "Python tests", "Privacy check" y "Secret scan" en verde. Para probarlo
+  en local antes de integrarlo: `gh pr checkout <número>`, y después
+  `git switch develop`. No se usa una rama intermedia (p. ej. `contrib`):
+  obligaría a fusionar dos veces y a mantenerla al día, con más conflictos.
+- **Workflows de colaboradores nuevos**: GitHub no ejecuta las Actions del
+  primer PR de un colaborador hasta que el mantenedor lo aprueba
+  (*Settings → Actions → General → Approval for running fork pull request
+  workflows*, "Require approval for first-time contributors", activo). Así
+  nadie ejecuta código en las Actions del proyecto sin revisión previa.
+  Antes de aprobarlo, revisar sobre todo los cambios en `.github/` y en
+  los scripts.
+- **Cambios grandes del mantenedor**: en una rama propia
+  `feature/<tema>` (p. ej. `feature/pdf-personalizado`), fusionada en
+  `develop` cuando esté terminada, igual que un PR externo. Así el trabajo
+  a medias no se mezcla con lo ya terminado. Los cambios pequeños pueden ir
+  directos a `develop`.
 - **Corrección urgente de una versión publicada**: rama `hotfix/X.Y.Z`
   desde `main`, PR a `main`, publicar el parche (pasos 3-5) y después
   fusionar `main` en `develop`.
+- **Documentación que no puede esperar a la próxima versión** (p. ej. las
+  normas de contribución), siempre que no cambie el programa: rama
+  `docs/<tema>` desde `main` con solo esos ficheros (`git cherry-pick` del
+  commit de `develop`), PR a `main` con los checks en verde y *merge
+  commit*, **sin nueva versión ni etiqueta**, y después
+  `git merge origin/main` en `develop`, para que las dos ramas compartan
+  el cambio y la siguiente Release no tenga conflictos.
 
 Las versiones las compila y publica GitHub Actions
 (`.github/workflows/release.yml`), no el equipo de desarrollo: un Windows
@@ -3029,7 +3172,9 @@ corrige publicando la siguiente versión de parche.
    que ambas ramas partan del mismo punto:
    `git checkout develop && git merge --ff-only origin/main && git push`.
 
-La página de descargas es `…/releases/latest`. `scripts\update_main.bat`
+La página de descargas es `…/releases`, no `…/releases/latest`: GitHub excluye de
+`latest` las *pre-release*, y todas las 0.x lo son (mismo motivo por el que
+`updates.py` no usa ese endpoint). `scripts\update_main.bat`
 sigue actualizando el checkout local de `main`, es decir, a la última
 versión publicada.
 

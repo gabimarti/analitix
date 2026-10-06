@@ -38,12 +38,14 @@ programar**. Todo tipo de ayuda suma:
 - **Envía un pull request** si ya tienes un cambio de código o
   documentación, **contra la rama `develop`** (no `main`). `main` contiene
   solo la última versión publicada; `develop` se fusiona en `main` al
-  publicar cada versión (ver la documentación técnica, §8.1).
+  publicar cada versión (ver la documentación técnica, §8.1). En tu primer
+  PR, los checks automáticos esperan a que el mantenedor los apruebe: es
+  una medida de seguridad de GitHub, no un rechazo.
 - También me encontrarás en [GitHub](https://github.com/gabimarti) y en
   [X/Twitter](https://x.com/gmarti).
 
-Si tu cambio añade o modifica una ventana o un cuadro de diálogo, sigue la
-[guía de diseño de diálogos](docs/GUIA_DIALOGOS.md) para que toda la
+Si tu cambio añade o modifica una pantalla, una ventana o un cuadro de
+diálogo, sigue la [guía de diseño de la interfaz](docs/GUIA_INTERFAZ.md) para que toda la
 aplicación se vea igual.
 
 ## Sobre añadir soporte para otro laboratorio/hospital
@@ -114,6 +116,9 @@ resultados de salud en el repositorio. El workflow
 `.github/workflows/privacy.yml` (`scripts/check_privacy.py`) lo comprueba en
 cada `push` y pull request: falla si se versiona un fichero de datos
 (`.pdf`, `.db`, `.xlsx`, `.csv`…) o un DNI/NIE con letra de control válida.
+La única excepción en PDF es el informe de ejemplo del manual
+(`docs/ejemplos/informe_alterados_ficticio.pdf`), generado con un paciente
+ficticio por `scripts/doc_screenshots.py`.
 Para DNI sintéticos usa el número `00000000` (`00000000T`) o una letra
 inválida (`00000000A`). Para cambios del parser, cubre tanto
 la nueva estructura como al menos una estructura ya soportada; para cambios

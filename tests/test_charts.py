@@ -141,6 +141,18 @@ def test_evolution_rcv_band():
     assert any("otro laboratorio" in t.get_text() for t in otro.axes[0].get_legend().get_texts())
 
 
+def test_evolution_personal_band():
+    from analitix.charts import evolution_figure
+
+    serie = [_row(f"2024-0{m}-01", 14.0, "A") for m in (1, 2, 3, 4)]
+    pr = dict(bajo=13.0, alto=15.0, punto=14.0, n=3, labs=2)
+    ax = evolution_figure(serie, "x", 2, personal=pr).axes[0]
+    labels = [t.get_text() for t in ax.get_legend().get_texts()]
+    assert any(t.startswith("Tu rango personal 13–15 (n=3)") and "mezcla laboratorios" in t for t in labels)
+    assert not any("rango personal" in t for t in
+                   [t.get_text() for t in evolution_figure(serie, "x", 2).axes[0].get_legend().get_texts()])
+
+
 def test_series_summary_text():
     from analitix.charts import series_summary
 
@@ -181,3 +193,36 @@ def test_changes_figure_orders_and_skips():
     items = changes_figure(rows, "x").axes[0].analitix_changes
     # Solo los medibles; el mayor cambio (en anchos de rango) queda arriba (último índice).
     assert [r["label"] for r in items] == ["Plaquetas", "Creatinina"]
+
+
+def test_heatmap_labels_only_row_extremes_with_many_columns():
+    from analitix.charts import HEATMAP_MAX_LABELED_COLUMNS, _ink_for, heatmap_figure
+
+    n = HEATMAP_MAX_LABELED_COLUMNS + 6  # más columnas de las que caben etiquetadas
+    valores = [14.0] * n
+    valores[3], valores[10], valores[20] = 18.0, 21.0, 9.0  # dos altos y un bajo (rango 12-16)
+    serie = [_row(f"2024-{1 + i // 28:02d}-{1 + i % 28:02d}", v, "A") for i, v in enumerate(valores)]
+    textos = sorted(t.get_text() for t in heatmap_figure([("Hb", serie)], "x").axes[0].texts)
+    assert textos == ["21", "9"]  # el máximo por encima y el mínimo por debajo, no el 18
+    # Contraste: blanco sobre oscuro, tinta oscura sobre claro.
+    assert _ink_for((0.1, 0.1, 0.4, 1)) == "white"
+    assert _ink_for((0.95, 0.9, 0.9, 1)) != "white"
+
+
+def test_out_of_range_labels_carry_symbol_not_only_color():
+    # Paleta apta para daltonismo: alto/bajo se leen también sin color.
+    from analitix.charts import evolution_figure
+
+    serie = [_row("2024-01-01", 17.0, "A"), _row("2024-02-01", 14.0, "A"),
+             _row("2024-03-01", 11.0, "A"), _row("2024-04-01", 14.5, "A")]
+    textos = [t.get_text() for t in evolution_figure(serie, "x").axes[0].texts]
+    assert "▲ 17" in textos and "▼ 11" in textos
+
+
+def test_last_value_highlighted_once():
+    from analitix.charts import evolution_figure
+
+    serie = [_row("2024-01-01", 14.0, "A"), _row("2024-02-01", 15.0, "A"),
+             _row("2024-03-01", 14.5, "A"), _row("2024-04-01", 17.2, "A")]
+    textos = [t.get_text() for t in evolution_figure(serie, "x").axes[0].texts]
+    assert "Último: ▲ 17.2" in textos and "▲ 17.2" not in textos  # sin etiqueta duplicada

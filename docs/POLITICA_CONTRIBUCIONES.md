@@ -52,7 +52,7 @@ informar de una vulnerabilidad: los complementa.
   la inicia el usuario y queda en la ubicación que él elige.
 - **Sin datos personales en los títulos de las ventanas.** El selector de
   paciente muestra solo el nombre (ver
-  [`GUIA_DIALOGOS.md`](GUIA_DIALOGOS.md)).
+  [`GUIA_INTERFAZ.md`](GUIA_INTERFAZ.md)).
 
 ### Al pedir ayuda o compartir un caso
 

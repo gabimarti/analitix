@@ -22,8 +22,13 @@ EXTENSIONES_PROHIBIDAS = {
     ".pdf", ".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm",
     ".xlsx", ".xls", ".xlsm", ".ods", ".csv", ".log",
 }
-# Datos de catálogo que sí forman parte del código (sin datos de pacientes).
-PERMITIDOS = {"src/analitix/data/test_aliases.csv", "src/analitix/data/biological_variation.csv"}
+# Datos de catálogo que sí forman parte del código (sin datos de pacientes)
+# y el informe PDF de ejemplo del manual, generado por
+# `scripts/doc_screenshots.py` con el paciente ficticio (nunca datos reales).
+PERMITIDOS = {
+    "src/analitix/data/test_aliases.csv", "src/analitix/data/biological_variation.csv",
+    "docs/ejemplos/informe_alterados_ficticio.pdf",
+}
 
 LETRAS_DNI = "TRWAGMYFPDXBNJZSQVHLCKE"
 _DNI_RE = re.compile(r"\b([XYZ]?)(\d{7,8})([A-Z])\b")

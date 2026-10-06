@@ -156,3 +156,60 @@ def classify_change(
         "estado": estado, "pct": pct, "rcv_bajada": bajada, "rcv_subida": subida,
         "analito": bv.analito, "fuente": bv.fuente, "nota": bv.nota,
     }
+
+
+# Mínimo de valores previos en estado estable para el rango personal: con 3
+# o más el intervalo ya es robusto (Coşkun et al. 2021, ver
+# `personal_range`).
+PERSONAL_MIN_POINTS = 3
+
+
+def personal_range(
+    canonical_id: Optional[str],
+    series: list[dict[str, Any]],
+    sex: Optional[str] = None,
+    table: Optional[dict[str, VariacionBiologica]] = None,
+) -> Optional[dict[str, Any]]:
+    """Rango de referencia personalizado (prRI) a partir del propio
+    historial — Coşkun A, Sandberg S, Unsal I, et al. Clin Chem
+    2021;67(2):374-384, doi:10.1093/clinchem/hvaa233 (ecuación 4: intervalo
+    de predicción con media desconocida y varianza conocida):
+
+        punto de equilibrio (SP) = media de n valores en estado estable
+        prRI = SP · (1 ± Z·√((n+1)/n)·√(CVI² + CVA²) / 100)
+
+    Valores usados ("estado estable", decisión de diseño): los anteriores
+    al último que estaban **dentro del rango de referencia de su propio
+    informe** (nunca uno fuera de rango, para no "normalizar" lo anormal),
+    sin el último, que es el que se compara con el rango. CVA efectivo =
+    máx(CVA del estudio, 0,5·CVI), igual que el RCV. El límite inferior no
+    baja de 0. `None` si no hay variación biológica para el parámetro o
+    hay menos de `PERSONAL_MIN_POINTS` valores válidos.
+
+    Devuelve `bajo`, `alto`, `punto`, `n`, `labs` (cuántos laboratorios
+    aportan valores: el modelo supone un mismo método), `fuente` y
+    `nota`."""
+    if canonical_id is None or len(series) < PERSONAL_MIN_POINTS + 1:
+        return None
+    bv = (load_table() if table is None else table).get(canonical_id)
+    cvi = bv.cvi_para(sex) if bv else None
+    if cvi is None:
+        return None
+    base = [
+        s for s in series[:-1]
+        if s.get("flag_calc") not in ("alto", "bajo")
+        and (s.get("ref_low") is not None or s.get("ref_high") is not None)
+        and s.get("value_num") is not None
+    ]
+    if len(base) < PERSONAL_MIN_POINTS:
+        return None
+    n = len(base)
+    punto = sum(s["value_num"] for s in base) / n
+    cva = max(bv.cva_pct or 0.0, CVA_FRACCION_DE_CVI * cvi)
+    semiancho_pct = Z_95 * math.sqrt((n + 1) / n) * math.sqrt(cvi ** 2 + cva ** 2)
+    return {
+        "bajo": max(0.0, punto * (1 - semiancho_pct / 100)),
+        "alto": punto * (1 + semiancho_pct / 100),
+        "punto": punto, "n": n, "labs": len({s.get("lab") for s in base}),
+        "fuente": bv.fuente, "nota": bv.nota,
+    }

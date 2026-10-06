@@ -74,3 +74,34 @@ def test_user_layer_overrides_bundled(tmp_path, monkeypatch):
         assert "sodi" in rcv.load_table()  # el resto sigue viniendo de la aplicación
     finally:
         rcv.load_table.cache_clear()
+
+
+def _punto(fecha, valor, flag="normal", lab="A"):
+    return dict(fecha=fecha, value_num=valor, flag_calc=flag, ref_low=50.0, ref_high=150.0, lab=lab)
+
+
+def test_personal_range_coskun_formula():
+    from analitix.rcv import personal_range
+
+    table = {"x": _bv(cvi=10, cva=2)}  # CVA efectivo = máx(2, 0,5·10) = 5
+    serie = [_punto("2024-01-01", 100.0), _punto("2024-02-01", 104.0), _punto("2024-03-01", 96.0),
+             _punto("2024-04-01", 130.0)]  # el último no entra en el cálculo
+    pr = personal_range("x", serie, table=table)
+    semiancho = 1.96 * math.sqrt(4 / 3) * math.sqrt(10**2 + 5**2)  # n = 3
+    assert pr["punto"] == pytest.approx(100.0)
+    assert pr["bajo"] == pytest.approx(100 * (1 - semiancho / 100))
+    assert pr["alto"] == pytest.approx(100 * (1 + semiancho / 100))
+    assert pr["n"] == 3 and pr["labs"] == 1
+
+
+def test_personal_range_uses_only_in_range_values():
+    from analitix.rcv import personal_range
+
+    table = {"x": _bv(cvi=10, cva=2)}
+    serie = [_punto("2024-01-01", 100.0), _punto("2024-02-01", 300.0, flag="alto"),
+             _punto("2024-03-01", 104.0), _punto("2024-04-01", 96.0), _punto("2024-05-01", 99.0, lab="B")]
+    pr = personal_range("x", serie, table=table)
+    assert pr["n"] == 3 and pr["punto"] == pytest.approx(100.0)  # el valor alto no "normaliza" el rango
+    # Con menos de 3 valores dentro de rango (sin contar el último) no hay rango personal.
+    assert personal_range("x", serie[:3], table=table) is None
+    assert personal_range("y", serie, table=table) is None  # sin variación biológica

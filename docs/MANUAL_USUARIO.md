@@ -130,13 +130,33 @@ Antes de nada verás el aviso legal/de uso (uso personal, nunca un
 diagnóstico médico) — hay que pulsar **Aceptar** para continuar; se muestra
 en cada arranque.
 
+<p align="center">
+  <img src="images/splash.png" width="45%" alt="Aviso legal de uso que se muestra en cada arranque">
+</p>
+
+<p align="center">
+  <img src="images/cargando.png" width="45%" alt="Ventana de carga de Analitix">
+</p>
+
 La primera vez, la app te pedirá **crear una contraseña maestra**. Esa
 contraseña cifra toda tu base de datos (`analitix.db`):
 - Guárdala en un lugar seguro. **No hay forma de recuperarla si la
   olvidas**; sin ella, los datos ya importados quedan inaccesibles.
 - No la compartas ni la envíes a nadie.
 
+<p align="center">
+  <img src="images/contrasena_crear.png" width="45%" alt="Diálogo para crear la contraseña de una base de datos nueva">
+</p>
+
+<p align="center">
+  <img src="images/contrasena_repetir.png" width="30%" alt="Diálogo para repetir la contraseña">
+</p>
+
 Después, cada día solo hace falta abrir Analitix e introducir tu contraseña.
+
+<p align="center">
+  <img src="images/inicio.png" width="80%" alt="Ventana principal de Analitix al abrirla">
+</p>
 
 Si en la base de datos hay **varios pacientes**, al abrir la aplicación se
 muestra una ventana **Seleccionar paciente activo** con solo el nombre
@@ -197,6 +217,12 @@ Cada apartado de esta guía indica entre paréntesis en qué menú está.
 
 Aquí se analizan los PDF de la carpeta configurada y se añaden a la base de
 datos.
+
+<p align="center">
+  <img src="images/importar.png" width="80%" alt="Pantalla Importar con la carpeta de informes">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 **Fecha de cada analítica:** la de **recepción** de la muestra en el
 laboratorio ("Recepció", "Data recepció mostra", "Fecha Recepción"...). Si
@@ -367,8 +393,8 @@ filas — pasa sobre todo con PDF antiguos que traen el nombre abreviado (sin
 algún nombre intermedio) y, además, un número de historia clínica de otra
 numeración (el NHC cambia entre plantillas del laboratorio a lo largo de
 los años, así que por sí solo no basta para reconocer al paciente).
-Selecciona las filas a fusionar (Ctrl/Shift para varias, ahora que se
-pueden marcar varias a la vez) y pulsa el botón: se te pedirá elegir cuál
+Marca la casilla (☐) de cada fila a fusionar —un clic marca o desmarca,
+sin necesidad de Ctrl— y pulsa el botón: se te pedirá elegir cuál
 de ellas conserva su identidad — el resto se funde en ella, sus informes
 pasan a pertenecerle y el DNI/fecha de nacimiento que le falten se rellenan
 con los del resto si los tienen. La columna "Informes" te ayuda a detectar
@@ -399,6 +425,12 @@ no hay ambigüedad posible y se selecciona solo.
 Para registrar una analítica cuando el PDF no se ha podido interpretar (o
 cuando simplemente no viene en PDF). No sustituye a la importación
 automática: es el respaldo para esos casos puntuales.
+
+<p align="center">
+  <img src="images/entrada_manual.png" width="80%" alt="Pantalla de Entrada manual de una analítica">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 Los datos que añadas aquí son siempre para el **paciente activo** (§1.3,
 Pacientes → Cambiar paciente activo...) — esta pestaña no tiene su
@@ -440,7 +472,11 @@ Gráfico de una prueba concreta a lo largo del tiempo.
   <img src="images/evolucion.png" width="80%" alt="Evolución de la hemoglobina con rango de referencia, tendencia y forma del punto por laboratorio">
 </p>
 
-> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+<p align="center">
+  <img src="images/evolucion_ldl.png" width="80%" alt="Evolución del colesterol LDL con valores por encima del límite marcados con ▲">
+</p>
+
+> Capturas con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 - Si la prueba viene de **varios laboratorios**, cada punto tiene la
   **forma** de su laboratorio (● ■ ▲ ◆…, con leyenda), y el color sigue
@@ -449,7 +485,7 @@ Gráfico de una prueba concreta a lo largo del tiempo.
   cambio real; al pasar el ratón por el punto también se ve el laboratorio.
 - La lista de la izquierda muestra todas las pruebas con resultado numérico
   del paciente seleccionado. Las que **alguna vez** han estado fuera de
-  rango llevan el icono ⚠ y aparecen en rojo, para poder localizarlas de un
+  rango llevan el icono ⚠ y aparecen en color rojo anaranjado, para poder localizarlas de un
   vistazo y estudiar su evolución.
 - Las pruebas con **pocos valores registrados** (por defecto, menos de 4;
   ajustable en Configuración, §2.20) se agrupan aparte, al final de la lista
@@ -466,9 +502,15 @@ Gráfico de una prueba concreta a lo largo del tiempo.
   - La línea de valores en el tiempo, con un punto por análisis.
   - Las líneas discontinuas de mínimo y máximo del rango de referencia (más
     la banda sombreada entre ambas).
-  - Los puntos **fuera de rango** en rojo (alto) o naranja (bajo), con el
-    valor exacto escrito junto al punto, con margen suficiente para que no
-    quede pegado al borde del gráfico ni a la leyenda.
+  - Los puntos **fuera de rango** en rojo anaranjado (alto) o azul (bajo),
+    con el valor exacto escrito junto al punto precedido de **▲** (alto) o
+    **▼** (bajo), con margen suficiente para que no quede pegado al borde
+    del gráfico ni a la leyenda. Los colores están elegidos para
+    distinguirse también con daltonismo, y el símbolo permite leerlos sin
+    color (por ejemplo, impresos en blanco y negro).
+  - El **último valor** destacado con un anillo y la etiqueta
+    **"Último: valor"** (con ▲/▼ si está fuera de rango), para ver de un
+    vistazo cómo estás ahora, sin que se pierda entre el histórico.
   - Pasando el cursor sobre cualquier punto (también los normales) aparece
     la fecha, el valor y la unidad.
   - Debajo del gráfico, un **resumen en texto**: en cuántas analíticas ha
@@ -481,6 +523,30 @@ Gráfico de una prueba concreta a lo largo del tiempo.
     porcentual**: cuánto ha cambiado el último valor respecto al anterior y
     respecto al primero de toda la serie — útil para saber si un cambio es
     grande o pequeño en términos relativos, no solo en unidades absolutas.
+  - **Tu rango personal (opcional)**: activa el interruptor **Mostrar mi
+    rango personal**, debajo de la lista de pruebas, para ver una banda
+    rayada morada con tu propio rango "normal". Se calcula con tus
+    analíticas anteriores que estaban dentro del rango del laboratorio (al
+    menos 3, sin contar la última), y suele ser más estrecho que el del
+    laboratorio, porque mide cuánto varías **tú**. Si la última analítica
+    sale de tu rango personal pero sigue dentro del rango del laboratorio,
+    no significa que estés enfermo, solo que te has movido de tu valor
+    habitual; puede ser algo para comentar con tu médico. La elección se
+    recuerda. Solo está en esta pantalla, no en los paneles clínicos.
+    Fuente y limitaciones en Ayuda → Referencias científicas
+    ("referencias_rcv").
+  - **Últimos 5 años o todo el histórico**: por defecto, cada gráfico
+    muestra los **5 años anteriores a la última analítica** de ese
+    parámetro, para que los valores muy antiguos no compriman el estado
+    actual. Si eso oculta analíticas, el gráfico lo indica arriba a la
+    derecha ("Últimos 5 años · N analíticas anteriores ocultas"). Activa
+    **Ver todo el histórico** (interruptor debajo de la lista, o menú
+    **Análisis → Ver todo el histórico**; con él activo, esa opción del
+    menú pasa a **Ver solo los últimos 5 años**) para verlo entero. Vale para
+    Evolución, Comparativa y los paneles clínicos (en los paneles se
+    aplica al elegir el siguiente índice); la elección se recuerda. Los
+    informes PDF completo y de alterados incluyen siempre todo el
+    histórico.
   - **Banda gris en el último punto** (pruebas con variación biológica
     conocida, ver "¿Cambio real o variación normal?" en §2.6): el margen
     de variación esperable desde el valor anterior. Si el último punto cae
@@ -516,8 +582,8 @@ fecha (misma escala de tiempo en ambas) pero cada una con su propia escala
 de valores — así se puede ver qué pasaba en una prueba cuando la otra tenía
 un valor concreto, sin mezclar unidades ni rangos distintos en un mismo eje.
 
-- Marca hasta 2 pruebas en la lista (Ctrl/Shift para seleccionar varias); si
-  intentas marcar una tercera, se avisa y se mantiene la selección anterior.
+- Marca la casilla de hasta 2 pruebas; si intentas marcar una tercera, se
+  avisa y no se marca. **Desmarcar todo** quita todas las marcas.
 - Pulsa **Comparar**. Cada panel incluye también el margen, la variación
   porcentual y la tendencia descritos en Evolución (§2.4). Si el gráfico
   combinado no cabe entero en la ventana, aparece una barra de scroll para
@@ -539,7 +605,7 @@ Evolución parámetro a parámetro. **Apoyo informativo y de seguimiento,
 nunca un diagnóstico.**
 
 - **Estado**: cada fila usa el mismo rango de referencia ya calculado por
-  el laboratorio para ese informe (🔴 Alto / 🟠 Bajo / 🟢 Normal) — no es
+  el laboratorio para ese informe (▲ Alto / ▼ Bajo / Normal) — no es
   un umbral nuevo inventado por Analitix.
 - **Variación vs. informe anterior**: el cambio porcentual respecto al
   valor anterior del mismo parámetro (o "—" si es la primera vez que se
@@ -578,8 +644,8 @@ en %, para poder comparar parámetros de escalas muy distintas: pasar la
 creatinina de 0,9 a 1,1 y las plaquetas de 200 a 244 es un +22 % en los dos
 casos, pero lo primero es mucho más relevante respecto a su rango. Color:
 
-- **Rojo ▲** = se aleja del rango o sale de él.
-- **Verde ✓** = se acerca al rango o vuelve a él.
+- **Rojo anaranjado ✗** = se aleja del rango o sale de él.
+- **Verde azulado ✓** = se acerca al rango o vuelve a él.
 - **Gris** = estaba dentro del rango y sigue dentro.
 
 Las barras de colores llevan escrito "anterior → actual"; al pasar el ratón
@@ -631,8 +697,11 @@ valor respecto al rango de referencia de ese informe:
 
 - **Gris** = dentro del rango.
 - **Azul** = por debajo; **rojo** = por encima. Cuanto más intenso, más
-  lejos del rango (el valor aparece escrito dentro de la casilla cuando hay
-  pocas columnas).
+  lejos del rango. El valor aparece escrito dentro de las casillas fuera de
+  rango cuando hay pocas analíticas. Si hay muchas (más de 24), solo se
+  escriben los extremos de cada parámetro: su valor más alto por encima del
+  rango y el más bajo por debajo, para ver hasta dónde ha llegado. El color
+  del texto se elige para que contraste con el de la casilla.
 - **Gris oscuro con un punto** = hay valor, pero el informe no traía rango.
 - **En blanco** = ese día no se midió ese parámetro.
 
@@ -729,6 +798,12 @@ diagnóstico**; un resultado alterado no sustituye una prueba de imagen, una
 biopsia ni la valoración de un hepatólogo. Misma disposición que "❤ Riesgo
 cardiovascular" (§2.7).
 
+<p align="center">
+  <img src="images/panel_hepatico.png" width="80%" alt="Panel de salud hepática con el ratio AST/ALT">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup, no queda siempre visible) que muestra **en qué estudios se basa cada índice**
   (De Ritis 1957 para el ratio AST/ALT; Wai et al. 2003 para APRI; Sterling
@@ -764,6 +839,12 @@ creatinina ya guardados — **apoyo informativo y de seguimiento, nunca un
 diagnóstico**; la interpretación clínica final es siempre del médico o
 nefrólogo. Misma disposición que "❤ Riesgo cardiovascular" (§2.7) y
 "🧪 Salud hepática" (§2.8).
+
+<p align="center">
+  <img src="images/panel_renal.png" width="80%" alt="Panel de función renal con el ratio urea/creatinina">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup, no queda siempre visible) que muestra **en qué estudios se basa cada cálculo**:
@@ -908,6 +989,12 @@ Distinta del resto de paneles: **no hay ningún índice combinado**, porque
 no existe ninguno validado científicamente que junte PCR y VSG en un solo
 número (sus "velocidades" de reacción son demasiado distintas).
 
+<p align="center">
+  <img src="images/panel_inflamacion.png" width="80%" alt="Panel de inflamación con la evolución de PCR y VSG">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup) explicando, con sus estudios, por qué no hay un
   índice combinado: la PCR reacciona en horas y baja rápido, la VSG tarda
@@ -931,6 +1018,12 @@ informativo y de seguimiento, nunca un diagnóstico**; la interpretación
 clínica final es siempre del médico. El panel clínico más simple de
 todos: un único parámetro con un único umbral citado.
 
+<p align="center">
+  <img src="images/panel_acido_urico.png" width="80%" alt="Panel de ácido úrico">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup, no queda siempre visible) que muestra el umbral usado (≥6.8 mg/dL, guía de la
   American College of Rheumatology de 2020), aclarando que un valor alto
@@ -953,6 +1046,12 @@ nunca un diagnóstico**; la interpretación clínica final es siempre del
 médico. Solo aparece en informes donde el laboratorio midió calcio y
 albúmina el mismo día.
 
+<p align="center">
+  <img src="images/panel_calcio.png" width="80%" alt="Panel de calcio corregido por albúmina">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup, no queda siempre visible) que muestra la fórmula (Payne et al. 1973), aclarando
   que se clasifica con el mismo rango de referencia que el laboratorio ya
@@ -972,6 +1071,12 @@ Traduce la HbA1c (%) a una glucosa media estimada en mg/dL, directamente
 comparable con las lecturas de glucosa — **apoyo informativo y de
 seguimiento, nunca un diagnóstico**; la interpretación clínica final es
 siempre del médico.
+
+<p align="center">
+  <img src="images/panel_glucemia.png" width="80%" alt="Panel de glucosa con la glucosa media estimada (eAG)">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup, no queda siempre visible) que muestra la fórmula ADAG y los puntos de corte
@@ -1009,6 +1114,12 @@ patrón** (hipotiroidismo/hipertiroidismo): esa clasificación es
 literalmente el criterio médico diagnóstico estándar y depende de si hay
 embarazo, algo que Analitix no registra.
 
+<p align="center">
+  <img src="images/panel_tiroides.png" width="80%" alt="Panel de tiroides con TSH y T4 libre">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
 - Arriba del todo, el título de la pestaña, el nombre del **paciente
   activo** y un botón **"⚠️ Aviso e información científica"** (abre en un popup) explicando por qué no hay clasificación por
   cuadrante, con la fuente de la relación fisiológica inversa entre TSH y
@@ -1024,6 +1135,12 @@ embarazo, algo que Analitix no registra.
 ### 2.17 💾 Exportar (menú Archivo → Exportar)
 
 Exporta los resultados del paciente seleccionado a un fichero:
+
+<p align="center">
+  <img src="images/exportar.png" width="80%" alt="Pantalla Exportar con Excel, CSV e informes PDF">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 - **Exportar a Excel...**: genera un `.xlsx` con una fila por resultado
   de **todos** los informes (fecha, prueba, valor, unidad, rango de
@@ -1046,7 +1163,7 @@ un diagnóstico**. Los dos siguen la misma estructura de página:
 
 Cada página lleva un pie con el tipo de informe a la izquierda y el
 número de página a la derecha. En la tabla, cada fila muestra valor,
-rango de referencia, estado (Alto/Bajo/Normal, coloreado) y variación
+rango de referencia, estado (▲ Alto/▼ Bajo/Normal, coloreado) y variación
 respecto al informe anterior, marcada con "(*)" si es un cambio brusco.
 
 - **Exportar informe completo (PDF)...**: **todos** los parámetros del
@@ -1059,16 +1176,69 @@ respecto al informe anterior, marcada con "(*)" si es un cambio brusco.
   si ese parámetro concreto no se repitió en él). Útil para un
   seguimiento centrado solo en lo que alguna vez dio problema.
 
+Ejemplo de **informe de alterados** con el paciente ficticio (portada, tabla
+de parámetros fuera de rango y uno de los gráficos de evolución). El PDF
+completo está en [`docs/ejemplos/informe_alterados_ficticio.pdf`](ejemplos/informe_alterados_ficticio.pdf).
+
+<p align="center">
+  <img src="images/pdf_alterados_portada.png" width="32%" alt="Portada del informe PDF de parámetros alterados">
+  <img src="images/pdf_alterados_tabla.png" width="32%" alt="Tabla de parámetros alterados del informe PDF">
+  <img src="images/pdf_alterados_grafico.png" width="32%" alt="Gráfico de evolución del informe PDF">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
 Limitación conocida en los dos: si hay muchísimos parámetros fuera de
 rango (o alterados) a la vez, esa página de tabla concreta podría no
 caber entera (no pagina automáticamente dentro de una misma categoría en
 esta versión).
+
+**Informe PDF personalizado...** Eliges tú qué incluir, por ejemplo solo
+el mapa de calor, la evolución de uno o dos parámetros concretos o un
+panel clínico para llevar a una consulta:
+
+- **Secciones**:
+  - la tabla del último informe (alterados y resto, como en los informes
+    anteriores);
+  - **Qué ha cambiado** respecto al informe anterior;
+  - el **mapa de calor**, eligiendo en el desplegable qué parámetros
+    incluye: los alguna vez fuera de rango, todos, o los de un panel
+    concreto (igual que en la pantalla Mapa de calor).
+- **Evolución de parámetros**: marca las casillas de los que quieras, en
+  una lista que se desplaza con la barra o con la rueda del ratón. Solo
+  aparecen las pruebas con al menos 2 analíticas.
+- **Paneles clínicos**: cada panel incluye su resumen, tal como lo ves en
+  pantalla, y sus gráficos. Los paneles sin datos aparecen desactivados.
+- **⚠ marca lo alterado**: los parámetros que alguna vez han estado fuera
+  de rango y los paneles con algún índice por encima del umbral
+  orientativo. **Marcar alterados** los selecciona todos de una vez y
+  **Desmarcar todo** deja el informe en blanco para empezar de cero.
+- El informe usa **los mismos ajustes que la pantalla**: los laboratorios
+  incluidos (el filtro aparece en la portada y en el pie), el aviso de
+  pocas analíticas, la banda de variación esperable y, si tienes activado
+  el interruptor en Evolución, tu rango personal en los gráficos de
+  parámetros.
+- Empieza siempre con la portada y el aviso de que no es un diagnóstico, y
+  cada página lleva su pie con el número de página.
+- **Todas las páginas son A4**, también en los otros dos informes PDF: los
+  gráficos se adaptan a una hoja vertical u horizontal, según su forma, y
+  aprovechan todo el ancho para imprimirlos.
+- **Secciones largas en varias páginas**: "Qué ha cambiado" y el mapa de
+  calor muestran como mucho 25 parámetros por página. Si hay más, siguen en
+  la página siguiente con el título marcado "(1/2)", "(2/2)"…, su leyenda
+  y su eje, y con la misma orientación en todas.
 
 ### 2.18 🔍 Explorador BD (menú Herramientas → Explorador BD)
 
 Muestra el contenido tal cual de la base de datos, tabla por tabla, para
 poder comprobar exactamente qué se ha guardado — es de **solo lectura**, no
 se puede cambiar nada desde aquí.
+
+<p align="center">
+  <img src="images/explorador_bd.png" width="80%" alt="Explorador BD con la tabla de pacientes">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
 - Elige una tabla en el desplegable (pacientes, informes, resultados,
   ficheros importados o preferencias) y pulsa **Actualizar** para
@@ -1101,8 +1271,9 @@ son la misma. Esta sección deja corregirlo:
    flecha **▸** a la izquierda de una prueba para desplegarla: verás una
    línea por cada nombre y **laboratorio** que lo usa, con sus resultados,
    para comparar cómo llama cada laboratorio a la misma prueba.
-2. Selecciona dos o más filas que sean en realidad la misma determinación
-   (Ctrl/Shift para varias) y pulsa **Fusionar seleccionadas...**.
+2. Marca la casilla (☐) de dos o más filas que sean en realidad la misma
+   determinación y pulsa **Fusionar seleccionadas...**. La flecha ▸ solo
+   despliega la fila, sin cambiar lo marcado.
 3. Elige cuál de ellas es el nombre "bueno" a conservar (por defecto, la que
    más resultados tiene) y confirma.
 
@@ -1252,6 +1423,10 @@ Este panel se organiza a su vez en cuatro subpestañas (**General**,
 **Seguridad**, **Datos**, **Estadísticas**), para que quepa todo sin
 necesidad de ampliar la ventana ni usar barras de desplazamiento.
 
+<p align="center">
+  <img src="images/configuracion.png" width="80%" alt="Configuración, subpestaña General">
+</p>
+
 **General**
 
 - **Carpeta de informes**: qué carpeta escanea el botón "Importar". Pulsa
@@ -1287,7 +1462,7 @@ necesidad de ampliar la ventana ni usar barras de desplazamiento.
 - **Informes huérfanos**: lista los informes que no aportan nada —
   **sin ningún resultado**, o cuyo PDF **ya no está** en la carpeta de
   informes (lo borraste, no lo renombraste: uno renombrado se sigue
-  reconociendo solo). Marca los que quieras (Ctrl/Shift para varios) y
+  reconociendo solo). Marca la casilla de los que quieras y
   **Eliminar seleccionados...** — pide confirmación, no se puede deshacer,
   y no toca ningún PDF de la carpeta. Útil, por ejemplo, si en algún
   momento borraste de la carpeta un PDF que nunca llegó a reconocerse bien:
@@ -1319,7 +1494,13 @@ necesidad de ampliar la ventana ni usar barras de desplazamiento.
 ### 2.21 ℹ Ayuda → Acerca de...
 
 Muestra el logo de Analitix, el nombre de la aplicación, el autor (Gabriel
-Marti) y un enlace a su perfil de GitHub (pulsable, abre el navegador).
+Marti), el **correo de contacto del proyecto** (contact@analitix.slmail.me; pulsable,
+abre tu programa de correo) y un enlace a su perfil de GitHub (pulsable,
+abre el navegador).
+
+<p align="center">
+  <img src="images/acerca_de.png" width="35%" alt="Ventana Acerca de Analitix">
+</p>
 
 ### 2.22 🔄 Ayuda → Buscar actualizaciones...
 

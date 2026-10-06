@@ -17,7 +17,7 @@ body:
     attributes:
       label: Versión (opcional)
       description: Menú Ayuda → Acerca de.
-      placeholder: "0.10.0"
+      placeholder: "0.11.0"
   - type: checkboxes
     id: privacy
     attributes:
