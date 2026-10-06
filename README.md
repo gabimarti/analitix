@@ -28,11 +28,14 @@ Novedades de cada versión en el [registro de cambios](CHANGELOG.md).
   (ver [«Formatos de informe soportados»](#formatos-de-informe-soportados))
   y los guarda cifrados en local.
 - Muestra gráficos de evolución y comparativas de cada prueba frente a su
-  rango de referencia.
+  rango de referencia, con el último valor destacado y colores aptos para
+  daltonismo (el estado se indica también con ▲/▼, nunca solo con color).
 - Calcula índices y paneles clínicos informativos (p. ej. riesgo
   cardiovascular, función renal, función hepática) a partir de fórmulas y
   umbrales publicados, citando siempre su fuente.
-- Exporta a Excel/CSV/PDF para llevarte tus propios datos.
+- Exporta a Excel/CSV/PDF para llevarte tus propios datos (ver un
+  [informe PDF de ejemplo](docs/ejemplos/informe_alterados_ficticio.pdf)
+  con datos ficticios).
 
 **Qué NO hace:**
 - No emite diagnósticos ni sustituye la valoración de un profesional
