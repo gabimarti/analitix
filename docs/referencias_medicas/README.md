@@ -47,6 +47,9 @@ literatura permite.
   intervalo de confianza, umbral KDIGO de descenso rápido del filtrado
   glomerular y tiempo en rango (Rosendaal 1993); umbrales de velocidad
   descartados (PSA, HbA1c).
+- [`referencias_tension_arterial.md`](referencias_tension_arterial.md) —
+  **implementado**: media de automedida en casa (protocolo ESH 2021) y
+  categorías de la guía ESC 2024 para medidas en casa.
 - [`referencias_hepatico.md`](referencias_hepatico.md) — **implementado**:
   función e índices hepáticos, ratio AST/ALT (De Ritis), FIB-4, APRI.
 - [`referencias_renal.md`](referencias_renal.md) — **implementado**:

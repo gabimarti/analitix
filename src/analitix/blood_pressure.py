@@ -215,3 +215,174 @@ def read_csv(path: Path, now: Optional[dt.datetime] = None,
         except ValueError as exc:
             errores.append(f"Línea {n}: {exc}")
     return lecturas, errores
+
+
+# -- Análisis (fase 2) ---------------------------------------------------
+# Categorías de la guía ESC 2024 (McEvoy JW et al., "2024 ESC Guidelines
+# for the management of elevated blood pressure and hypertension", Eur
+# Heart J 2024;45(38):3912-4018, doi:10.1093/eurheartj/ehae178, tabla 5):
+# no elevada < 120/70; elevada 120/70 a < 135/85 en casa (< 140/90 en la
+# consulta); hipertensión ≥ 135/85 en casa (≥ 140/90 en la consulta). Manda
+# la peor de las dos cifras. Solo se aplican a una MEDIA de automedida
+# según protocolo, nunca a una lectura suelta.
+BP_THRESHOLDS = {
+    "casa": {"elevada": (120, 70), "hipertension": (135, 85)},
+    "consulta": {"elevada": (120, 70), "hipertension": (140, 90)},
+}
+BP_CATEGORY_LABELS = {"no_elevada": "PA no elevada", "elevada": "PA elevada", "hipertension": "hipertensión"}
+# Protocolo de automedida en casa (Stergiou GS et al., "2021 European
+# Society of Hypertension practice guidelines for office and out-of-office
+# blood pressure measurement", J Hypertens 2021;39(7):1293-1302,
+# doi:10.1097/HJH.0000000000002843, recuadros 6 y 7): 7 días (al menos 3),
+# mañana y noche; "Assess HBPM of 7 days (at least 3 days with at least 12
+# readings). Discard the first day and calculate the average of all the
+# other readings. Individual readings have little diagnostic accuracy."
+HBPM_DAYS = 7
+HBPM_MIN_DAYS = 3
+HBPM_MIN_READINGS = 12
+
+
+def bp_category(systolic: float, diastolic: float, place: str = "casa") -> str:
+    """Categoría ESC 2024 ("no_elevada", "elevada" o "hipertension") de una
+    media; manda la peor de las dos cifras."""
+    umbrales = BP_THRESHOLDS[place]
+    if systolic >= umbrales["hipertension"][0] or diastolic >= umbrales["hipertension"][1]:
+        return "hipertension"
+    if systolic >= umbrales["elevada"][0] or diastolic >= umbrales["elevada"][1]:
+        return "elevada"
+    return "no_elevada"
+
+
+def _media(valores: list[float]) -> Optional[float]:
+    return sum(valores) / len(valores) if valores else None
+
+
+def home_week_summary(readings: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    """Media de la última semana de automedida en casa según el protocolo
+    ESH 2021: las lecturas "casa" de los `HBPM_DAYS` días que acaban en la
+    última, sin el primer día con lecturas. `valida` solo si quedan al menos
+    `HBPM_MIN_DAYS` días y `HBPM_MIN_READINGS` lecturas; solo entonces lleva
+    `categoria` (ESC 2024, umbrales de casa). `None` sin lecturas en casa."""
+    casa = [r for r in readings if r.get("place", "casa") == "casa"]
+    if not casa:
+        return None
+    dia = lambda r: dt.date.fromisoformat(r["measured_at"][:10])  # noqa: E731
+    fin = max(dia(r) for r in casa)
+    inicio = fin - dt.timedelta(days=HBPM_DAYS - 1)
+    semana = [r for r in casa if dia(r) >= inicio]
+    primer_dia = min(dia(r) for r in semana)
+    usadas = [r for r in semana if dia(r) != primer_dia]
+    dias = len({dia(r) for r in usadas})
+    sis = _media([r["systolic"] for r in usadas])
+    dias_ = _media([r["diastolic"] for r in usadas])
+    valida = dias >= HBPM_MIN_DAYS and len(usadas) >= HBPM_MIN_READINGS
+    return {
+        "inicio": inicio.isoformat(), "fin": fin.isoformat(), "primer_dia": primer_dia.isoformat(),
+        "dias": dias, "n": len(usadas), "systolic": sis, "diastolic": dias_,
+        "pulse": _media([r["pulse"] for r in usadas if r.get("pulse")]),
+        "pulse_pressure": None if sis is None else sis - dias_,
+        "valida": valida, "categoria": bp_category(sis, dias_) if valida else None,
+    }
+
+
+def bp_summary_text(readings: list[dict[str, Any]]) -> str:
+    """Resumen en lenguaje llano para el panel y el PDF."""
+    if not readings:
+        return "Sin mediciones de tensión arterial para este paciente (Entrada manual → Tensión arterial...)."
+    lineas = []
+    semana = home_week_summary(readings)
+    if semana is None:
+        lineas.append("No hay mediciones tomadas en casa: la media de automedida solo usa las de casa.")
+    else:
+        periodo = f"del {semana['inicio']} al {semana['fin']}, sin el primer día ({semana['primer_dia']})"
+        if semana["n"]:
+            media = f"{semana['systolic']:.0f}/{semana['diastolic']:.0f} mmHg"
+            extra = f" · presión de pulso {semana['pulse_pressure']:.0f} mmHg"
+            if semana["pulse"]:
+                extra += f" · pulso medio {semana['pulse']:.0f} lpm"
+            lineas.append(f"Última semana de automedida en casa ({periodo}): {semana['n']} lecturas en "
+                          f"{semana['dias']} días. Media {media}{extra}.")
+        else:
+            lineas.append(f"Última semana de automedida en casa ({periodo}): sin lecturas después del primer día.")
+        if semana["valida"]:
+            casa = BP_THRESHOLDS["casa"]
+            lineas.append(
+                f"Categoría informativa según la guía ESC 2024 para medidas en casa: "
+                f"{BP_CATEGORY_LABELS[semana['categoria']]} (no elevada < {casa['elevada'][0]}/{casa['elevada'][1]}; "
+                f"elevada hasta < {casa['hipertension'][0]}/{casa['hipertension'][1]}; hipertensión ≥ "
+                f"{casa['hipertension'][0]}/{casa['hipertension'][1]} mmHg). Es una ayuda para hablarlo con tu "
+                "médico, no un diagnóstico.")
+        else:
+            lineas.append(
+                f"No cumple el protocolo de automedida de la guía ESH 2021 (hacen falta al menos "
+                f"{HBPM_MIN_DAYS} días y {HBPM_MIN_READINGS} lecturas sin contar el primer día, idealmente "
+                f"{HBPM_DAYS} días con dos tomas por la mañana y dos por la noche): la media no se clasifica.")
+    consulta = [r for r in readings if r.get("place") == "consulta"]
+    if consulta:
+        ultima = consulta[-1]
+        lineas.append(f"Última toma en la consulta: {ultima['systolic']}/{ultima['diastolic']} mmHg "
+                      f"({ultima['measured_at'][:10]}); en la consulta los umbrales son otros (hipertensión ≥ 140/90).")
+    lineas.append("Las lecturas sueltas no se clasifican: tienen poca precisión diagnóstica (ESH 2021).")
+    return "\n".join(lineas)
+
+
+def period_stats(readings: list[dict[str, Any]], desde: Optional[str] = None,
+                 hasta: Optional[str] = None) -> Optional[dict[str, Any]]:
+    """Medias descriptivas de las mediciones EN CASA entre `desde` y
+    `hasta` ("AAAA-MM-DD", ambos incluidos; `None` = sin límite): nº de
+    mediciones y de días, y media de sistólica, diastólica y pulso de todas
+    las mediciones. No se clasifican (la guía solo clasifica una semana de
+    automedida según protocolo, ver `home_week_summary`). `None` si no hay
+    ninguna en el periodo."""
+    casa = [r for r in readings if r.get("place", "casa") == "casa"
+            and (desde is None or r["measured_at"][:10] >= desde)
+            and (hasta is None or r["measured_at"][:10] <= hasta)]
+    if not casa:
+        return None
+    return {
+        "desde": casa[0]["measured_at"][:10], "hasta": casa[-1]["measured_at"][:10], "n": len(casa),
+        "dias": len({r["measured_at"][:10] for r in casa}),
+        "systolic": _media([r["systolic"] for r in casa]), "diastolic": _media([r["diastolic"] for r in casa]),
+        "pulse": _media([r["pulse"] for r in casa if r.get("pulse")]),
+    }
+
+
+# Guía para medir la tensión en casa: recuadros 4 (procedimiento) y 6
+# (pauta) de la guía ESH 2021 (Stergiou GS et al., J Hypertens
+# 2021;39(7):1293-1302, doi:10.1097/HJH.0000000000002843), cotejados con su
+# texto. Se muestra en la pantalla de entrada y en el manual.
+MEASUREMENT_GUIDE = """Según la guía europea de medición de la tensión arterial (ESH 2021,
+recuadros 4 y 6), para que la media sirva para valorar tu tensión:
+
+CUÁNTAS VECES
+• 7 días seguidos (como mínimo 3), mejor justo antes de una visita médica.
+• Cada día, por la mañana y por la noche.
+• Cada vez, 2 mediciones con 1 minuto entre ellas (anota las dos).
+• Por la mañana, antes de tomar la medicación (si tomas) y antes de
+  desayunar; por la noche, antes de cenar.
+• Para el seguimiento a largo plazo con tratamiento: 2 mediciones una o dos
+  veces por semana (como mínimo, una vez al mes).
+
+CONDICIONES
+• Habitación tranquila y con temperatura agradable.
+• Nada de tabaco, cafeína, comida ni ejercicio en los 30 minutos previos.
+• Sentado y relajado 3-5 minutos antes de medir; sin hablar durante ni
+  entre las mediciones.
+
+POSTURA
+• Sentado con la espalda apoyada en el respaldo.
+• Piernas sin cruzar y pies apoyados en el suelo.
+• Brazo desnudo, apoyado en la mesa, con la mitad del brazo a la altura
+  del corazón.
+
+APARATO
+• Tensiómetro electrónico de brazo validado clínicamente, con el manguito
+  de la talla de tu brazo.
+
+CÓMO LO USA ANALITIX
+• Para la media de la semana de automedida descarta el primer día y
+  necesita al menos 3 días y 12 mediciones (si sigues la pauta, tendrás
+  unas 24). Una medición suelta no se clasifica.
+• Marca «casa» como lugar: los umbrales de casa no son los de la consulta.
+
+Apoyo informativo, nunca un diagnóstico: coméntalo con tu médico."""

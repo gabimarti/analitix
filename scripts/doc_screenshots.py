@@ -359,6 +359,7 @@ def capture_app(con, pid) -> None:
         ("calcio", app.list_calcio_indices, app._show_calcio_index, "panel_calcio.png"),
         ("glucemia", app.list_glucemia_indices, app._show_glucemia_index, "panel_glucemia.png"),
         ("tiroides", None, app._show_thyroid_chart, "panel_tiroides.png"),
+        ("tension_panel", None, lambda: None, "panel_tension.png"),
     ):
         show(page)
         if listbox is not None:

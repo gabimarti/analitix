@@ -2699,6 +2699,22 @@ Notas de implementación:
   `AVISO_ENTRADA_MANUAL` y validan al teclear con `_restrict(entry, patron)`
   (validación "key" de Tk: cifras donde van cifras, sin caracteres de
   control, longitud máxima).
+- Panel "Tensión arterial" (`_build_tab_tension_panel`, Paneles clínicos,
+  página `tension_panel`): `blood_pressure.bp_summary_text` +
+  `charts.bp_figure` sobre `_bp_readings_windowed` (ventana de años con
+  `_windowed`); `_refresh_bp_panel` se llama desde `_refresh_tension_page`
+  (cambio de paciente, guardar, importar, borrar) y `_toggle_full_history`.
+  `home_week_summary` aplica el protocolo ESH 2021 (7 días hasta la última
+  lectura en casa, sin el primer día, válida con ≥ `HBPM_MIN_DAYS` días y ≥
+  `HBPM_MIN_READINGS` lecturas) y `bp_category` los umbrales de la tabla 5
+  de ESC 2024 (`BP_THRESHOLDS`, casa y consulta; manda la peor cifra). El PDF
+  personalizado ofrece la sección si hay mediciones. Intervalo y periodo de
+  comparación (`vars_bp_periodo`, `_bp_periodo` valida AAAA-MM-DD) con tabla
+  de medias `blood_pressure.period_stats` (solo mediciones en casa, sin
+  clasificar); con intervalo, el gráfico ignora la ventana de años. Guía de
+  medición `blood_pressure.MEASUREMENT_GUIDE` (ESH 2021, recuadros 4 y 6) en
+  el botón «¿Cómo medirla?» de la pantalla de entrada. Fuentes literales en
+  `docs/referencias_medicas/referencias_tension_arterial.md`.
 - Pestaña "✏ Entrada manual" (`_build_tab_manual`): para analíticas cuyo PDF
   no se ha podido interpretar (o que no vienen en PDF). Ya no tiene selector
   de paciente propio: usa el paciente activo (`self.current_patient_id`,

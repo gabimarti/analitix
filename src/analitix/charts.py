@@ -1144,3 +1144,84 @@ def position_figure(rows: list[dict[str, Any]], title: str) -> Figure:
     ax.analitix_positions = items
     ax.analitix_position_skipped = skipped
     return fig
+
+
+# -- Tensión arterial ------------------------------------------------------
+def bp_figure(readings: list[dict[str, Any]], title: str) -> Figure:
+    """Evolución de la tensión arterial (`bp_readings`): arriba, sistólica y
+    diastólica (punto por lectura, ● casa y ■ consulta, y línea con la media
+    de cada día); abajo, el pulso. Las líneas horizontales son los umbrales
+    de la guía ESC 2024 para medidas en casa (`blood_pressure.BP_THRESHOLDS`):
+    orientan, pero solo clasifican una media de automedida, no una lectura
+    suelta. Último día destacado con anillo y su media escrita."""
+    from analitix.blood_pressure import BP_THRESHOLDS  # sin dependencia al importar charts
+
+    fig = Figure(figsize=(8, 6.2), dpi=100)
+    ax, ax_pulso = fig.subplots(2, 1, sharex=True, gridspec_kw={"height_ratios": [3, 1.3]})
+    if not readings:
+        ax.set_title(f"{title} (sin datos)")
+        return fig
+    fechas = [dt.datetime.strptime(r["measured_at"], "%Y-%m-%d %H:%M") for r in readings]
+    # Media de cada día solo con las tomas en casa (las de la consulta van
+    # aparte, como ■); la línea se corta en huecos de más de una semana.
+    por_dia: dict[dt.date, list[dict[str, Any]]] = {}
+    for f, r in zip(fechas, readings):
+        if r.get("place", "casa") == "casa":
+            por_dia.setdefault(f.date(), []).append(r)
+    dias = sorted(por_dia)
+    centro = [dt.datetime.combine(d, dt.time(12)) for d in dias]
+    cortes = [i for i in range(1, len(dias)) if (dias[i] - dias[i - 1]).days > 7]
+
+    def _con_cortes(xs, ys):
+        xs, ys = list(xs), list(ys)
+        for i in reversed(cortes):
+            xs.insert(i, xs[i - 1] + (xs[i] - xs[i - 1]) / 2)
+            ys.insert(i, float("nan"))
+        return xs, ys
+    casa = BP_THRESHOLDS["casa"]
+    for clave, color, umbral, elevada, nombre in (
+        ("systolic", COLOR_ALTO, casa["hipertension"][0], casa["elevada"][0], "Sistólica"),
+        ("diastolic", COLOR_BAJO, casa["hipertension"][1], casa["elevada"][1], "Diastólica"),
+    ):
+        for lugar, marker in (("casa", "o"), ("consulta", "s")):
+            idx = [i for i, r in enumerate(readings) if r.get("place", "casa") == lugar]
+            if idx:
+                ax.scatter([fechas[i] for i in idx], [readings[i][clave] for i in idx], s=14 if lugar == "casa" else 40,
+                           marker=marker, color=_tint(color, 0.45), edgecolors=color, linewidths=0.6, zorder=2)
+        ax.axhline(umbral, color=color, linestyle="--", linewidth=1, alpha=0.8)
+        ax.axhline(elevada, color=color, linestyle=":", linewidth=1, alpha=0.6)
+        if not dias:
+            continue
+        medias = [sum(r[clave] for r in por_dia[d]) / len(por_dia[d]) for d in dias]
+        ax.plot(*_con_cortes(centro, medias), color=color, linewidth=1.6, zorder=3,
+                label=f"{nombre} en casa (media del día)")
+        ax.scatter([centro[-1]], [medias[-1]], s=150, facecolors="none", edgecolors=color, linewidths=1.6, zorder=4)
+        ax.annotate(f"Último día: {medias[-1]:.0f}", (centro[-1], medias[-1]), textcoords="offset points",
+                    xytext=(10, 0), ha="left", va="center", fontsize=8, fontweight="bold", color=color)
+    ax.plot([], [], color=COLOR_INK_SECONDARY, linestyle="--",
+            label=f"Hipertensión en casa (ESC 2024): ≥ {casa['hipertension'][0]}/{casa['hipertension'][1]}")
+    ax.plot([], [], color=COLOR_INK_SECONDARY, linestyle=":",
+            label=f"PA elevada desde {casa['elevada'][0]}/{casa['elevada'][1]}")
+    ax.scatter([], [], marker="s", color=COLOR_INK_SECONDARY, label="Toma en la consulta")
+    ax.set_ylabel("mmHg")
+    ax.set_title(title, pad=44)
+    ax.legend(fontsize=7, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=3, frameon=False, borderaxespad=0.2)
+    ax.grid(axis="y", color="#e1e0d9", linewidth=0.8)
+
+    pulsos = [(f, r["pulse"]) for f, r in zip(fechas, readings) if r.get("pulse")]
+    if pulsos:
+        ax_pulso.scatter([f for f, _ in pulsos], [p for _, p in pulsos], s=12, color=_tint(COLOR_NORMAL, 0.45),
+                         edgecolors=COLOR_NORMAL, linewidths=0.6)
+        if all(any(r.get("pulse") for r in por_dia[d]) for d in dias) and dias:
+            ax_pulso.plot(*_con_cortes(centro, [_media_pulso(por_dia[d]) for d in dias]), color=COLOR_NORMAL,
+                          linewidth=1.4)
+    ax_pulso.set_ylabel("Pulso (lpm)")
+    ax_pulso.grid(axis="y", color="#e1e0d9", linewidth=0.8)
+    ax_pulso.tick_params(axis="x", rotation=30)
+    fig.tight_layout()
+    return fig
+
+
+def _media_pulso(lecturas: list[dict[str, Any]]) -> float:
+    pulsos = [r["pulse"] for r in lecturas if r.get("pulse")]
+    return sum(pulsos) / len(pulsos)

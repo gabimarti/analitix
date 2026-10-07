@@ -84,3 +84,42 @@ def test_check_limits_keeps_user_limits_inside_absolute_bounds():
                  {"systolic": [80, 250], "diastolic": [45, 140]}):                      # falta el pulso
         with pytest.raises(ValueError):
             check_limits(malo)
+
+
+def test_home_week_summary_follows_esh_protocol_and_esc_categories():
+    from analitix.blood_pressure import bp_category, bp_summary_text, home_week_summary
+
+    assert bp_category(118, 69) == "no_elevada"
+    assert bp_category(125, 69) == "elevada" and bp_category(118, 75) == "elevada"
+    assert bp_category(130, 85) == "hipertension"  # manda la peor cifra (diastólica)
+    assert bp_category(138, 80, "consulta") == "elevada"  # en la consulta el umbral es 140/90
+
+    def lectura(dia, hora, s, d, lugar="casa"):
+        return {"measured_at": f"2026-03-{dia:02d} {hora}", "systolic": s, "diastolic": d, "pulse": 70, "place": lugar}
+
+    # 7 días con mañana y noche; el primer día (muy alto) se descarta
+    semana = [lectura(1, "08:00", 190, 110), lectura(1, "21:00", 190, 110)]
+    semana += [lectura(d, h, 125, 78) for d in range(2, 8) for h in ("08:00", "21:00")]
+    semana.append(lectura(20, "10:00", 150, 95, "consulta"))  # no cuenta en la media de casa
+    r = home_week_summary([x for x in semana if x["place"] == "casa"])
+    assert (r["n"], r["dias"], r["systolic"], r["diastolic"], r["valida"], r["categoria"]) == (
+        12, 6, 125, 78, True, "elevada")
+    pocas = home_week_summary(semana[:6])  # 2 días tras descartar el primero, 4 lecturas
+    assert not pocas["valida"] and pocas["categoria"] is None
+    texto = bp_summary_text(semana[:6])
+    assert "No cumple el protocolo" in texto and "Categoría" not in texto
+
+
+def test_period_stats_only_home_readings_between_dates():
+    from analitix.blood_pressure import period_stats
+
+    lecturas = [
+        {"measured_at": "2020-03-01 08:00", "systolic": 120, "diastolic": 80, "pulse": 60, "place": "casa"},
+        {"measured_at": "2020-03-02 08:00", "systolic": 130, "diastolic": 90, "pulse": None, "place": "casa"},
+        {"measured_at": "2020-03-02 10:00", "systolic": 170, "diastolic": 100, "pulse": 80, "place": "consulta"},
+        {"measured_at": "2025-03-01 08:00", "systolic": 140, "diastolic": 88, "pulse": 70, "place": "casa"},
+    ]
+    s = period_stats(lecturas, "2020-01-01", "2020-12-31")
+    assert (s["n"], s["dias"], s["systolic"], s["diastolic"], s["pulse"]) == (2, 2, 125, 85, 60)
+    assert period_stats(lecturas)["n"] == 3
+    assert period_stats(lecturas, "2021-01-01", "2021-12-31") is None

@@ -476,9 +476,9 @@ punto se dibuja pero no se marca como fuera de rango en ningún sentido).
 ### 2.3.1 🩺 Tensión arterial (menú Entrada manual → Tensión arterial...)
 
 Registro de tus mediciones de tensión arterial, siempre para el **paciente
-activo**. Por ahora sirve para guardarlas; los gráficos, la media según el
-protocolo de las guías y el cruce con las analíticas (riesgo cardiovascular)
-llegarán en próximas versiones, con sus fuentes.
+activo**. Los resultados (media de la semana de automedida, categoría según la
+guía y gráfico) se ven en **Paneles clínicos → Tensión arterial** (§2.16.1). El
+cruce con las analíticas (riesgo cardiovascular) llegará más adelante.
 
 <p align="center">
   <img src="images/tension_arterial.png" width="80%" alt="Pantalla de registro de tensión arterial con mediciones de ejemplo">
@@ -486,6 +486,8 @@ llegarán en próximas versiones, con sus fuentes.
 
 > Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
+- **ℹ️ ¿Cómo medirla?**: abre la guía para medir la tensión en casa de forma
+  que la media sirva (ver el apartado siguiente).
 - **Añadir medición**: fecha (AAAA-MM-DD), hora (HH:MM), sistólica (la
   "alta"), diastólica (la "baja"), pulso (opcional), **lugar** y una nota
   opcional. Los campos solo admiten cifras (o fecha y hora) y, al guardar,
@@ -1273,6 +1275,80 @@ embarazo, algo que Analitix no registra.
   en su propio panel con el mismo eje de fechas.
 - **ℹ ¿Qué es esto?**: explicación en lenguaje sencillo y técnico (con
   cita completa) de por qué no hay clasificación automática.
+
+#### Cómo medir la tensión en casa
+
+Lo que dice la guía europea de medición de la tensión arterial (ESH 2021,
+recuadros 4 y 6) para que la media sirva para valorar tu tensión; es lo
+mismo que muestra el botón **ℹ️ ¿Cómo medirla?**:
+
+- **Cuántas veces:** 7 días seguidos (como mínimo 3), mejor justo antes de
+  una visita médica; cada día por la mañana y por la noche; **cada vez, 2
+  mediciones con 1 minuto entre ellas** (anota las dos). Por la mañana, antes
+  de la medicación (si tomas) y antes de desayunar; por la noche, antes de
+  cenar. Para el seguimiento a largo plazo con tratamiento: 2 mediciones una o
+  dos veces por semana (como mínimo, una vez al mes).
+- **Condiciones:** habitación tranquila y con temperatura agradable; nada de
+  tabaco, cafeína, comida ni ejercicio en los 30 minutos previos; sentado y
+  relajado 3-5 minutos antes; sin hablar durante ni entre las mediciones.
+- **Postura:** sentado con la espalda apoyada, piernas sin cruzar y pies en el
+  suelo, brazo desnudo apoyado en la mesa con la mitad del brazo a la altura
+  del corazón.
+- **Aparato:** tensiómetro electrónico de brazo validado clínicamente, con el
+  manguito de la talla de tu brazo.
+- **Cómo lo usa Analitix:** la media de la semana de automedida descarta el
+  primer día y necesita al menos 3 días y 12 mediciones (siguiendo la pauta,
+  tendrás unas 24). Una medición suelta no se clasifica. Marca «casa» como
+  lugar.
+
+Fuente: Stergiou GS et al. 2021 European Society of Hypertension practice
+guidelines for office and out-of-office blood pressure measurement. *J
+Hypertens* 2021;39(7):1293-1302 (ver Ayuda → Referencias científicas,
+"referencias_tension_arterial").
+
+### 2.16.1 🩺 Tensión arterial (menú Paneles clínicos → Tensión arterial)
+
+Resultados de las mediciones registradas en Entrada manual → Tensión arterial
+(§2.3.1) — **apoyo informativo, nunca un diagnóstico**.
+
+<p align="center">
+  <img src="images/panel_tension.png" width="80%" alt="Panel de tensión arterial con la media de la semana de automedida y el gráfico">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
+- **Media de la última semana de automedida en casa**, como indica la guía
+  europea de medición (ESH 2021): las mediciones **en casa** de los 7 días que
+  terminan en la última, **sin el primer día**, con cuántas lecturas y días
+  entran, la **presión de pulso** (alta − baja) y el **pulso medio**.
+- **Categoría informativa** según la guía europea ESC 2024 para medidas en
+  casa: PA no elevada (por debajo de 120/70), PA elevada (desde 120/70 hasta
+  por debajo de 135/85) o hipertensión (135/85 o más); manda la peor de las dos
+  cifras. **Solo se da si la semana cumple el protocolo**: al menos 3 días y 12
+  lecturas sin contar el primero (lo ideal: 7 días con dos tomas por la mañana
+  y dos por la noche). Si no, se muestra la media sin clasificar y se explica
+  qué falta. Una lectura suelta nunca se clasifica: tiene poca precisión.
+- **Última toma en la consulta**, aparte: en la consulta los umbrales son
+  otros (hipertensión desde 140/90).
+- **Intervalo y comparación:** escribe un intervalo («desde» y «hasta», en
+  AAAA-MM-DD; uno de los dos puede quedar en blanco) y pulsa **Aplicar** para
+  ver solo ese periodo en el gráfico; **Todo** vuelve a la vista general. Puedes
+  añadir un **periodo de comparación** (por ejemplo, marzo a junio de 2020
+  frente a marzo a junio de 2025). La tabla de **medias** muestra, para todo el
+  histórico, el intervalo y el periodo de comparación, cuántas mediciones y
+  días hay y la media de sistólica, diastólica y pulso. Son medias
+  descriptivas de las mediciones **en casa**, sin clasificar: la categoría de
+  la guía solo se da a una semana de automedida que cumple el protocolo.
+- **Gráfico**: arriba, sistólica y diastólica (un punto por medición, ● en
+  casa y ■ en la consulta, y una línea con la media de cada día en casa, que se
+  corta si pasa más de una semana sin medir); las líneas horizontales marcan
+  135/85 (discontinua) y 120/70 (punteada). El último día lleva un anillo con
+  su media. Abajo, el pulso. Respeta la ventana de 5 años / «Ver todo el
+  histórico» (§2.4).
+- En **Exportar → Informe PDF personalizado** puedes añadir la sección
+  «Tensión arterial (resumen y gráfico)».
+- Fuentes literales y limitaciones en Ayuda → Referencias científicas
+  ("referencias_tension_arterial").
 
 ### 2.17 💾 Exportar (menú Archivo → Exportar)
 

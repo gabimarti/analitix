@@ -40,6 +40,7 @@ from analitix.charts import (
     LAB_UNKNOWN,
     MAX_COMPARISON_TESTS,
     apply_target,
+    bp_figure,
     change_status,
     changes_figure,
     comparison_figure,
@@ -58,6 +59,9 @@ from analitix.blood_pressure import (
     PLACES as BP_PLACES,
     check_limits as check_bp_limits,
     read_csv as read_bp_csv,
+    MEASUREMENT_GUIDE as BP_MEASUREMENT_GUIDE,
+    bp_summary_text,
+    period_stats as bp_period_stats,
     validate_reading,
 )
 from analitix.config import DB_PATH, FROZEN, PROJECT_ROOT, REPORTS_DIR, copy_home, set_installed_home_dir
@@ -500,6 +504,9 @@ class AnalitixApp(ttk.Window):
         paneles_menu.add_command(
             label="Tiroides", command=lambda: self._show_page("tiroides")
         )
+        paneles_menu.add_command(
+            label="Tensión arterial", command=lambda: self._show_page("tension_panel")
+        )
         menubar.add_cascade(label="Paneles clínicos", menu=paneles_menu)
 
         herramientas_menu = tk.Menu(menubar, tearoff=0)
@@ -654,6 +661,7 @@ class AnalitixApp(ttk.Window):
         self.tab_calcio = ttk.Frame(self.content)
         self.tab_glucemia = ttk.Frame(self.content)
         self.tab_tiroides = ttk.Frame(self.content)
+        self.tab_tension_panel = ttk.Frame(self.content)
         self.tab_exportar = ttk.Frame(self.content)
         self.tab_explorador = ttk.Frame(self.content)
         self.tab_catalogo = ttk.Frame(self.content)
@@ -678,6 +686,7 @@ class AnalitixApp(ttk.Window):
             "calcio": self.tab_calcio,
             "glucemia": self.tab_glucemia,
             "tiroides": self.tab_tiroides,
+            "tension_panel": self.tab_tension_panel,
             "exportar": self.tab_exportar,
             "explorador": self.tab_explorador,
             "catalogo": self.tab_catalogo,
@@ -719,6 +728,7 @@ class AnalitixApp(ttk.Window):
         self._build_tab_calcio()
         self._build_tab_glucemia()
         self._build_tab_tiroides()
+        self._build_tab_tension_panel()
         self._build_tab_exportar()
         self._build_tab_explorador()
         self._build_tab_catalogo()
@@ -1639,6 +1649,9 @@ class AnalitixApp(ttk.Window):
         ttk.Label(cabecera, text="Paciente activo:").pack(side="left")
         self.label_tension_patient = ttk.Label(cabecera, text="ninguno", bootstyle="info")
         self.label_tension_patient.pack(side="left", padx=6)
+        ttk.Button(cabecera, text="ℹ️ ¿Cómo medirla?", bootstyle="info",
+                   command=lambda: self._show_disclaimer_popup("Cómo medir la tensión en casa", BP_MEASUREMENT_GUIDE)
+                   ).pack(side="right")
 
         forma = ttk.Labelframe(frame, text="Añadir medición", padding=PAD)
         forma.pack(fill="x", padx=PAD, pady=6)
@@ -1719,6 +1732,7 @@ class AnalitixApp(ttk.Window):
             )
         self._sync_checks(self.tree_tension)
         self.label_tension_count.configure(text=f"{len(lecturas)} mediciones")
+        self._refresh_bp_panel()
 
     def _save_bp(self) -> None:
         if self.current_patient_id is None:
@@ -1780,6 +1794,134 @@ class AnalitixApp(ttk.Window):
         if messagebox.askyesno("Borrar", f"¿Borrar {len(marcadas)} mediciones? No se puede deshacer.", parent=self):
             delete_bp_readings(self.con, self.current_patient_id, marcadas)
             self._refresh_tension_page()
+
+    # -- Paneles clínicos: tensión arterial --------------------------------
+    def _build_tab_tension_panel(self) -> None:
+        """Resumen y gráfico de la tensión arterial del paciente activo (ver
+        `blood_pressure.home_week_summary`/`bp_summary_text` y
+        `charts.bp_figure` para las fuentes). Se rehace al cambiar de
+        paciente y al añadir, importar o borrar mediciones."""
+        frame = self.tab_tension_panel
+        ttk.Label(frame, text="Tensión arterial", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=PAD, pady=(PAD, 0))
+        ttk.Label(frame, textvariable=self.status_var, bootstyle="info").pack(anchor="w", padx=PAD, pady=(0, 2))
+        self._build_disclaimer_button(
+            frame, "Aviso — Tensión arterial",
+            "⚠ Apoyo informativo y de seguimiento, nunca un diagnóstico: la interpretación clínica final es "
+            "siempre del médico.\n"
+            "Protocolo de automedida en casa: Stergiou GS, et al. \"2021 European Society of Hypertension "
+            "practice guidelines for office and out-of-office blood pressure measurement.\" J Hypertens. "
+            "2021;39(7):1293-1302 (recuadros 6 y 7: 7 días, al menos 3 con al menos 12 lecturas; se descarta "
+            "el primer día y se promedian las demás; las lecturas sueltas tienen poca precisión diagnóstica).\n"
+            "Categorías: McEvoy JW, et al. \"2024 ESC Guidelines for the management of elevated blood "
+            "pressure and hypertension.\" Eur Heart J. 2024;45(38):3912-4018 (tabla 5: en casa, no elevada "
+            "< 120/70, elevada 120/70 a < 135/85, hipertensión ≥ 135/85; en la consulta, hipertensión "
+            "≥ 140/90). Solo se clasifica una media que cumple el protocolo. Más detalle en Ayuda → "
+            "Referencias científicas (\"referencias_tension_arterial\").",
+        )
+        self.text_bp_summary = tk.Text(frame, height=5, wrap="word", relief="flat")
+        self.text_bp_summary.pack(fill="x", padx=PAD, pady=(0, 4))
+        self._style_plain_widget(self.text_bp_summary)
+        self.text_bp_summary.configure(state="disabled")
+
+        # Intervalo a ver y periodo de comparación (fechas AAAA-MM-DD; en
+        # blanco = sin límite). Las medias son descriptivas, sin clasificar.
+        periodos = ttk.Frame(frame)
+        periodos.pack(fill="x", padx=PAD, pady=(0, 4))
+        self.vars_bp_periodo = {k: tk.StringVar() for k in ("desde", "hasta", "cmp_desde", "cmp_hasta")}
+        for col, (clave, texto) in enumerate((("desde", "Intervalo: desde"), ("hasta", "hasta"),
+                                              ("cmp_desde", "Comparar con: desde"), ("cmp_hasta", "hasta"))):
+            ttk.Label(periodos, text=texto).grid(row=0, column=2 * col, sticky="w", padx=(0 if col == 0 else 10, 4))
+            entrada = ttk.Entry(periodos, textvariable=self.vars_bp_periodo[clave], width=11)
+            self._restrict(entrada, r"[\d-]{0,10}")
+            entrada.grid(row=0, column=2 * col + 1, sticky="w")
+        aplicar = ttk.Button(periodos, text="Aplicar", bootstyle="primary", command=self._refresh_bp_panel)
+        aplicar.grid(row=0, column=8, padx=(12, 4))
+        todo = ttk.Button(periodos, text="Todo", bootstyle="secondary-outline", command=self._reset_bp_periodo)
+        todo.grid(row=0, column=9)
+        self._same_width(aplicar, todo)
+        ttk.Label(periodos, text="Fechas AAAA-MM-DD; en blanco, sin límite. Las medias son de las mediciones "
+                  "en casa y no se clasifican.", bootstyle="secondary").grid(row=1, column=0, columnspan=10,
+                                                                              sticky="w", pady=(2, 0))
+        columnas = ("periodo", "fechas", "n", "dias", "sistolica", "diastolica", "pulso")
+        self.tree_bp_medias = ttk.Treeview(frame, columns=columnas, show="headings", height=3)
+        for col, texto, ancho in zip(columnas, ("Periodo", "Fechas", "Mediciones", "Días", "Sistólica media",
+                                                "Diastólica media", "Pulso medio"),
+                                     (170, 200, 90, 60, 110, 110, 90)):
+            self.tree_bp_medias.heading(col, text=texto)
+            self.tree_bp_medias.column(col, width=ancho, anchor="w" if col in ("periodo", "fechas") else "center")
+        self.tree_bp_medias.pack(fill="x", padx=PAD, pady=(0, 6))
+        self.chart_canvas_tension = ttk.Frame(frame)
+        self.chart_canvas_tension.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
+        self._refresh_bp_panel()
+
+    def _bp_readings_windowed(self) -> tuple[list[dict], int]:
+        """Mediciones del paciente activo en la ventana de años de los
+        gráficos (`_windowed`), y cuántas quedan fuera."""
+        lecturas = list_bp_readings(self.con, self.current_patient_id) if self.current_patient_id else []
+        en_ventana = self._windowed([{**r, "fecha": r["measured_at"]} for r in lecturas])
+        return en_ventana, len(lecturas) - len(en_ventana)
+
+    def _reset_bp_periodo(self) -> None:
+        for var in self.vars_bp_periodo.values():
+            var.set("")
+        self._refresh_bp_panel()
+
+    def _bp_periodo(self, desde_clave: str, hasta_clave: str) -> tuple[str | None, str | None] | None:
+        """(desde, hasta) del formulario, `None` si los dos están vacíos, o
+        `ValueError` si una fecha no es AAAA-MM-DD válida o están al revés."""
+        desde, hasta = (self.vars_bp_periodo[k].get().strip() or None for k in (desde_clave, hasta_clave))
+        if desde is None and hasta is None:
+            return None
+        for fecha in (desde, hasta):
+            if fecha is not None:
+                try:
+                    dt.date.fromisoformat(fecha)
+                except ValueError:
+                    raise ValueError(f"«{fecha}» no es una fecha válida") from None
+        if desde and hasta and desde > hasta:
+            raise ValueError("la fecha «desde» es posterior a «hasta»")
+        return desde, hasta
+
+    def _refresh_bp_panel(self) -> None:
+        if not hasattr(self, "text_bp_summary"):
+            return
+        try:
+            intervalo = self._bp_periodo("desde", "hasta")
+            comparacion = self._bp_periodo("cmp_desde", "cmp_hasta")
+        except ValueError as exc:
+            messagebox.showwarning("Fechas no válidas", f"Revisa las fechas (AAAA-MM-DD): {exc}.", parent=self)
+            return
+        todas = list_bp_readings(self.con, self.current_patient_id) if self.current_patient_id else []
+        self.tree_bp_medias.delete(*self.tree_bp_medias.get_children())
+        for nombre, periodo in (("Todo el histórico", (None, None)), ("Intervalo seleccionado", intervalo),
+                                ("Periodo de comparación", comparacion)):
+            if periodo is None or (nombre == "Todo el histórico" and not todas):
+                continue
+            s = bp_period_stats(todas, *periodo)
+            if s is None:
+                self.tree_bp_medias.insert("", "end", values=(nombre, "sin mediciones en casa", "", "", "", "", ""))
+                continue
+            self.tree_bp_medias.insert("", "end", values=(
+                nombre, f"{s['desde']} a {s['hasta']}", s["n"], s["dias"], f"{s['systolic']:.0f}",
+                f"{s['diastolic']:.0f}", "" if s["pulse"] is None else f"{s['pulse']:.0f}"))
+        if intervalo is not None:
+            desde, hasta = intervalo
+            lecturas = [r for r in todas if (desde is None or r["measured_at"][:10] >= desde)
+                        and (hasta is None or r["measured_at"][:10] <= hasta)]
+            ocultas = 0  # el intervalo manda sobre la ventana de años
+        else:
+            lecturas, ocultas = self._bp_readings_windowed()
+        self.text_bp_summary.configure(state="normal")
+        self.text_bp_summary.delete("1.0", "end")
+        self.text_bp_summary.insert("1.0", bp_summary_text(lecturas))
+        self.text_bp_summary.configure(state="disabled")
+        for child in self.chart_canvas_tension.winfo_children():
+            child.destroy()
+        if lecturas:
+            titulo = "Tensión arterial" if intervalo is None else (
+                f"Tensión arterial · {intervalo[0] or 'inicio'} a {intervalo[1] or 'hoy'}")
+            self._embed_figure(self._mark_window(bp_figure(lecturas, titulo), ocultas, "mediciones"),
+                               self.chart_canvas_tension)
 
     # -- Evolución --------------------------------------------------------
     def _build_tab_evolucion(self) -> None:
@@ -3961,11 +4103,12 @@ class AnalitixApp(ttk.Window):
         return [s for s in series if s["fecha"][:10] >= cutoff]
 
     @staticmethod
-    def _mark_window(fig, hidden: int):
-        """Aviso en el gráfico cuando la ventana de años oculta analíticas."""
+    def _mark_window(fig, hidden: int, que: str = "analíticas"):
+        """Aviso en el gráfico cuando la ventana de años oculta datos
+        (`que`: "analíticas" o, en tensión arterial, "mediciones")."""
         if hidden:
             fig.text(
-                0.99, 0.99, f"Últimos {HISTORY_YEARS} años · {hidden} analíticas anteriores ocultas "
+                0.99, 0.99, f"Últimos {HISTORY_YEARS} años · {hidden} {que} anteriores ocultas "
                 "(Análisis → Ver todo el histórico)", ha="right", va="top", fontsize=7, color="#777777",
             )
         return fig
@@ -3985,6 +4128,7 @@ class AnalitixApp(ttk.Window):
             self._show_evolution()
         if self._comparativa_selection():
             self._show_comparison()
+        self._refresh_bp_panel()
 
     def _toggle_personal_range(self) -> None:
         """Interruptor "Mostrar mi rango personal" de Evolución: se recuerda
@@ -4256,11 +4400,16 @@ class AnalitixApp(ttk.Window):
         var_tabla = tk.BooleanVar(value=True)
         var_cambios = tk.BooleanVar(value=False)
         var_mapa = tk.BooleanVar(value=False)
+        var_tension = tk.BooleanVar(value=False)
+        hay_tension = bool(self._bp_readings_windowed()[0])
         for var, texto in (
             (var_tabla, f"{'⚠ ' if alterado_ahora else ''}Tabla del último informe ({summary['fecha'][:10]})"),
             (var_cambios, "Qué ha cambiado (respecto al informe anterior)"),
         ):
             ttk.Checkbutton(secciones, text=texto, variable=var).pack(anchor="w", padx=8, pady=1)
+        if hay_tension:
+            ttk.Checkbutton(secciones, text="Tensión arterial (resumen y gráfico)", variable=var_tension).pack(
+                anchor="w", padx=8, pady=1)
         fila_mapa = ttk.Frame(secciones)
         fila_mapa.pack(anchor="w", padx=8, pady=1)
         ttk.Checkbutton(fila_mapa, text="Mapa de calor:", variable=var_mapa).pack(side="left")
@@ -4301,13 +4450,14 @@ class AnalitixApp(ttk.Window):
                 var.set(alterado)
 
         def _desmarcar() -> None:
-            for var in [var_tabla, var_cambios, var_mapa, *vars_tests, *(v for v, _l, _a in vars_paneles.values())]:
+            for var in [var_tabla, var_cambios, var_mapa, var_tension, *vars_tests, *(v for v, _l, _a in vars_paneles.values())]:
                 var.set(False)
 
         def _generar() -> None:
             seleccion = [t for t, var in zip(tests, vars_tests) if var.get()]
             elegidos = [(key, label) for key, (var, label, _a) in vars_paneles.items() if var.get()]
-            if not (var_tabla.get() or var_cambios.get() or var_mapa.get() or seleccion or elegidos):
+            if not (var_tabla.get() or var_cambios.get() or var_mapa.get() or var_tension.get() or seleccion
+                    or elegidos):
                 messagebox.showwarning("Informe personalizado", "Elige al menos una sección.", parent=dialog)
                 return
             paginas = []
@@ -4335,6 +4485,10 @@ class AnalitixApp(ttk.Window):
             for t in seleccion:
                 serie = get_series(self.con, t["canonical_id"], self.current_patient_id)
                 paginas.append(self._evolution_figure(serie, t["raw_name"], t["canonical_id"], with_personal=True))
+            if var_tension.get():
+                lecturas, ocultas = self._bp_readings_windowed()
+                paginas.append(text_page("Tensión arterial", bp_summary_text(lecturas)))
+                paginas.append(self._mark_window(bp_figure(lecturas, "Tensión arterial"), ocultas, "mediciones"))
             for key, label in elegidos:
                 paginas.extend(self._panel_pdf_pages(key, label))
             if not paginas:
