@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 import logging
 import os
 import subprocess
@@ -49,6 +50,16 @@ from analitix.charts import (
     trend_arrow,
 )
 from analitix import __version__
+from analitix.blood_pressure import (
+    ABSOLUTE_LIMITS as BP_ABSOLUTE_LIMITS,
+    CSV_TEMPLATE as BP_CSV_TEMPLATE,
+    DEFAULT_LIMITS as BP_DEFAULT_LIMITS,
+    LIMIT_NAMES as BP_LIMIT_NAMES,
+    PLACES as BP_PLACES,
+    check_limits as check_bp_limits,
+    read_csv as read_bp_csv,
+    validate_reading,
+)
 from analitix.config import DB_PATH, FROZEN, PROJECT_ROOT, REPORTS_DIR, copy_home, set_installed_home_dir
 from analitix.db import rekey
 from analitix.export import export_csv, export_excel, export_pages_pdf, export_pdf, table_page, text_page
@@ -90,8 +101,10 @@ from analitix.renal_risk import (
 from analitix.repository import (
     EXPLORABLE_TABLES,
     SEX_OPTIONS,
+    add_bp_reading,
     create_manual_report,
     delete_all_data,
+    delete_bp_readings,
     delete_patient,
     delete_target,
     delete_reports,
@@ -108,6 +121,7 @@ from analitix.repository import (
     list_canonical_groups,
     list_canonical_tests,
     list_files_needing_review,
+    list_bp_readings,
     list_known_test_names,
     list_labs,
     list_orphan_reports,
@@ -325,6 +339,14 @@ COLOR_ALTERADO, COLOR_GRIS = COLOR_ALTO, "#999999"
 # `export.export_pdf`).
 CAMBIO_BRUSCO_PCT = 30.0
 
+# Aviso común de las pantallas de entrada manual (analíticas y tensión).
+AVISO_ENTRADA_MANUAL = (
+    "⚠ Los gráficos, cálculos e informes de Analitix se basan en los datos que introduces aquí. "
+    "Revísalos antes de guardar: un valor mal escrito (por ejemplo 18 en vez de 180, o la unidad "
+    "equivocada) daría gráficos, resúmenes e informes erróneos. La aplicación solo comprueba que los "
+    "valores sean posibles, no que sean correctos."
+)
+
 # Años que muestran por defecto los gráficos de evolución (contados hacia
 # atrás desde la última analítica de cada parámetro); el interruptor "Ver
 # todo el histórico" los amplía. Elección de interfaz para que el estado
@@ -414,8 +436,14 @@ class AnalitixApp(ttk.Window):
         pacientes_menu = tk.Menu(menubar, tearoff=0)
         pacientes_menu.add_command(label="Cambiar paciente activo...", command=self._choose_active_patient)
         pacientes_menu.add_command(label="Pacientes", command=lambda: self._show_page("pacientes"))
-        pacientes_menu.add_command(label="Entrada manual", command=lambda: self._show_page("manual"))
         menubar.add_cascade(label="Pacientes", menu=pacientes_menu)
+
+        # Datos que introduce la persona a mano (siempre para el paciente
+        # activo), separados de Pacientes.
+        entrada_menu = tk.Menu(menubar, tearoff=0)
+        entrada_menu.add_command(label="Analíticas...", command=lambda: self._show_page("manual"))
+        entrada_menu.add_command(label="Tensión arterial...", command=lambda: self._show_page("tension"))
+        menubar.add_cascade(label="Entrada manual", menu=entrada_menu)
 
         analisis_menu = tk.Menu(menubar, tearoff=0)
         analisis_menu.add_command(label="Evolución", command=lambda: self._show_page("evolucion"))
@@ -611,6 +639,7 @@ class AnalitixApp(ttk.Window):
         self.tab_importar = ttk.Frame(self.content)
         self.tab_pacientes = ttk.Frame(self.content)
         self.tab_manual = ttk.Frame(self.content)
+        self.tab_tension = ttk.Frame(self.content)
         self.tab_evolucion = ttk.Frame(self.content)
         self.tab_comparativa = ttk.Frame(self.content)
         self.tab_resumen = ttk.Frame(self.content)
@@ -634,6 +663,7 @@ class AnalitixApp(ttk.Window):
             "importar": self.tab_importar,
             "pacientes": self.tab_pacientes,
             "manual": self.tab_manual,
+            "tension": self.tab_tension,
             "evolucion": self.tab_evolucion,
             "comparativa": self.tab_comparativa,
             "resumen": self.tab_resumen,
@@ -674,6 +704,7 @@ class AnalitixApp(ttk.Window):
         self._build_tab_importar()
         self._build_tab_pacientes()
         self._build_tab_manual()
+        self._build_tab_tension()
         self._build_tab_evolucion()
         self._build_tab_comparativa()
         self._build_tab_resumen()
@@ -1071,6 +1102,7 @@ class AnalitixApp(ttk.Window):
             text=f"Paciente activo: {patient['full_name']}" if patient else "Paciente activo: ninguno"
         )
         self._refresh_manual_patient_label()
+        self._refresh_tension_page()
 
     def _delete_selected_patient(self) -> None:
         patient = self._selected_patient()
@@ -1380,13 +1412,16 @@ class AnalitixApp(ttk.Window):
     # -- Entrada manual -----------------------------------------------------
     def _build_tab_manual(self) -> None:
         frame = self.tab_manual
+        ttk.Label(frame, text="Analíticas", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=PAD, pady=(PAD, 0))
+        ttk.Label(frame, text=AVISO_ENTRADA_MANUAL, bootstyle="warning", wraplength=900, justify="left").pack(
+            anchor="w", padx=PAD, pady=(6, 4))
         ttk.Label(
             frame,
             text="Para analíticas cuyo PDF no se ha podido interpretar (o que no vienen en PDF): "
             "añade una fila por cada determinación y guarda. Los datos se guardan siempre para "
             "el paciente activo — cámbialo con Pacientes → Cambiar paciente activo... si es otra persona.",
             bootstyle="secondary", wraplength=900,
-        ).pack(anchor="w", padx=PAD, pady=(PAD, 6))
+        ).pack(anchor="w", padx=PAD, pady=(0, 6))
 
         cabecera = ttk.Frame(frame)
         cabecera.pack(fill="x", padx=PAD, pady=(0, 6))
@@ -1395,7 +1430,8 @@ class AnalitixApp(ttk.Window):
         self.label_manual_patient.grid(row=0, column=1, sticky="w", padx=(6, 24))
         ttk.Label(cabecera, text="Fecha (AAAA-MM-DD):").grid(row=0, column=2, sticky="w")
         self.var_manual_fecha = tk.StringVar(value=dt.date.today().isoformat())
-        ttk.Entry(cabecera, textvariable=self.var_manual_fecha, width=14).grid(row=0, column=3, sticky="w", padx=(6, 0))
+        entry_fecha = ttk.Entry(cabecera, textvariable=self.var_manual_fecha, width=14)
+        entry_fecha.grid(row=0, column=3, sticky="w", padx=(6, 0))
         ttk.Label(cabecera, text="Notas (opcional):").grid(row=1, column=0, sticky="w", pady=(6, 0))
         self.var_manual_notas = tk.StringVar()
         entry_notas = ttk.Entry(cabecera, textvariable=self.var_manual_notas, width=80)
@@ -1449,6 +1485,17 @@ class AnalitixApp(ttk.Window):
         )
         self.btn_manual_save.pack(side="right")
         self.combo_manual_nombre["values"] = list_known_test_names(self.con)
+
+        # Validación al teclear: números donde van números (con signo y coma
+        # o punto decimal), fechas solo con cifras y guiones, y textos sin
+        # caracteres de control y con longitud máxima.
+        decimal = r"-?\d{0,7}(?:[.,]\d{0,6})?"
+        for entrada, patron in (
+            (entry_fecha, r"[\d-]{0,10}"), (entry_valor, decimal), (entry_ref_low, decimal),
+            (entry_ref_high, decimal), (entry_unidad, r"[^\x00-\x1f\x7f]{0,20}"),
+            (entry_notas, r"[^\x00-\x1f\x7f]{0,200}"), (self.combo_manual_nombre, r"[^\x00-\x1f\x7f]{0,80}"),
+        ):
+            self._restrict(entrada, patron)
 
         # Se deshabilitan hasta que haya un paciente activo (§2.2): sin esto,
         # se podía rellenar y "Añadir a la lista" sin ningún paciente
@@ -1560,6 +1607,179 @@ class AnalitixApp(ttk.Window):
         self._refresh_test_lists()
         self._refresh_stats()
         messagebox.showinfo("Analitix", f"Analítica guardada con {n} determinación(es).", parent=self)
+
+    # -- Validación al teclear (entradas manuales) --------------------------
+    def _restrict(self, entry, patron: str) -> None:
+        """Solo deja escribir en `entry` texto que encaje entero con `patron`
+        (validación "key" de Tk): números donde van números, sin caracteres
+        de control, con longitud máxima. Comprobar que el valor tiene
+        sentido es cosa de quien guarda (p. ej. `validate_reading`)."""
+        regla = re.compile(patron)
+        entry.configure(validate="key", validatecommand=(self.register(lambda P: bool(regla.fullmatch(P))), "%P"))
+
+    # -- Entrada manual: tensión arterial ---------------------------------
+    def _build_tab_tension(self) -> None:
+        """Registro de tensión arterial del paciente activo: entrada manual,
+        importación CSV (`blood_pressure.read_csv`) y borrado. Las
+        mediciones se validan con `blood_pressure.validate_reading`."""
+        frame = self.tab_tension
+        ttk.Label(frame, text="Tensión arterial", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=PAD, pady=(PAD, 0))
+        ttk.Label(frame, text=AVISO_ENTRADA_MANUAL, bootstyle="warning", wraplength=900, justify="left").pack(
+            anchor="w", padx=PAD, pady=(6, 4))
+        ttk.Label(
+            frame,
+            text="Cada medición se guarda para el paciente activo (cámbialo con Pacientes → Cambiar paciente "
+            "activo...). «Lugar» indica si la tomaste en casa o en la consulta: las guías usan umbrales "
+            "distintos para cada caso. Para importar un CSV, guarda antes la plantilla para ver el formato "
+            "(también se aceptan las exportaciones de Omron Connect y Withings).",
+            bootstyle="secondary", wraplength=900, justify="left",
+        ).pack(anchor="w", padx=PAD, pady=(0, 6))
+        cabecera = ttk.Frame(frame)
+        cabecera.pack(fill="x", padx=PAD)
+        ttk.Label(cabecera, text="Paciente activo:").pack(side="left")
+        self.label_tension_patient = ttk.Label(cabecera, text="ninguno", bootstyle="info")
+        self.label_tension_patient.pack(side="left", padx=6)
+
+        forma = ttk.Labelframe(frame, text="Añadir medición", padding=PAD)
+        forma.pack(fill="x", padx=PAD, pady=6)
+        ahora = dt.datetime.now()
+        self.vars_tension = {
+            "fecha": tk.StringVar(value=ahora.strftime("%Y-%m-%d")), "hora": tk.StringVar(value=ahora.strftime("%H:%M")),
+            "sistolica": tk.StringVar(), "diastolica": tk.StringVar(), "pulso": tk.StringVar(),
+            "lugar": tk.StringVar(value=BP_PLACES[0]), "nota": tk.StringVar(),
+        }
+        campos = (
+            ("fecha", "Fecha (AAAA-MM-DD):", 12, r"[\d-]{0,10}"),
+            ("hora", "Hora (HH:MM):", 7, r"[\d:]{0,5}"),
+            ("sistolica", "Sistólica (alta):", 6, r"\d{0,3}"),
+            ("diastolica", "Diastólica (baja):", 6, r"\d{0,3}"),
+            ("pulso", "Pulso (opcional):", 6, r"\d{0,3}"),
+        )
+        self._tension_widgets = []
+        for col, (clave, texto, ancho, patron) in enumerate(campos):
+            ttk.Label(forma, text=texto).grid(row=0, column=2 * col, sticky="w")
+            entrada = ttk.Entry(forma, textvariable=self.vars_tension[clave], width=ancho)
+            self._restrict(entrada, patron)
+            entrada.grid(row=0, column=2 * col + 1, sticky="w", padx=(6, 14))
+            self._tension_widgets.append(entrada)
+        ttk.Label(forma, text="Lugar:").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        lugar = ttk.Combobox(forma, textvariable=self.vars_tension["lugar"], values=BP_PLACES, state="readonly", width=10)
+        lugar.grid(row=1, column=1, sticky="w", padx=(6, 14), pady=(8, 0))
+        ttk.Label(forma, text="Nota (opcional):").grid(row=1, column=2, sticky="w", pady=(8, 0))
+        nota = ttk.Entry(forma, textvariable=self.vars_tension["nota"], width=50)
+        self._restrict(nota, r"[^\x00-\x1f\x7f]{0,200}")
+        nota.grid(row=1, column=3, columnspan=5, sticky="we", padx=(6, 14), pady=(8, 0))
+        guardar = ttk.Button(forma, text="Guardar medición", bootstyle="success", command=self._save_bp)
+        guardar.grid(row=1, column=8, columnspan=2, sticky="e", pady=(8, 0))
+        self._tension_widgets += [lugar, nota, guardar]
+
+        columnas = ("fecha_hora", "sistolica", "diastolica", "pulso", "lugar", "nota", "origen")
+        tabla = ttk.Frame(frame)
+        tabla.pack(fill="both", expand=True, padx=PAD, pady=(0, 6))
+        self.tree_tension = ttk.Treeview(tabla, columns=columnas, show="headings", height=14, selectmode="extended")
+        for col, texto, ancho in zip(columnas, ("Fecha y hora", "Sistólica", "Diastólica", "Pulso", "Lugar", "Nota", "Origen"),
+                                     (140, 80, 80, 60, 80, 360, 70)):
+            self.tree_tension.heading(col, text=texto)
+            self.tree_tension.column(col, width=ancho, anchor="w" if col in ("fecha_hora", "nota") else "center")
+        self._checkbox_tree(self.tree_tension)
+        barra = ttk.Scrollbar(tabla, orient="vertical", command=self.tree_tension.yview)
+        self.tree_tension.configure(yscrollcommand=barra.set)
+        self.tree_tension.pack(side="left", fill="both", expand=True)
+        barra.pack(side="left", fill="y")
+
+        botones = ttk.Frame(frame)
+        botones.pack(fill="x", padx=PAD, pady=(0, PAD))
+        self.label_tension_count = ttk.Label(botones, text="", bootstyle="secondary")
+        self.label_tension_count.pack(side="left")
+        borrar = ttk.Button(botones, text="Borrar marcadas", bootstyle="danger-outline", command=self._delete_bp_selected)
+        plantilla = ttk.Button(botones, text="Guardar plantilla CSV...", bootstyle="secondary-outline",
+                               command=self._save_bp_template)
+        importar = ttk.Button(botones, text="Importar CSV...", bootstyle="success", command=self._import_bp_csv)
+        for boton in (importar, plantilla, borrar):
+            boton.pack(side="right", padx=(8, 0))
+        self._same_width(borrar, plantilla, importar)
+        self._tension_widgets += [borrar, importar]
+        self._refresh_tension_page()
+
+    def _refresh_tension_page(self) -> None:
+        if not hasattr(self, "tree_tension"):
+            return
+        patient = next((p for p in self.patients if p["id"] == self.current_patient_id), None)
+        self.label_tension_patient.configure(text=patient["full_name"] if patient else "ninguno")
+        estado = "normal" if self.current_patient_id is not None else "disabled"
+        for widget in self._tension_widgets:
+            widget.configure(state="readonly" if estado == "normal" and isinstance(widget, ttk.Combobox) else estado)
+        self.tree_tension.delete(*self.tree_tension.get_children())
+        lecturas = list_bp_readings(self.con, self.current_patient_id) if self.current_patient_id else []
+        for r in reversed(lecturas):  # la más reciente arriba
+            self.tree_tension.insert(
+                "", "end", iid=str(r["id"]),
+                values=(r["measured_at"], r["systolic"], r["diastolic"], r["pulse"] or "", r["place"], r["note"] or "",
+                        r["source"]),
+            )
+        self._sync_checks(self.tree_tension)
+        self.label_tension_count.configure(text=f"{len(lecturas)} mediciones")
+
+    def _save_bp(self) -> None:
+        if self.current_patient_id is None:
+            messagebox.showwarning("Sin paciente", "Elige antes un paciente activo.", parent=self)
+            return
+        v = {k: var.get() for k, var in self.vars_tension.items()}
+        try:
+            lectura = validate_reading(f"{v['fecha']} {v['hora']}", v["sistolica"], v["diastolica"], v["pulso"],
+                                       v["lugar"], v["nota"], limits=self._bp_limits())
+        except ValueError as exc:
+            messagebox.showwarning("Medición no válida", str(exc)[:1].upper() + str(exc)[1:] + ".", parent=self)
+            return
+        if not add_bp_reading(self.con, self.current_patient_id, lectura):
+            messagebox.showwarning("Ya existe", f"Ya hay una medición guardada el {lectura['measured_at']}.", parent=self)
+            return
+        self.con.commit()
+        for clave in ("sistolica", "diastolica", "pulso", "nota"):
+            self.vars_tension[clave].set("")
+        self._refresh_tension_page()
+
+    def _import_bp_csv(self) -> None:
+        if self.current_patient_id is None:
+            messagebox.showwarning("Sin paciente", "Elige antes un paciente activo.", parent=self)
+            return
+        ruta = filedialog.askopenfilename(filetypes=[("CSV", "*.csv"), ("Texto", "*.txt")], parent=self)
+        if not ruta:
+            return
+        try:
+            lecturas, errores = read_bp_csv(Path(ruta), limits=self._bp_limits())
+        except OSError as exc:
+            messagebox.showerror("Importar CSV", f"No se pudo leer el fichero: {exc}", parent=self)
+            return
+        nuevas = sum(add_bp_reading(self.con, self.current_patient_id, r, source="csv") for r in lecturas)
+        self.con.commit()
+        # Sin valores en el registro: solo recuentos (datos de salud).
+        logger.info("CSV de tensión: %d nuevas, %d repetidas, %d errores", nuevas, len(lecturas) - nuevas, len(errores))
+        texto = f"{nuevas} mediciones importadas"
+        if len(lecturas) > nuevas:
+            texto += f", {len(lecturas) - nuevas} ya existían (no se duplican)"
+        if errores:
+            texto += f".\n\n{len(errores)} líneas con error (no importadas):\n" + "\n".join(errores[:12])
+            if len(errores) > 12:
+                texto += f"\n… y {len(errores) - 12} más."
+        (messagebox.showwarning if errores else messagebox.showinfo)("Importar CSV", texto, parent=self)
+        self._refresh_tension_page()
+
+    def _save_bp_template(self) -> None:
+        ruta = filedialog.asksaveasfilename(defaultextension=".csv", initialfile="plantilla_tension_arterial.csv",
+                                            filetypes=[("CSV", "*.csv")], parent=self)
+        if ruta:
+            # BOM UTF-8 para que Excel muestre bien los acentos.
+            Path(ruta).write_text(BP_CSV_TEMPLATE, encoding="utf-8-sig")
+
+    def _delete_bp_selected(self) -> None:
+        marcadas = [int(iid) for iid in self.tree_tension.selection()]
+        if not marcadas or self.current_patient_id is None:
+            messagebox.showinfo("Borrar", "Marca antes las mediciones que quieras borrar.", parent=self)
+            return
+        if messagebox.askyesno("Borrar", f"¿Borrar {len(marcadas)} mediciones? No se puede deshacer.", parent=self):
+            delete_bp_readings(self.con, self.current_patient_id, marcadas)
+            self._refresh_tension_page()
 
     # -- Evolución --------------------------------------------------------
     def _build_tab_evolucion(self) -> None:
@@ -4381,12 +4601,15 @@ class AnalitixApp(ttk.Window):
         tab_seguridad = ttk.Frame(sub)
         tab_datos = ttk.Frame(sub)
         tab_estadisticas = ttk.Frame(sub)
+        tab_entrada = ttk.Frame(sub)
         sub.add(tab_general, text="General")
+        sub.add(tab_entrada, text="Entrada manual")
         sub.add(tab_seguridad, text="Seguridad")
         sub.add(tab_datos, text="Datos")
         sub.add(tab_estadisticas, text="Estadísticas")
 
         self._build_subtab_general(tab_general)
+        self._build_subtab_entrada(tab_entrada)
         self._build_subtab_seguridad(tab_seguridad)
         self._build_subtab_datos(tab_datos)
         self._build_subtab_estadisticas(tab_estadisticas)
@@ -4669,6 +4892,68 @@ class AnalitixApp(ttk.Window):
         self.var_reports_dir.set(str(self.reports_dir))
         set_setting(self.con, "reports_dir", str(self.reports_dir))
         messagebox.showinfo("Analitix", "Carpeta actualizada.", parent=self)
+
+    def _bp_limits(self) -> dict[str, tuple[int, int]]:
+        """Límites de plausibilidad de la tensión arterial (Configuración →
+        Entrada manual, ajuste `bp_limits`); los de por defecto si no hay o
+        si el ajuste guardado no es válido."""
+        try:
+            return check_bp_limits(json.loads(get_setting(self.con, "bp_limits", "") or "{}"))
+        except (ValueError, TypeError):
+            return dict(BP_DEFAULT_LIMITS)
+
+    def _build_subtab_entrada(self, frame: ttk.Frame) -> None:
+        """Límites para validar la entrada manual de tensión arterial."""
+        caja = ttk.Labelframe(frame, text="Límites de la tensión arterial", padding=PAD)
+        caja.pack(fill="x", padx=PAD, pady=PAD)
+        ttk.Label(
+            caja,
+            text="Al guardar o importar una medición de tensión arterial, los valores fuera de estos límites se "
+            "rechazan como probable error de tecleo o de columna. No son valores normales ni objetivos de "
+            "salud: solo cazan errores evidentes (por ejemplo 18 en vez de 180). Cada límite se puede "
+            "ajustar dentro del margen permitido que se indica a la derecha.",
+            bootstyle="secondary", wraplength=760, justify="left",
+        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
+        ttk.Label(caja, text="Mínimo").grid(row=1, column=1)
+        ttk.Label(caja, text="Máximo").grid(row=1, column=2)
+        actuales = self._bp_limits()
+        self.vars_bp_limits = {}
+        for fila, (clave, (tope_min, tope_max)) in enumerate(BP_ABSOLUTE_LIMITS.items(), start=2):
+            unidad = "lpm" if clave == "pulse" else "mmHg"
+            ttk.Label(caja, text=f"{BP_LIMIT_NAMES[clave].capitalize()} ({unidad}):").grid(
+                row=fila, column=0, sticky="w", pady=2)
+            par = (tk.IntVar(value=actuales[clave][0]), tk.IntVar(value=actuales[clave][1]))
+            for col, var in enumerate(par, start=1):
+                caja_num = ttk.Spinbox(caja, from_=tope_min, to=tope_max, textvariable=var, width=6)
+                self._restrict(caja_num, r"\d{0,3}")
+                caja_num.grid(row=fila, column=col, padx=6, pady=2)
+            ttk.Label(caja, text=f"permitido: {tope_min} – {tope_max}", bootstyle="secondary").grid(
+                row=fila, column=3, sticky="w", padx=(8, 0))
+            self.vars_bp_limits[clave] = par
+        botones = ttk.Frame(caja)
+        botones.grid(row=len(BP_ABSOLUTE_LIMITS) + 2, column=0, columnspan=4, sticky="w", pady=(10, 0))
+        guardar = ttk.Button(botones, text="Guardar límites", bootstyle="primary", command=self._save_bp_limits)
+        guardar.pack(side="left")
+        por_defecto = ttk.Button(botones, text="Valores por defecto", bootstyle="secondary-outline",
+                                 command=self._reset_bp_limits)
+        por_defecto.pack(side="left", padx=(8, 0))
+        self._same_width(guardar, por_defecto)
+
+    def _save_bp_limits(self) -> None:
+        try:
+            limites = check_bp_limits({k: (a.get(), b.get()) for k, (a, b) in self.vars_bp_limits.items()})
+        except (ValueError, tk.TclError) as exc:
+            texto = str(exc) if isinstance(exc, ValueError) else "escribe los límites como números enteros"
+            messagebox.showwarning("Límites no válidos", texto[:1].upper() + texto[1:] + ".", parent=self)
+            return
+        set_setting(self.con, "bp_limits", json.dumps({k: list(v) for k, v in limites.items()}))
+        messagebox.showinfo("Analitix", "Límites guardados.", parent=self)
+
+    def _reset_bp_limits(self) -> None:
+        for clave, (minimo, maximo) in BP_DEFAULT_LIMITS.items():
+            self.vars_bp_limits[clave][0].set(minimo)
+            self.vars_bp_limits[clave][1].set(maximo)
+        self._save_bp_limits()
 
     def _change_min_points(self) -> None:
         self.min_points = max(2, self.var_min_points.get())

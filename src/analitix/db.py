@@ -97,6 +97,24 @@ CREATE TABLE IF NOT EXISTS targets (
     set_on TEXT,
     PRIMARY KEY (patient_id, canonical_id)
 );
+
+-- Mediciones de tensión arterial (entrada manual o CSV, ver
+-- blood_pressure.py). measured_at: "AAAA-MM-DD HH:MM"; place: "casa" o
+-- "consulta" (los umbrales de las guías difieren); source: "manual" o "csv".
+-- Una sola medición por paciente y minuto: reimportar un CSV no duplica.
+CREATE TABLE IF NOT EXISTS bp_readings (
+    id INTEGER PRIMARY KEY,
+    patient_id INTEGER NOT NULL REFERENCES patients(id),
+    measured_at TEXT NOT NULL,
+    systolic INTEGER NOT NULL,
+    diastolic INTEGER NOT NULL,
+    pulse INTEGER,
+    place TEXT NOT NULL DEFAULT 'casa',
+    note TEXT,
+    source TEXT NOT NULL DEFAULT 'manual',
+    UNIQUE(patient_id, measured_at)
+);
+CREATE INDEX IF NOT EXISTS idx_bp_patient ON bp_readings(patient_id, measured_at);
 """
 
 

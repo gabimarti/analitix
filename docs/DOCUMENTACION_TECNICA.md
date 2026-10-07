@@ -219,6 +219,23 @@ Esquema completo en `db.SCHEMA` (SQLite). Tablas:
   para que una evolución sea representativa: agrupa la lista de
   Evolución/Comparativa y es el umbral del control de pocos datos de todos
   los gráficos de evolución, ver §5, `charts.data_sufficiency`).
+- **`bp_readings`** — mediciones de tensión arterial: `patient_id`,
+  `measured_at` (`AAAA-MM-DD HH:MM`), `systolic`, `diastolic`, `pulse`
+  (opcional), `place` (`casa`/`consulta`), `note`, `source`
+  (`manual`/`csv`); `UNIQUE(patient_id, measured_at)` para que reimportar
+  un CSV no duplique. Funciones en `repository`: `add_bp_reading` (sin
+  commit, `INSERT OR IGNORE`), `list_bp_readings`, `delete_bp_readings`;
+  coherente con `merge_patients`, `delete_patient`, `delete_reports` y
+  `delete_all_data`, y visible en el Explorador BD. Validación y lectura de
+  CSV en `blood_pressure.py` (`validate_reading`, `read_csv`,
+  `HEADER_ALIASES` con las cabeceras de Omron Connect y Withings,
+  `CSV_TEMPLATE`). Límites de plausibilidad, no clínicos: `DEFAULT_LIMITS`
+  (sistólica 80-250, diastólica 45-140, pulso 45-225) ajustables en
+  Configuración → Entrada manual (ajuste `bp_limits` en `settings`, JSON
+  `{"systolic": [min, max], ...}`) dentro de `ABSOLUTE_LIMITS` (50-300,
+  20-200, 20-250); `check_limits` los valida y `gui._bp_limits` vuelve a los
+  de por defecto si el ajuste guardado no es válido. `validate_reading` y
+  `read_csv` reciben `limits`.
 - **`targets`** — objetivo indicado por el médico por paciente y prueba
   (`patient_id`, `canonical_id` como clave; `target_low`/`target_high`, uno
   puede ser `NULL`; `note`; `set_on` `AAAA-MM-DD`). Solo lo introduce la
@@ -2254,7 +2271,8 @@ impropio dado que la navegación ya no es por pestañas, aunque se mantiene
 por todo el proyecto. Estructura del menú (`_build_menu`):
 
 - **Archivo**: Importar, Exportar, —, Salir.
-- **Pacientes**: Pacientes, Entrada manual.
+- **Pacientes**: Cambiar paciente activo..., Pacientes.
+- **Entrada manual**: Analíticas... (`manual`), Tensión arterial... (`tension`).
 - **Análisis**: Evolución, Comparativa — gráficos "a la carta" de uno o dos
   parámetros elegidos a mano por el usuario, sin interpretación clínica
   propia — y Resumen, una tabla de
@@ -2671,6 +2689,16 @@ Notas de implementación:
   de solo lectura por construcción (un `Treeview` no permite editar celdas
   sin cableado extra, que aquí no existe): sirve para verificar qué hay
   guardado exactamente, no para modificarlo.
+- Pantalla "Tensión arterial" (`_build_tab_tension`, menú Entrada manual):
+  formulario, tabla con casillas (`_checkbox_tree`), Importar CSV, Guardar
+  plantilla y Borrar marcadas, siempre para el paciente activo
+  (`_refresh_tension_page` al cambiarlo). Valida con
+  `blood_pressure.validate_reading` y guarda con `repository.add_bp_reading`;
+  el registro (`analitix.log`) solo anota recuentos de la importación, nunca
+  valores. Las dos pantallas de entrada manual muestran
+  `AVISO_ENTRADA_MANUAL` y validan al teclear con `_restrict(entry, patron)`
+  (validación "key" de Tk: cifras donde van cifras, sin caracteres de
+  control, longitud máxima).
 - Pestaña "✏ Entrada manual" (`_build_tab_manual`): para analíticas cuyo PDF
   no se ha podido interpretar (o que no vienen en PDF). Ya no tiene selector
   de paciente propio: usa el paciente activo (`self.current_patient_id`,

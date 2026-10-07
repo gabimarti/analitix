@@ -195,7 +195,8 @@ Al arrancar y escribir tu contraseña, se abre la ventana principal con una
 se ve el logo de Analitix como pantalla de bienvenida. Los menús son:
 
 - **Archivo**: Importar, Exportar, Salir.
-- **Pacientes**: Cambiar paciente activo..., Pacientes, Entrada manual.
+- **Pacientes**: Cambiar paciente activo..., Pacientes.
+- **Entrada manual**: Analíticas..., Tensión arterial... (siempre para el paciente activo).
 - **Análisis**: Evolución, Comparativa, Resumen, Mapa de calor — gráficos a la carta de uno o dos
   parámetros elegidos por ti — y Resumen, una tabla tipo "semáforo" con
   todos los parámetros del último informe de un vistazo. Al final,
@@ -420,11 +421,19 @@ explícitamente — así no se corre el riesgo de ver o exportar sin darte
 cuenta los datos de otra persona. Con un único paciente en la base de datos
 no hay ambigüedad posible y se selecciona solo.
 
-### 2.3 ✏ Entrada manual (menú Pacientes → Entrada manual)
+### 2.3 ✏ Entrada manual de analíticas (menú Entrada manual → Analíticas...)
 
 Para registrar una analítica cuando el PDF no se ha podido interpretar (o
 cuando simplemente no viene en PDF). No sustituye a la importación
 automática: es el respaldo para esos casos puntuales.
+
+**Importante:** los gráficos, cálculos e informes de Analitix se basan en lo
+que introduces. Un valor mal escrito (por ejemplo 18 en vez de 180, o la
+unidad equivocada) daría gráficos, resúmenes e informes erróneos. Los campos
+solo admiten caracteres válidos (cifras y coma o punto decimal en los
+valores, cifras y guiones en la fecha, textos sin caracteres de control y
+de longitud limitada), pero la aplicación no puede saber si un valor
+posible es el correcto: revísalo antes de guardar.
 
 <p align="center">
   <img src="images/entrada_manual.png" width="80%" alt="Pantalla de Entrada manual de una analítica">
@@ -463,6 +472,64 @@ activo...
 El valor y el rango admiten coma o punto como separador decimal. El nombre y
 el valor son obligatorios; la unidad y el rango son opcionales (sin rango, el
 punto se dibuja pero no se marca como fuera de rango en ningún sentido).
+
+### 2.3.1 🩺 Tensión arterial (menú Entrada manual → Tensión arterial...)
+
+Registro de tus mediciones de tensión arterial, siempre para el **paciente
+activo**. Por ahora sirve para guardarlas; los gráficos, la media según el
+protocolo de las guías y el cruce con las analíticas (riesgo cardiovascular)
+llegarán en próximas versiones, con sus fuentes.
+
+<p align="center">
+  <img src="images/tension_arterial.png" width="80%" alt="Pantalla de registro de tensión arterial con mediciones de ejemplo">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
+- **Añadir medición**: fecha (AAAA-MM-DD), hora (HH:MM), sistólica (la
+  "alta"), diastólica (la "baja"), pulso (opcional), **lugar** y una nota
+  opcional. Los campos solo admiten cifras (o fecha y hora) y, al guardar,
+  se comprueba que la sistólica sea mayor que la diastólica, que la fecha
+  no sea futura y que los valores estén dentro de unos **límites**: por
+  defecto, sistólica entre 80 y 250, diastólica entre 45 y 140 y pulso
+  entre 45 y 225. Son límites para cazar errores de tecleo, **no** valores
+  normales; se pueden ajustar en **Configuración → Entrada manual** (§2.20)
+  dentro de un margen (sistólica 50-300, diastólica 20-200, pulso 20-250).
+  Los mismos límites se aplican al importar un CSV. El mismo aviso que en
+  las analíticas vale aquí.
+- **Lugar** (casa o consulta, por defecto casa): las guías usan umbrales
+  distintos para la tensión medida en casa y en la consulta, y el riesgo
+  cardiovascular se calcula con la de consulta; guardarlo ahora permitirá
+  hacer bien esos cálculos.
+- No se guardan dos mediciones del mismo paciente en el mismo minuto: si
+  ya existe, se avisa (y al importar, se omite sin duplicarla).
+- **Borrar marcadas**: marca las casillas de las mediciones y pulsa el
+  botón (pide confirmación; no se puede deshacer).
+- **Importar CSV...**: importa un fichero de texto con una medición por
+  línea. **Guardar plantilla CSV...** guarda un ejemplo con el formato
+  exacto:
+
+  ```
+  fecha_hora;sistolica;diastolica;pulso;lugar;notas
+  2026-01-15 08:10;128;82;64;casa;antes del desayuno
+  2026-02-02 10:45;134;86;;consulta;revisión anual
+  ```
+
+  - Separador `;`, `,` o tabulador (se detecta solo). Primera línea con los
+    nombres de las columnas; el orden da igual.
+  - Obligatorias: `fecha_hora` (o `fecha` y `hora` en columnas separadas),
+    `sistolica` y `diastolica`. Opcionales: `pulso`, `lugar` (casa o
+    consulta; si falta, casa) y `notas`.
+  - Fechas `AAAA-MM-DD HH:MM` (también con segundos), `DD/MM/AAAA HH:MM` o
+    `DD-MM-AAAA HH:MM`.
+  - También se aceptan directamente las exportaciones de **Omron Connect**
+    (`Date`, `Time`, `Systolic (mmHg)`…, fechas como `Jan 12 2025`) y
+    **Withings** (`Date`, `Heart rate`, `Systolic`, `Diastolic`). Otras
+    cabeceras habituales (`SYS`, `DIA`, `PUL`, `Pulse`…) también se
+    reconocen.
+  - Al terminar se muestra cuántas se han importado, cuántas ya existían y
+    qué líneas tenían errores (con el número de línea y el motivo); las
+    líneas con error no se importan.
 
 ### 2.4 📈 Evolución (menú Análisis → Evolución)
 
@@ -1494,9 +1561,10 @@ líneas es una molestia; una fusión equivocada da información incorrecta.
 
 ### 2.20 ⚙ Configuración (menú Configuración)
 
-Este panel se organiza a su vez en cuatro subpestañas (**General**,
-**Seguridad**, **Datos**, **Estadísticas**), para que quepa todo sin
-necesidad de ampliar la ventana ni usar barras de desplazamiento.
+Este panel se organiza a su vez en cinco subpestañas (**General**,
+**Entrada manual**, **Seguridad**, **Datos**, **Estadísticas**), para que
+quepa todo sin necesidad de ampliar la ventana ni usar barras de
+desplazamiento.
 
 <p align="center">
   <img src="images/configuracion.png" width="80%" alt="Configuración, subpestaña General">
@@ -1519,6 +1587,18 @@ necesidad de ampliar la ventana ni usar barras de desplazamiento.
   mire si hay una versión nueva cada vez que se abre (desactivado por
   defecto), o pulsa **Buscar ahora** para comprobarlo en el momento (ver
   §2.22).
+
+**Entrada manual**
+
+- **Límites de la tensión arterial**: mínimo y máximo admitidos para la
+  sistólica, la diastólica y el pulso al guardar o importar mediciones
+  (§2.3.1). Por defecto, sistólica 80-250, diastólica 45-140 y pulso
+  45-225 (mmHg / latidos por minuto); cada límite se puede ajustar dentro
+  del margen que se indica al lado (sistólica 50-300, diastólica 20-200,
+  pulso 20-250), con el mínimo siempre por debajo del máximo. **Guardar
+  límites** los aplica y **Valores por defecto** los restablece. No son
+  valores normales ni objetivos de salud: solo sirven para rechazar
+  errores evidentes, como 18 en vez de 180.
 
 **Seguridad**
 

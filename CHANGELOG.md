@@ -12,6 +12,8 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ### Añadido
 
+- Registro de tensión arterial (menú Entrada manual → Tensión arterial...): sistólica, diastólica, pulso, fecha y hora, lugar (casa o consulta) y nota, para el paciente activo, con importación de CSV (plantilla propia y exportaciones de Omron Connect y Withings) que informa de cada línea con error y no duplica mediciones.
+- Configuración → Entrada manual: límites ajustables (mínimo y máximo) para validar la sistólica, la diastólica y el pulso; por defecto 80-250, 45-140 y 45-225, ajustables dentro de 50-300, 20-200 y 20-250.
 - Objetivo indicado por tu médico (Evolución → «🎯 Objetivo indicado por mi médico...»): si tu médico te ha fijado un objetivo concreto para una prueba (por ejemplo, LDL por debajo de 100 mg/dL), puedes anotarlo a mano y los gráficos de esa prueba lo muestran en lugar del rango del laboratorio, con la etiqueta «Objetivo indicado por su médico». Analitix nunca propone ni calcula objetivos.
 - Tiempo dentro del rango (u objetivo del médico) bajo cada gráfico de evolución: el % del tiempo, interpolando entre analíticas (método de Rosendaal, estándar en anticoagulación), sin contar periodos de más de un año sin analíticas.
 - Para el filtrado glomerular, aviso de la guía KDIGO si baja de forma demostrable más de 5 mL/min/1,73 m² al año («progresión rápida»: coméntalo con tu médico).
@@ -19,6 +21,7 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ### Cambiado
 
+- Menú nuevo «Entrada manual» con «Analíticas...» y «Tensión arterial...» (antes, Pacientes → Entrada manual). Las dos pantallas avisan de que los gráficos e informes dependen de lo que se introduce, y los campos solo admiten caracteres válidos y longitudes razonables.
 - La tendencia se calcula con un método robusto (pendiente de Theil-Sen) que un valor raro no arrastra, con su margen de confianza del 95 %: si no permite afirmar que el valor cambie dice «sin tendencia demostrable», y con menos de 5 analíticas o 2 años, «pocos datos para confirmarla» (antes bastaban 3 analíticas). La columna «Tendencia» del Resumen usa el mismo criterio.
 - El color intenso queda para las desviaciones grandes: un valor fuera de rango por poco se dibuja con el mismo color, más claro. Los colores aptos para daltonismo y los símbolos ▲/▼ no cambian.
 - Los rangos con un solo límite (por ejemplo LDL «< 130») ya dibujan su línea en los gráficos de evolución; antes no se veía ninguna.
