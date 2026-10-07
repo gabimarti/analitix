@@ -585,11 +585,34 @@ anota (ver "🎯 Objetivo indicado por mi médico" más abajo).
     probablemente real (no necesariamente malo). Si el último valor es de
     otro laboratorio, la leyenda lo indica y no se dibuja la banda. También
     aparece en los gráficos de los paneles clínicos.
-  - Con al menos 3 valores, además una **línea de tendencia** punteada
-    (regresión lineal simple) con si el valor tiende a subir, bajar o
-    mantenerse estable, la tasa de cambio aproximada al año y una
-    proyección a 3 meses vista. Es una orientación visual sencilla, **no
-    un diagnóstico ni una predicción médica** — para eso, tu médico.
+  - Con al menos 3 valores, además una **línea de tendencia** punteada y,
+    debajo, si sube, baja o no cambia, con su **ritmo al año** y un
+    **margen de confianza del 95 %** (por ejemplo "↓ bajando ~-2/año (IC
+    95 %: -3,1 a -0,8)"). Se calcula con un método estadístico robusto
+    (pendiente de Theil-Sen, Sen 1968): un único valor raro apenas la
+    mueve, al contrario que una recta normal. Si el margen incluye el 0
+    (puede estar subiendo, bajando o igual), dice **"sin tendencia
+    demostrable"**: con esos datos no se puede afirmar que cambie. Con
+    menos de 5 analíticas o menos de 2 años dice **"pocos datos para
+    confirmarla"**. Si hay tendencia, añade una proyección a 3 meses vista.
+    Es una orientación, **no un diagnóstico ni una predicción médica**.
+  - Solo para el **filtrado glomerular estimado** (FG) existe un umbral de
+    ritmo de cambio respaldado por una guía clínica: si el FG baja de forma
+    demostrable más de 5 mL/min/1,73 m² al año, el texto recuerda que la
+    guía KDIGO llama a eso "progresión rápida" y que conviene comentarlo
+    con tu médico. Para el resto de pruebas no se muestra ningún umbral de
+    ritmo, porque no hay uno validado (por ejemplo, la "velocidad del PSA"
+    se desaconseja en estudios grandes).
+  - En el texto de debajo, junto a "Dentro del rango en X de Y analíticas",
+    el **% del tiempo** que el valor ha estado dentro del rango (o del
+    objetivo de tu médico): entre dos analíticas se supone que el valor
+    cambia en línea recta y se cuentan los días dentro (método de
+    Rosendaal, el estándar del "tiempo en rango" de los tratamientos
+    anticoagulantes, pensado para analíticas a intervalos irregulares).
+    No se cuentan los periodos de más de un año sin analíticas (se indica
+    si los hay), y solo aparece si lo contado suma al menos un año.
+    Fuentes y limitaciones de todo esto en Ayuda → Referencias
+    científicas ("referencias_tendencia_tiempo_en_rango").
 - **ℹ️ ¿Qué es este parámetro?**: la descripción en lenguaje llano del
   parámetro (qué mide y por qué se pide) en un diálogo aparte, para quien
   no esté familiarizado con los términos médicos — no se muestra
@@ -647,11 +670,11 @@ nunca un diagnóstico.**
   un punto de corte clínico.
 - **Tendencia**: a diferencia de "Variación" (que solo mira el último
   informe frente al anterior), esta columna usa **todo el histórico** del
-  parámetro — ↑ si la tendencia general es a subir, → si se mantiene
-  estable, ↓ si es a bajar. Mismo cálculo (regresión lineal) y mismo
-  criterio de "estable" que ya usa el gráfico de Evolución (§2.4) bajo el
-  propio gráfico. Con menos de 3 analíticas de ese parámetro se muestra
-  "—": con tan pocos puntos una tendencia no es fiable.
+  parámetro — ↑ si la tendencia general es a subir, ↓ si es a bajar, →
+  si no hay una tendencia demostrable o es mínima. Mismo cálculo
+  (pendiente robusta con margen de confianza) que el texto bajo el
+  gráfico de Evolución (§2.4). Con menos de 5 analíticas o menos de 2 años
+  se muestra "—": con tan pocos datos una tendencia no es fiable.
   - Si sube o baja, se acompaña de un **% anual** (p. ej. "↑ +38%/año"):
     qué parte del rango de referencia recorrería el parámetro en un año a
     este ritmo — un +100%/año cruza todo el rango normal en un año

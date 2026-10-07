@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import textwrap
 from typing import Any, Optional
 
 import matplotlib.dates as mdates
@@ -93,6 +94,23 @@ MAX_COMPARISON_TESTS = 2
 # lineal no es fiable y no se dibuja.
 MIN_POINTS_FOR_TREND = 3
 TREND_PROJECTION_DAYS = 90
+# Para dar una tendencia por demostrada hacen falta, además de un IC que
+# excluya el 0 (`_fit_trend`), al menos 5 analíticas en al menos 2 años: con
+# menos, la pendiente de una serie corta e irregular es poco estable.
+# Elección prudente de interfaz, no un umbral clínico.
+MIN_POINTS_CONFIRM_TREND = 5
+MIN_DAYS_CONFIRM_TREND = 2 * 365
+SIN_TENDENCIA = "sin tendencia demostrable"
+POCOS_DATOS_TENDENCIA = "pocos datos para confirmarla"
+# Filtrado glomerular estimado: la guía KDIGO define "progresión rápida" de
+# la enfermedad renal crónica como un descenso sostenido de más de 5
+# mL/min/1,73 m² al año (KDIGO 2012 Clinical Practice Guideline for the
+# Evaluation and Management of CKD, cap. 1 "Definition and classification of
+# CKD", Kidney Int Suppl 2013;3(1):19-62, doi:10.1038/kisup.2012.64; lo
+# mantiene la actualización KDIGO 2024). Es el único umbral de velocidad de
+# cambio con respaldo de guía entre las pruebas de la app; las series que lo
+# usan llevan `kdigo_fg=True` (gui._evolution_figure).
+KDIGO_RAPID_DECLINE_PER_YEAR = 5.0
 
 # Analíticas recomendadas para que un gráfico de evolución sea
 # representativo (valor por defecto del ajuste "min_points_evolucion" de
@@ -105,6 +123,8 @@ DEFAULT_MIN_POINTS = 4
 # fijo en píxeles por encima/debajo del punto— no queden pegadas al borde
 # del área de datos ni se solapen con la leyenda.
 Y_MARGIN_RATIO = 0.15
+# Ancho máximo, en caracteres, de cada línea del recuadro bajo el gráfico.
+INFO_BOX_WIDTH = 100
 
 
 # Forma del punto por laboratorio (Evolución, Comparativa y los gráficos de
@@ -139,15 +159,38 @@ def _parse_fecha(fecha: str) -> dt.datetime:
         return dt.datetime.min
 
 
-def _fit_trend(fechas: list[dt.datetime], valores: list[float]) -> Optional[tuple[float, float, Any]]:
-    """Ajuste de regresión lineal simple (valor ~ fecha). `None` si hay menos
-    de `MIN_POINTS_FOR_TREND` puntos (con tan pocos, una regresión no es
-    fiable)."""
+def _fit_trend(fechas: list[dt.datetime], valores: list[float]) -> Optional[tuple[float, float, Any, float, float]]:
+    """Pendiente robusta de Theil-Sen (valor ~ fecha) con su intervalo de
+    confianza del 95 %: (pendiente, ordenada, x, IC inferior, IC superior),
+    pendientes por día. `None` con menos de `MIN_POINTS_FOR_TREND` puntos.
+
+    La pendiente es la mediana de las pendientes entre todos los pares de
+    puntos, y el IC sale de la distribución de la τ de Kendall (Sen PK,
+    "Estimates of the regression coefficient based on Kendall's tau", J Am
+    Stat Assoc 1968;63(324):1379-89, doi:10.1080/01621459.1968.10480934):
+    con varianza n(n-1)(2n+5)/18 (sin corrección por empates, algo más
+    conservador), se toman las pendientes ordenadas de posiciones
+    (N ∓ 1,96·σ)/2. Frente a la recta de mínimos cuadrados, un único valor
+    atípico apenas la mueve, y el IC dice si el cambio es demostrable (si
+    incluye 0, no lo es). Ordenada de Conover: mediana(y) − pendiente ·
+    mediana(x)."""
     if len(fechas) < MIN_POINTS_FOR_TREND:
         return None
-    x = mdates.date2num(fechas)
-    slope, intercept = np.polyfit(x, valores, 1)
-    return slope, intercept, x
+    x = np.asarray(mdates.date2num(fechas), dtype=float)
+    y = np.asarray(valores, dtype=float)
+    i, j = np.triu_indices(len(x), 1)
+    dx = x[j] - x[i]
+    validos = dx != 0  # dos analíticas el mismo día no dan pendiente
+    pendientes = np.sort((y[j] - y[i])[validos] / dx[validos])
+    if not len(pendientes):
+        return None
+    slope = float(np.median(pendientes))
+    intercept = float(np.median(y) - slope * np.median(x))
+    n, total = len(x), len(pendientes)
+    margen = 1.959964 * np.sqrt(n * (n - 1) * (2 * n + 5) / 18)
+    bajo = pendientes[max(int(round((total - margen) / 2)) - 1, 0)]
+    alto = pendientes[min(int(round((total + margen) / 2)), total - 1)]
+    return slope, intercept, x, float(bajo), float(alto)
 
 
 def _draw_trend_lines(ax, fit: Optional[tuple[float, float, Any]]) -> None:
@@ -155,7 +198,7 @@ def _draw_trend_lines(ax, fit: Optional[tuple[float, float, Any]]) -> None:
     a `TREND_PROJECTION_DAYS` días vista (sin texto, ver `_trend_text`)."""
     if fit is None:
         return
-    slope, intercept, x = fit
+    slope, intercept, x = fit[:3]
 
     x_fit = np.array([x[0], x[-1]])
     ax.plot(mdates.num2date(x_fit), slope * x_fit + intercept, linestyle=":", color=COLOR_TREND, linewidth=1.3, zorder=0)
@@ -179,16 +222,24 @@ def _trend_direction(
     el umbral de "estable" en dos sitios."""
     if fit is None:
         return None
-    slope, intercept, x = fit
+    slope, intercept, x, ic_bajo, ic_alto = fit
+    span = (ref_high - ref_low) if (ref_low is not None and ref_high is not None and ref_high > ref_low) else None
+    if span is None:
+        span = (max(valores) - min(valores)) or abs(valores[-1]) or 1.0
+    # Con pocas analíticas o poco tiempo, ni siquiera un IC que excluya el 0
+    # es fiable para hablar de tendencia (≥ 5 analíticas en ≥ 2 años).
+    if len(x) < MIN_POINTS_CONFIRM_TREND or x[-1] - x[0] < MIN_DAYS_CONFIRM_TREND:
+        return "→", POCOS_DATOS_TENDENCIA, slope, span
+    # Si el IC del 95 % de la pendiente de Theil-Sen incluye el 0, el cambio
+    # no es demostrable con estos datos (ver `_fit_trend`).
+    if ic_bajo <= 0 <= ic_alto:
+        return "→", SIN_TENDENCIA, slope, span
 
     # Umbral de "estable": un cambio, a lo largo de todo el periodo observado,
     # menor al 5% del rango de referencia (o del propio rango de valores si no
     # hay rango de referencia) no se considera una tendencia real. El mismo
     # `span` sirve de vara de medir para la magnitud (leve/brusca) de una
     # tendencia real: cuánto rango normal se recorre por año.
-    span = (ref_high - ref_low) if (ref_low is not None and ref_high is not None and ref_high > ref_low) else None
-    if span is None:
-        span = (max(valores) - min(valores)) or abs(valores[-1]) or 1.0
     change_over_period = slope * (x[-1] - x[0])
     if abs(change_over_period) < 0.05 * span:
         return "→", "estable", slope, span
@@ -210,11 +261,29 @@ def _trend_text(
     if direction is None:
         return None
     arrow, palabra, slope, _span = direction
-    _, intercept, x = fit
-    x_proj_end = x[-1] + TREND_PROJECTION_DAYS
-    rate_per_year = slope * 365.25
-    proyeccion = slope * x_proj_end + intercept
-    return f"{arrow} Tendencia: {palabra} (~{rate_per_year:+.2g}/año) · proy. 3 meses: {proyeccion:.3g}"
+    _, intercept, x, ic_bajo, ic_alto = fit
+    if palabra == POCOS_DATOS_TENDENCIA:
+        return (f"{arrow} Tendencia: {palabra} (hacen falta ≥ {MIN_POINTS_CONFIRM_TREND} analíticas "
+                f"en ≥ {MIN_DAYS_CONFIRM_TREND // 365} años)")
+    ritmo = f"~{slope * 365.25:+.2g}/año (IC 95 %: {ic_bajo * 365.25:+.2g} a {ic_alto * 365.25:+.2g})"
+    if palabra == SIN_TENDENCIA:
+        return f"{arrow} Tendencia: {palabra}, ritmo {ritmo}"
+    proyeccion = slope * (x[-1] + TREND_PROJECTION_DAYS) + intercept
+    return f"{arrow} Tendencia: {palabra} {ritmo} · proy. 3 meses: {proyeccion:.3g}"
+
+
+def _kdigo_note(series: list[dict[str, Any]], fit) -> Optional[str]:
+    """Nota de la guía KDIGO para el filtrado glomerular (`kdigo_fg`) cuando
+    el descenso es demostrable y supera `KDIGO_RAPID_DECLINE_PER_YEAR`."""
+    if not fit or not series or not series[0].get("kdigo_fg"):
+        return None
+    direccion = _trend_direction(fit, [s["value_num"] for s in series], None, None)
+    _slope, _intercept, _x, _ic_bajo, ic_alto = fit
+    if (direccion and direccion[1] == "bajando" and fit[0] * 365.25 < -KDIGO_RAPID_DECLINE_PER_YEAR
+            and ic_alto < 0):
+        return (f"La guía KDIGO llama «progresión rápida» a un descenso sostenido de más de "
+                f"{KDIGO_RAPID_DECLINE_PER_YEAR:g} al año: coméntalo con tu médico.")
+    return None
 
 
 def trend_arrow(series: list[dict[str, Any]], ref_low: Optional[float], ref_high: Optional[float]) -> Optional[str]:
@@ -233,7 +302,7 @@ def trend_arrow(series: list[dict[str, Any]], ref_low: Optional[float], ref_high
     fechas = [_parse_fecha(s["fecha"]) for s in series]
     valores = [s["value_num"] for s in series]
     direction = _trend_direction(_fit_trend(fechas, valores), valores, ref_low, ref_high)
-    if direction is None:
+    if direction is None or direction[1] == POCOS_DATOS_TENDENCIA:
         return None
     arrow, _palabra, slope, span = direction
     if arrow == "→":
@@ -261,6 +330,70 @@ def _pct_change_text(valores: list[float]) -> Optional[str]:
     return " · ".join(partes) if partes else None
 
 
+# Tiempo en rango por interpolación lineal (Rosendaal FR, Cannegieter SC,
+# van der Meer FJ, Briët E, "A method to determine the optimal intensity of
+# oral anticoagulant therapy", Thromb Haemost 1993;69(3):236-9, PMID 8470047):
+# entre dos analíticas consecutivas se supone que el valor cambia en línea
+# recta, y se cuenta la fracción de días dentro del rango. Es el método de
+# referencia del "tiempo en rango terapéutico" del INR, pensado justamente
+# para mediciones a intervalos irregulares; el mismo concepto que el "time
+# in range" de la glucosa continua (Battelino T et al., Diabetes Care
+# 2019;42(8):1593-1603, doi:10.2337/dci19-0028). No se interpola en huecos
+# de más de `TIR_MAX_GAP_DAYS` (no se sabe qué pasó en medio) y hace falta
+# cubrir al menos `TIR_MIN_DAYS` días. Elecciones de interfaz, no clínicas.
+TIR_MAX_GAP_DAYS = 365
+TIR_MIN_DAYS = 365
+_SIN_LIMITE = 1e12
+
+
+def _normalized_point(s: dict[str, Any]) -> Optional[tuple[str, float, float, float]]:
+    """(tipo de rango, valor normalizado, límite inferior, límite superior)
+    en la misma escala para los dos extremos de un tramo: con dos límites,
+    0 = inferior y 1 = superior; con uno solo, el valor dividido por él."""
+    low, high, v = s.get("ref_low"), s.get("ref_high"), s.get("value_num")
+    if v is None:
+        return None
+    if low is not None and high is not None and high > low:
+        return "ambos", (v - low) / (high - low), 0.0, 1.0
+    if high:
+        return "superior", v / high, -_SIN_LIMITE, 1.0
+    if low:
+        return "inferior", v / low, 1.0, _SIN_LIMITE
+    return None
+
+
+def _fraction_inside(p0: float, p1: float, a: float, b: float) -> float:
+    """Fracción de un tramo recto de p0 a p1 que cae dentro de [a, b]."""
+    if p0 == p1:
+        return 1.0 if a <= p0 <= b else 0.0
+    t_a, t_b = (a - p0) / (p1 - p0), (b - p0) / (p1 - p0)
+    return max(0.0, min(1.0, max(t_a, t_b)) - max(0.0, min(t_a, t_b)))
+
+
+def time_in_range(series: list[dict[str, Any]]) -> Optional[tuple[float, int]]:
+    """(% del tiempo dentro del rango, nº de huecos de más de
+    `TIR_MAX_GAP_DAYS` que no se han contado) de la serie, con el rango de
+    cada analítica (o el objetivo del médico, `apply_target`). `None` si los
+    tramos contados no llegan a `TIR_MIN_DAYS` días."""
+    dentro = total = 0.0
+    huecos = 0
+    for s0, s1 in zip(series, series[1:]):
+        dias = (_parse_fecha(s1["fecha"]) - _parse_fecha(s0["fecha"])).days
+        if dias <= 0:
+            continue
+        if dias > TIR_MAX_GAP_DAYS:
+            huecos += 1
+            continue
+        n0, n1 = _normalized_point(s0), _normalized_point(s1)
+        if not n0 or not n1 or n0[0] != n1[0]:
+            continue  # sin rango, o con rangos de distinto tipo: no comparables
+        dentro += dias * _fraction_inside(n0[1], n1[1], n0[2], n0[3])
+        total += dias
+    if total < TIR_MIN_DAYS:
+        return None
+    return dentro / total * 100, huecos
+
+
 def series_summary(series: list[dict[str, Any]]) -> Optional[str]:
     """Resumen en lenguaje llano de la serie, descriptivo y nunca causal:
     "Dentro del rango en 9 de 10 analíticas; la última (2026-01-01), un 8 %
@@ -277,6 +410,10 @@ def series_summary(series: list[dict[str, Any]]) -> Optional[str]:
     dentro = sum(1 for s in con_rango if s.get("flag_calc") not in ("alto", "bajo"))
     que = "del objetivo indicado por su médico" if series[0].get("objetivo") else "del rango"
     texto = f"Dentro {que} en {dentro} de {len(con_rango)} analíticas"
+    tir = time_in_range(series)
+    if tir:
+        pct, huecos = tir
+        texto += f" (~{pct:.0f} % del tiempo{', sin contar huecos de más de un año' if huecos else ''})"
     ultima = series[-1]
     fecha = (ultima.get("fecha") or "")[:10]
     valor, flag = ultima["value_num"], ultima.get("flag_calc")
@@ -312,6 +449,7 @@ def _draw_info_box(
     ref_low: Optional[float],
     ref_high: Optional[float],
     summary: Optional[str] = None,
+    extra: Optional[str] = None,
 ) -> None:
     """Recuadro de texto bajo el eje con el resumen en texto de la serie
     (`series_summary`), la tendencia (si hay suficientes puntos) y la
@@ -319,9 +457,14 @@ def _draw_info_box(
     `ax` (no a la figura), para que funcione igual en Evolución como en
     cada panel de la Comparativa; `annotation_clip=False` evita que se
     recorte al quedar fuera del área de datos."""
-    lineas = [t for t in (summary, _trend_text(fit, valores, ref_low, ref_high), _pct_change_text(valores)) if t]
+    lineas = [t for t in (summary, _trend_text(fit, valores, ref_low, ref_high), _pct_change_text(valores), extra)
+              if t]
     if not lineas:
         return
+    # Líneas largas partidas: si no, `tight_layout` estrecha todo el gráfico
+    # para hacer sitio al recuadro.
+    lineas = [textwrap.fill(parte, INFO_BOX_WIDTH) for linea in lineas for parte in linea.split("\n")]
+    ax.analitix_info_lines = sum(linea.count("\n") + 1 for linea in lineas)  # ver `evolution_figure`
     ax.annotate(
         "\n".join(lineas),
         xy=(0.5, 0), xycoords="axes fraction",
@@ -518,7 +661,7 @@ def _plot_series_on_ax(
     _draw_trend_lines(ax, fit)
     _draw_info_box(
         ax, fit, valores, ref_low[-1] if ref_low else None, ref_high[-1] if ref_high else None,
-        summary=series_summary(series),
+        summary=series_summary(series), extra=_kdigo_note(series, fit),
     )
     _apply_y_margin(ax, y_extent)
 
@@ -593,8 +736,9 @@ def evolution_figure(
     fig.tight_layout()
     # Deja sitio bajo el eje para el recuadro de tendencia/variación (hasta
     # dos líneas, ver `_draw_info_box`) además de las fechas rotadas; ambos
-    # se dibujan fuera del área de datos.
-    fig.subplots_adjust(bottom=0.34)
+    # se dibujan fuera del área de datos. Con objetivo del médico o nota de
+    # KDIGO pueden ser 4-5 líneas: el margen crece con ellas.
+    fig.subplots_adjust(bottom=max(0.34, 0.16 + 0.05 * getattr(ax, "analitix_info_lines", 0)))
     return fig
 
 

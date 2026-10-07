@@ -1517,10 +1517,27 @@ ha cambiado".
   final de la proyección** (mismo `x` que usará `_draw_trend`); si no se
   extendiera, la banda quedaría visualmente "cortada" antes del borde
   derecho del gráfico en cuanto la proyección amplía el eje X.
-- `_fit_trend(fechas, valores) -> (slope, intercept, x) | None`: regresión
-  lineal simple (`numpy.polyfit`, sobre fechas convertidas a número con
-  `matplotlib.dates.date2num`); `None` con menos de `MIN_POINTS_FOR_TREND=3`
-  puntos.
+- `_fit_trend(fechas, valores) -> (slope, intercept, x, ic_bajo, ic_alto) |
+  None`: pendiente robusta de **Theil-Sen** (mediana de las pendientes entre
+  todos los pares, fechas en número con `matplotlib.dates.date2num`) con su
+  IC del 95 % por la τ de Kendall (Sen 1968, doi:10.1080/01621459.1968.10480934;
+  sin corrección por empates), ordenada de Conover; `None` con menos de
+  `MIN_POINTS_FOR_TREND=3` puntos. Sustituye a la regresión por mínimos
+  cuadrados (2026-10-07): un valor atípico ya no arrastra la recta.
+  `_trend_direction` devuelve "pocos datos para confirmarla" con menos de
+  `MIN_POINTS_CONFIRM_TREND=5` puntos o menos de `MIN_DAYS_CONFIRM_TREND`
+  (2 años), "sin tendencia demostrable" si el IC incluye 0, y si no el
+  criterio de "estable" de siempre. `_kdigo_note` añade al recuadro la
+  nota de "progresión rápida" de KDIGO 2012 (doi:10.1038/kisup.2012.64,
+  `KDIGO_RAPID_DECLINE_PER_YEAR=5`) solo en series con `kdigo_fg=True`
+  (`gui._evolution_figure`: `renal_risk.FG_IDS` o el índice "fg" del panel
+  renal) y descenso demostrable. `time_in_range(series)`: % del tiempo
+  dentro del rango por interpolación lineal (Rosendaal 1993, PMID 8470047),
+  sin interpolar huecos de más de `TIR_MAX_GAP_DAYS` y solo si se cubren
+  `TIR_MIN_DAYS`; lo añade `series_summary`. `_draw_info_box` parte las
+  líneas a `INFO_BOX_WIDTH` caracteres y `evolution_figure` agranda el
+  margen inferior según `ax.analitix_info_lines`. Fuentes y decisiones en
+  `docs/referencias_medicas/referencias_tendencia_tiempo_en_rango.md`.
 - `_draw_trend_lines(ax, fit)` / `_trend_text(fit, valores, ref_low,
   ref_high)`: el dibujo de la recta y la construcción del texto están
   separados, para poder combinar el texto de tendencia con el de variación
@@ -2431,12 +2448,12 @@ Notas de implementación:
   ref_high)`, con `serie = repository.get_series(con, canonical_id,
   patient_id)` — a diferencia de "Variación" (que solo compara el último
   informe con el anterior), usa **todo el histórico** del parámetro.
-  Reutiliza la regresión lineal y el umbral de "estable" (±5% del rango de
-  referencia a lo largo de todo el periodo) que ya usaba el recuadro de
+  Reutiliza la pendiente de Theil-Sen, su IC y el umbral de "estable" (±5%
+  del rango de referencia a lo largo de todo el periodo) del recuadro de
   tendencia del gráfico de Evolución (`charts._fit_trend`/
-  `_trend_direction`, `MIN_POINTS_FOR_TREND = 3`) en vez de definir un
-  criterio nuevo — con menos de 3 puntos se muestra "—", igual que la
-  ausencia de recta de tendencia en el gráfico. Si sube/baja (no estable),
+  `_trend_direction`) en vez de definir un criterio nuevo — "→" si no hay
+  tendencia demostrable y "—" con menos de 5 puntos o 2 años ("pocos datos
+  para confirmarla"). Si sube/baja (no estable),
   `trend_arrow` añade una magnitud (p. ej. `"↑ +38%/año"`) para distinguir
   una tendencia leve de una brusca: `pendiente × 365.25 / span × 100`, el mismo `span`
   (rango de referencia, o rango de valores si no hay rango) que decide el
@@ -2965,8 +2982,9 @@ La suite cubre, sin abrir la GUI, las partes con mayor riesgo de regresión:
   dígito suelto en medio);
 - carga y detección de perfiles de parser por centro/laboratorio
   (`parser_profiles.py`), con texto sintético (nunca un PDF real);
-- tendencia de una serie completa (regresión lineal, flecha y magnitud
-  anual) usada tanto por el gráfico de Evolución como por la columna
+- tendencia de una serie completa (pendiente de Theil-Sen con IC, flecha y
+  magnitud anual), tiempo en rango y nota de KDIGO, usados tanto por el
+  gráfico de Evolución como por la columna
   "Tendencia" de Resumen (`charts.py`);
 - fórmulas del perfil lipídico, de los índices hepáticos (De Ritis, APRI,
   FIB-4), de la función renal (categorías KDIGO, ratio urea/creatinina,

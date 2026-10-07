@@ -7,8 +7,8 @@ def _serie(fechas, valores):
 
 def test_trend_arrow_ascendente():
     serie = _serie(
-        ["2024-01-01", "2024-02-01", "2024-03-01", "2024-04-01"],
-        [80, 90, 100, 115],
+        ["2022-01-01", "2022-07-01", "2023-01-01", "2023-07-01", "2024-03-01"],
+        [80, 90, 100, 108, 115],
     )
     resultado = trend_arrow(serie, 70, 100)
     assert resultado.startswith("↑ +") and resultado.endswith("%/año"), resultado
@@ -16,8 +16,8 @@ def test_trend_arrow_ascendente():
 
 def test_trend_arrow_descendente():
     serie = _serie(
-        ["2024-01-01", "2024-02-01", "2024-03-01", "2024-04-01"],
-        [115, 100, 90, 80],
+        ["2022-01-01", "2022-07-01", "2023-01-01", "2023-07-01", "2024-03-01"],
+        [115, 100, 95, 90, 80],
     )
     resultado = trend_arrow(serie, 70, 100)
     assert resultado.startswith("↓ -") and resultado.endswith("%/año"), resultado
@@ -25,8 +25,8 @@ def test_trend_arrow_descendente():
 
 def test_trend_arrow_estable():
     serie = _serie(
-        ["2024-01-01", "2024-02-01", "2024-03-01", "2024-04-01"],
-        [140, 140.5, 139.5, 140],
+        ["2022-01-01", "2022-07-01", "2023-01-01", "2023-07-01", "2024-03-01"],
+        [140, 140.5, 139.5, 140, 140.2],
     )
     assert trend_arrow(serie, 135, 145) == "→"
 
@@ -34,6 +34,9 @@ def test_trend_arrow_estable():
 def test_trend_arrow_pocos_puntos():
     serie = _serie(["2024-01-01", "2024-04-01"], [4.0, 3.6])
     assert trend_arrow(serie, 3.5, 5.0) is None
+    # 4 analíticas en 3 meses: hay recta, pero pocos datos para confirmar tendencia
+    corta = _serie(["2024-01-01", "2024-02-01", "2024-03-01", "2024-04-01"], [80, 90, 100, 115])
+    assert trend_arrow(corta, 70, 100) is None
 
 
 def test_range_position():
@@ -258,3 +261,40 @@ def test_doctor_target_note_shown_under_chart():
     texto = series_summary(apply_target(serie, {"low": 30.0, "high": 60.0, "note": "Dra. ficticia, 2026"}))
     assert texto.splitlines()[1] == "Objetivo indicado por su médico: entre 30 y 60 g/dL · Dra. ficticia, 2026"
     assert "\n" not in series_summary(serie)  # sin objetivo, una sola línea como antes
+
+
+def test_theil_sen_is_robust_and_ci_says_if_trend_is_demonstrable():
+    import datetime as dt
+
+    from analitix.charts import _fit_trend, _trend_text
+
+    fechas = [dt.datetime(2020 + i // 2, 1 + 6 * (i % 2), 1) for i in range(8)]
+    sube = [10 + i for i in range(8)]
+    sube[3] = 60  # un valor atípico no arrastra la pendiente robusta
+    slope, _, _, bajo, alto = _fit_trend(fechas, sube)
+    assert abs(slope * 365.25 - 2) < 0.1 and 0 < bajo <= slope <= alto
+    plano = [10, 12, 9, 11, 10, 12, 9, 11]
+    assert "sin tendencia demostrable" in _trend_text(_fit_trend(fechas, plano), plano, 0, 20)
+
+
+def test_time_in_range_interpolates_and_skips_long_gaps():
+    from analitix.charts import time_in_range
+
+    def p(fecha, v):
+        return {"fecha": fecha, "value_num": v, "ref_low": 0.0, "ref_high": 10.0}
+
+    # sube de 5 a 15 y vuelve a 5 en dos tramos de ~6 meses: dentro la mitad de cada uno
+    pct, huecos = time_in_range([p("2024-01-01", 5), p("2024-07-01", 15), p("2025-01-01", 5)])
+    assert abs(pct - 50) < 0.01 and huecos == 0
+    # un hueco de más de un año no se interpola: aquí no queda tramo suficiente
+    assert time_in_range([p("2020-01-01", 5), p("2022-01-01", 5)]) is None
+
+
+def test_kdigo_note_only_for_demonstrable_rapid_egfr_decline():
+    from analitix.charts import evolution_figure
+
+    fg = [dict(_row(f"20{20 + i}-01-01", 90 - 8 * i, "A", 60.0, 200.0), kdigo_fg=True) for i in range(6)]
+    texto = " ".join(t.get_text() for t in evolution_figure(fg, "FG").axes[0].texts)
+    assert "progresión rápida" in texto
+    estable = [dict(_row(f"20{20 + i}-01-01", 90 + (i % 2), "A", 60.0, 200.0), kdigo_fg=True) for i in range(6)]
+    assert "progresión rápida" not in " ".join(t.get_text() for t in evolution_figure(estable, "FG").axes[0].texts)

@@ -81,6 +81,7 @@ from analitix.iron_risk import (
 )
 from analitix.lipid_risk import INDEX_LABELS as LIPID_INDEX_LABELS, get_latest_lipid_summary, get_lipid_index_series
 from analitix.renal_risk import (
+    FG_IDS,
     INDEX_LABELS as RENAL_INDEX_LABELS,
     KDIGO_RISK_LABELS,
     get_latest_renal_summary,
@@ -1998,7 +1999,8 @@ class AnalitixApp(ttk.Window):
             "respecto al informe anterior, esté o no dentro de rango. \"Tendencia\" (↑/→/↓) usa "
             "todo el histórico del parámetro, no solo el último informe, con el % anual que "
             "recorre del rango de referencia (p. ej. +100%/año = cruza todo el rango normal en "
-            "un año, tendencia fuerte); \"—\" con menos de 3 analíticas.",
+            "un año, tendencia fuerte); → si no hay tendencia demostrable; \"—\" con menos de 5 "
+            "analíticas o menos de 2 años.",
             bootstyle="secondary", wraplength=900, justify="left",
         ).pack(anchor="w", padx=PAD, pady=(0, PAD))
 
@@ -3713,6 +3715,11 @@ class AnalitixApp(ttk.Window):
         # del laboratorio: el objetivo del médico solo cambia lo que se dibuja.
         if canonical_id:
             series = apply_target(series, get_target(self.con, self.current_patient_id, canonical_id))
+        # Filtrado glomerular (prueba suelta o índice "fg" del panel renal):
+        # único umbral de velocidad con respaldo de guía (KDIGO, ver
+        # `charts.KDIGO_RAPID_DECLINE_PER_YEAR`).
+        if canonical_id in FG_IDS or canonical_id == "fg":
+            series = [{**s, "kdigo_fg": True} for s in series]
         return self._mark_window(evolution_figure(series, label, self.min_points, rcv=rcv, personal=personal), hidden)
 
     def _comparison_figure(self, series_by_test: dict[str, list[dict]]):
