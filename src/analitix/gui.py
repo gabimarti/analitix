@@ -38,12 +38,14 @@ from analitix.charts import (
     DEFAULT_MIN_POINTS,
     LAB_UNKNOWN,
     MAX_COMPARISON_TESTS,
+    apply_target,
     change_status,
     changes_figure,
     comparison_figure,
     data_sufficiency,
     evolution_figure,
     heatmap_figure,
+    position_figure,
     trend_arrow,
 )
 from analitix import __version__
@@ -90,6 +92,7 @@ from analitix.repository import (
     create_manual_report,
     delete_all_data,
     delete_patient,
+    delete_target,
     delete_reports,
     get_all_results,
     get_excluded_labs,
@@ -98,6 +101,7 @@ from analitix.repository import (
     get_patient_sex,
     get_series,
     get_setting,
+    get_target,
     get_stats,
     get_table_rows,
     list_canonical_groups,
@@ -113,6 +117,7 @@ from analitix.repository import (
     merge_patients,
     set_excluded_labs,
     set_setting,
+    set_target,
     update_patient,
 )
 from analitix import (
@@ -1568,6 +1573,10 @@ class AnalitixApp(ttk.Window):
             left, text="ℹ️ ¿Qué es este parámetro?", bootstyle="info",
             command=lambda: self._show_test_info(self.list_tests_evolucion.curselection()),
         ).pack(fill="x")
+        ttk.Button(
+            left, text="🎯 Objetivo indicado por mi médico...", bootstyle="secondary-outline",
+            command=self._edit_target,
+        ).pack(fill="x", pady=(4, 0))
         ttk.Checkbutton(
             left, text="Mostrar mi rango personal", variable=self.var_personal_range,
             command=self._toggle_personal_range, bootstyle="round-toggle",
@@ -1592,6 +1601,85 @@ class AnalitixApp(ttk.Window):
         series = get_series(self.con, canonical_id, self.current_patient_id)
         fig = self._evolution_figure(series, label, canonical_id, with_personal=True)
         self._embed_figure(fig, self.chart_canvas_evolucion)
+
+    def _edit_target(self) -> None:
+        """Objetivo indicado por el médico para la prueba elegida en
+        Evolución (tabla `targets`). Solo lo introduce la persona, copiándolo
+        de lo que le haya indicado su médico; Analitix nunca lo propone ni lo
+        calcula. En los gráficos sustituye al rango del laboratorio."""
+        selection = self.list_tests_evolucion.curselection()
+        if self.current_patient_id is None or not selection or self._evolution_tests[selection[0]][0] is None:
+            messagebox.showinfo("Objetivo", "Elige antes una prueba de la lista.", parent=self)
+            return
+        canonical_id, label = self._evolution_tests[selection[0]]
+        actual = get_target(self.con, self.current_patient_id, canonical_id) or {}
+        unidad = next((s.get("unit") for s in get_series(self.con, canonical_id, self.current_patient_id)
+                       if s.get("unit")), "")
+        dialog, body = self._new_dialog("Objetivo indicado por mi médico")
+        ttk.Label(body, text=label, font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        ttk.Label(
+            body,
+            text="Rellénalo solo si tu médico te ha indicado un objetivo concreto para esta prueba "
+            "(por ejemplo, «LDL por debajo de 100 mg/dL»). Analitix nunca propone ni calcula "
+            "objetivos: copia aquí el que te hayan dado, con las mismas unidades que el informe.\n\n"
+            "Mientras exista, los gráficos de esta prueba muestran tu objetivo en lugar del rango del "
+            "laboratorio, con la etiqueta «Objetivo indicado por su médico», y marcan ▲/▼ respecto a "
+            "él. La tabla del Resumen y los informes PDF completo y de alterados siguen usando el "
+            "rango del laboratorio. Deja vacío el límite que no te hayan indicado.",
+            wraplength=480, justify="left",
+        ).pack(anchor="w", pady=(4, 8))
+        campos = ttk.Frame(body)
+        campos.pack(anchor="w")
+        valores = {}
+        # Máximo arriba y mínimo abajo, como en un gráfico.
+        for fila, (clave, texto) in enumerate((("high", "Máximo:"), ("low", "Mínimo:"))):
+            ttk.Label(campos, text=texto).grid(row=fila, column=0, sticky="w", pady=2)
+            entrada = ttk.Entry(campos, width=12)
+            if actual.get(clave) is not None:
+                entrada.insert(0, f"{actual[clave]:g}")
+            entrada.grid(row=fila, column=1, sticky="w", padx=6, pady=2)
+            ttk.Label(campos, text=unidad, bootstyle="secondary").grid(row=fila, column=2, sticky="w")
+            valores[clave] = entrada
+        ttk.Label(campos, text="Nota (opcional):").grid(row=2, column=0, sticky="w", pady=2)
+        nota = ttk.Entry(campos, width=36)
+        nota.insert(0, actual.get("note") or "")
+        nota.grid(row=2, column=1, columnspan=2, sticky="w", padx=6, pady=2)
+        if actual.get("set_on"):
+            ttk.Label(body, text=f"Guardado el {actual['set_on']}.", bootstyle="secondary").pack(anchor="w", pady=(4, 0))
+
+        def _redibujar() -> None:
+            dialog.destroy()
+            if self.list_tests_evolucion.curselection():
+                self._show_evolution()
+
+        def _guardar() -> None:
+            textos = {k: e.get().strip() for k, e in valores.items()}
+            numeros = {k: self._parse_float_field(t) for k, t in textos.items()}
+            if any(textos[k] and numeros[k] is None for k in textos):
+                messagebox.showwarning("Objetivo", "Escribe los límites como números (p. ej. 100 o 4,5).", parent=dialog)
+                return
+            try:
+                set_target(self.con, self.current_patient_id, canonical_id, numeros["low"], numeros["high"],
+                           nota.get().strip())
+            except ValueError as exc:
+                messagebox.showwarning("Objetivo", str(exc), parent=dialog)
+                return
+            _redibujar()
+
+        def _quitar() -> None:
+            delete_target(self.con, self.current_patient_id, canonical_id)
+            _redibujar()
+
+        botones = ttk.Frame(body)
+        botones.pack(fill="x", pady=(PAD, 0))
+        if actual:
+            ttk.Button(botones, text="Quitar objetivo", bootstyle="danger-outline", command=_quitar).pack(side="left")
+        boton_cancelar = ttk.Button(botones, text="Cancelar", command=dialog.destroy)
+        boton_cancelar.pack(side="right")
+        boton_ok = ttk.Button(botones, text="Guardar", bootstyle="primary", command=_guardar)
+        boton_ok.pack(side="right", padx=(0, 8))
+        self._same_width(boton_cancelar, boton_ok)
+        self._center_dialog(dialog)
 
     def _show_test_info(self, selection: tuple[int, ...], tests: list | None = None) -> None:
         """Diálogo con la descripción en lenguaje llano de uno o varios
@@ -1761,7 +1849,10 @@ class AnalitixApp(ttk.Window):
             canonical_id, label = self._evolution_tests[idx]
             if canonical_id is None:
                 continue
-            series_by_test[label] = get_series(self.con, canonical_id, self.current_patient_id)
+            series_by_test[label] = apply_target(
+                get_series(self.con, canonical_id, self.current_patient_id),
+                get_target(self.con, self.current_patient_id, canonical_id),
+            )
         if not series_by_test:
             return
         fig = self._comparison_figure(series_by_test)
@@ -1916,8 +2007,24 @@ class AnalitixApp(ttk.Window):
         notebook.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         tabla = ttk.Frame(notebook)
         cambios = ttk.Frame(notebook)
+        posicion = ttk.Frame(notebook)
         notebook.add(tabla, text="Tabla")
         notebook.add(cambios, text="Qué ha cambiado")
+        notebook.add(posicion, text="Posición en el rango")
+        ttk.Label(
+            posicion,
+            text="Dónde está cada parámetro del último informe respecto a su rango de referencia, para "
+            "comparar de un vistazo parámetros de escalas muy distintas. La franja es el rango (de su "
+            "límite inferior al superior; con solo un límite superior, desde 0), el punto lleno el "
+            "valor actual y el hueco el anterior. Fuera del rango: ▲ alto / ▼ bajo, más claro si la "
+            "desviación es leve. Arriba, los más alejados. Estar en el centro de la franja no es "
+            "«mejor» que estar cerca de un límite: todo el rango es normal.",
+            bootstyle="secondary", wraplength=900, justify="left",
+        ).pack(anchor="w", pady=(6, 2))
+        self.label_resumen_posicion = ttk.Label(posicion, text="", bootstyle="secondary")
+        self.label_resumen_posicion.pack(anchor="w", pady=(0, 4))
+        self.chart_canvas_resumen_posicion = ttk.Frame(posicion)
+        self.chart_canvas_resumen_posicion.pack(fill="both", expand=True)
         ttk.Label(
             cambios,
             text="Cada barra es el cambio de un parámetro respecto al informe anterior, medido en "
@@ -1985,15 +2092,18 @@ class AnalitixApp(ttk.Window):
 
     def _refresh_resumen_panel(self) -> None:
         self.tree_resumen.delete(*self.tree_resumen.get_children())
-        for child in self.chart_canvas_resumen_cambios.winfo_children():
-            child.destroy()
+        for canvas in (self.chart_canvas_resumen_cambios, self.chart_canvas_resumen_posicion):
+            for child in canvas.winfo_children():
+                child.destroy()
         self.label_resumen_cambios.configure(text="")
+        self.label_resumen_posicion.configure(text="")
         summary = get_latest_report_summary(self.con, self.current_patient_id) if self.current_patient_id else None
         if not summary:
             self.label_resumen_fecha.configure(text="Sin informes con resultados numéricos para este paciente")
             return
         self.label_resumen_fecha.configure(text=f"Último informe: {summary['fecha'][:10]}")
         self._draw_changes(summary)
+        self._draw_positions(summary)
 
         for f in self._classify_latest_report(summary):
             flag, pct, brusco = f["flag_calc"], f["pct"], f["brusco"]
@@ -2055,6 +2165,26 @@ class AnalitixApp(ttk.Window):
         fig.analitix_scroll = len(fig.axes[0].analitix_changes) > HEATMAP_SCROLL_ROWS
         self._embed_figure(fig, self.chart_canvas_resumen_cambios)
         self._attach_changes_hover(fig)
+
+    def _draw_positions(self, summary: dict) -> None:
+        """Gráfico "Posición en el rango" (`charts.position_figure`) del
+        último informe, con el valor anterior de cada parámetro."""
+        filas = [
+            dict(label=f["raw_name"], value=f["value_num"], previous=f["valor_anterior"], unit=f["unit"],
+                 ref_low=f["ref_low"], ref_high=f["ref_high"])
+            for f in self._classify_latest_report(summary)
+        ]
+        fig = position_figure(filas, f"Posición en el rango — último informe ({summary['fecha'][:10]})")
+        ax = fig.axes[0]
+        dibujados, omitidos = len(ax.analitix_positions), ax.analitix_position_skipped
+        self.label_resumen_posicion.configure(
+            text=f"{dibujados} parámetros"
+            + (f" (se omiten {omitidos} sin rango o con solo límite inferior)" if omitidos else "")
+        )
+        if not dibujados:
+            return
+        fig.analitix_scroll = dibujados > HEATMAP_SCROLL_ROWS
+        self._embed_figure(fig, self.chart_canvas_resumen_posicion)
 
     def _attach_changes_hover(self, fig) -> None:
         """Tooltip de cada barra de "Qué ha cambiado": valores, % y rango."""
@@ -3579,6 +3709,10 @@ class AnalitixApp(ttk.Window):
         personal = (
             personal_range(canonical_id, series, sex) if with_personal and self.var_personal_range.get() else None
         )
+        # Después del RCV y del rango personal, que se miden contra el rango
+        # del laboratorio: el objetivo del médico solo cambia lo que se dibuja.
+        if canonical_id:
+            series = apply_target(series, get_target(self.con, self.current_patient_id, canonical_id))
         return self._mark_window(evolution_figure(series, label, self.min_points, rcv=rcv, personal=personal), hidden)
 
     def _comparison_figure(self, series_by_test: dict[str, list[dict]]):

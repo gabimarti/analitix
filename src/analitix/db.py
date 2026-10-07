@@ -83,6 +83,20 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- Objetivo indicado por el médico para un paciente y una prueba (p. ej. LDL
+-- < 100 mg/dL): lo introduce la persona a mano, nunca lo calcula Analitix.
+-- En los gráficos sustituye al rango del laboratorio. Un límite puede faltar
+-- ("< 100" = solo target_high). set_on: "AAAA-MM-DD".
+CREATE TABLE IF NOT EXISTS targets (
+    patient_id INTEGER NOT NULL REFERENCES patients(id),
+    canonical_id TEXT NOT NULL,
+    target_low REAL,
+    target_high REAL,
+    note TEXT,
+    set_on TEXT,
+    PRIMARY KEY (patient_id, canonical_id)
+);
 """
 
 

@@ -226,3 +226,35 @@ def test_last_value_highlighted_once():
              _row("2024-03-01", 14.5, "A"), _row("2024-04-01", 17.2, "A")]
     textos = [t.get_text() for t in evolution_figure(serie, "x").axes[0].texts]
     assert "Último: ▲ 17.2" in textos and "▲ 17.2" not in textos  # sin etiqueta duplicada
+
+
+def test_doctor_target_replaces_range_and_one_sided_limit_is_drawn():
+    from analitix.charts import apply_target, evolution_figure, series_summary
+
+    serie = [_row(f"2024-0{m}-01", v, "A", low=None, high=130.0) for m, v in ((1, 125.0), (2, 110.0), (3, 95.0))]
+    con_objetivo = apply_target(serie, {"low": None, "high": 100.0})
+    assert [s["flag_calc"] for s in con_objetivo] == ["alto", "alto", "normal"]
+    assert series_summary(con_objetivo).startswith("Dentro del objetivo indicado por su médico en 1 de 3")
+    leyenda = [t.get_text() for t in evolution_figure(con_objetivo, "x").axes[0].get_legend().get_texts()]
+    assert "Objetivo indicado por su médico (< 100)" in leyenda
+    leyenda = [t.get_text() for t in evolution_figure(serie, "x").axes[0].get_legend().get_texts()]
+    assert "Límite de referencia (< 130)" in leyenda  # antes, un solo límite no se dibujaba
+
+
+def test_slight_deviation_is_lighter_same_hue_and_labelled():
+    from analitix.charts import COLOR_ALTO, _point_style, deviation_label
+
+    leve, contorno = _point_style({"flag_calc": "alto", "value_num": 16.5, "ref_low": 12.0, "ref_high": 16.0}, "g")
+    grave, _ = _point_style({"flag_calc": "alto", "value_num": 20.0, "ref_low": 12.0, "ref_high": 16.0}, "g")
+    assert contorno == COLOR_ALTO and grave == COLOR_ALTO and leve != COLOR_ALTO  # mismo tono, más claro
+    assert [deviation_label(d) for d in (0, 0.1, -0.5, 1.2)] == [
+        "dentro del rango", "ligeramente alto", "bajo", "muy alto"]
+
+
+def test_doctor_target_note_shown_under_chart():
+    from analitix.charts import apply_target, series_summary
+
+    serie = [_row("2024-01-01", 70.0, "A", 20.0, 45.0), _row("2024-02-01", 50.0, "A", 20.0, 45.0)]
+    texto = series_summary(apply_target(serie, {"low": 30.0, "high": 60.0, "note": "Dra. ficticia, 2026"}))
+    assert texto.splitlines()[1] == "Objetivo indicado por su médico: entre 30 y 60 g/dL · Dra. ficticia, 2026"
+    assert "\n" not in series_summary(serie)  # sin objetivo, una sola línea como antes

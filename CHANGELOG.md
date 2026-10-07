@@ -10,6 +10,16 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ## [Sin publicar]
 
+### Añadido
+
+- Objetivo indicado por tu médico (Evolución → «🎯 Objetivo indicado por mi médico...»): si tu médico te ha fijado un objetivo concreto para una prueba (por ejemplo, LDL por debajo de 100 mg/dL), puedes anotarlo a mano y los gráficos de esa prueba lo muestran en lugar del rango del laboratorio, con la etiqueta «Objetivo indicado por su médico». Analitix nunca propone ni calcula objetivos.
+- Resumen → «Posición en el rango»: cada parámetro del último informe sobre la franja de su rango, con el valor anterior y una palabra que lo resume («ligeramente alto», «muy bajo»…), para comparar de un vistazo parámetros de escalas distintas.
+
+### Cambiado
+
+- El color intenso queda para las desviaciones grandes: un valor fuera de rango por poco se dibuja con el mismo color, más claro. Los colores aptos para daltonismo y los símbolos ▲/▼ no cambian.
+- Los rangos con un solo límite (por ejemplo LDL «< 130») ya dibujan su línea en los gráficos de evolución; antes no se veía ninguna.
+
 ## [0.11.0] - 2026-10-06
 
 ### Cambiado

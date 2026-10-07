@@ -196,6 +196,8 @@ def build_demo_db(path: Path):
                 value_raw=f"{value:g}", value_num=value, unit=units[li], ref_low=low, ref_high=high,
                 ref_text=None, flag_pdf=None, flag_calc=compute_flag(value, low, high), sample_date=f"{fecha} 08:30:00",
             ))
+    # Objetivo del médico de ejemplo (ficticio), para las capturas del LDL.
+    repository.set_target(con, pid, "colesterol_ldl", None, 100.0, "Ejemplo ficticio")
     con.commit()
     return con, pid
 
@@ -305,6 +307,8 @@ def capture_app(con, pid) -> None:
         _select(app.list_tests_evolucion, match)
         app._show_evolution()
         _grab(app, name)
+    dialog_after("objetivo_medico.png")  # con el LDL elegido
+    app._edit_target()
 
     show("comparativa")
     for i, (_cid, label) in enumerate(app._evolution_tests):
@@ -319,6 +323,8 @@ def capture_app(con, pid) -> None:
     _grab(app, "resumen_tabla.png")
     notebook.select(1)
     _grab(app, "resumen_cambios.png")
+    notebook.select(2)
+    _grab(app, "resumen_posicion.png")
 
     show("mapa_calor")
     app.var_mapa_calor_set.set(gui.HEATMAP_OUT_OF_RANGE)

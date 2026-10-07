@@ -473,7 +473,15 @@ Gráfico de una prueba concreta a lo largo del tiempo.
 </p>
 
 <p align="center">
-  <img src="images/evolucion_ldl.png" width="80%" alt="Evolución del colesterol LDL con valores por encima del límite marcados con ▲">
+  <img src="images/evolucion_ldl.png" width="80%" alt="Evolución del colesterol LDL medida contra un objetivo indicado por el médico (menor de 100), con los valores por encima marcados con ▲">
+</p>
+
+Arriba, el LDL con un **objetivo indicado por el médico** (< 100 mg/dL, de
+ejemplo) en lugar del rango del laboratorio; abajo, el diálogo donde se
+anota (ver "🎯 Objetivo indicado por mi médico" más abajo).
+
+<p align="center">
+  <img src="images/objetivo_medico.png" width="50%" alt="Diálogo para anotar el objetivo indicado por el médico">
 </p>
 
 > Capturas con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
@@ -501,13 +509,18 @@ Gráfico de una prueba concreta a lo largo del tiempo.
 - Selecciona una prueba y pulsa **Ver evolución**. El gráfico muestra:
   - La línea de valores en el tiempo, con un punto por análisis.
   - Las líneas discontinuas de mínimo y máximo del rango de referencia (más
-    la banda sombreada entre ambas).
+    la banda sombreada entre ambas). Si el rango tiene un solo límite (por
+    ejemplo, LDL "< 130"), una sola línea con ese límite en la leyenda.
   - Los puntos **fuera de rango** en rojo anaranjado (alto) o azul (bajo),
     con el valor exacto escrito junto al punto precedido de **▲** (alto) o
     **▼** (bajo), con margen suficiente para que no quede pegado al borde
     del gráfico ni a la leyenda. Los colores están elegidos para
     distinguirse también con daltonismo, y el símbolo permite leerlos sin
-    color (por ejemplo, impresos en blanco y negro).
+    color (por ejemplo, impresos en blanco y negro). Si la desviación es
+    **leve** (fuera del rango por menos de una cuarta parte de su ancho),
+    el punto es del mismo color pero **más claro**: el color intenso queda
+    para las desviaciones grandes. Es una ayuda visual, no un criterio
+    clínico.
   - El **último valor** destacado con un anillo y la etiqueta
     **"Último: valor"** (con ▲/▼ si está fuera de rango), para ver de un
     vistazo cómo estás ahora, sin que se pierda entre el histórico.
@@ -535,6 +548,24 @@ Gráfico de una prueba concreta a lo largo del tiempo.
     recuerda. Solo está en esta pantalla, no en los paneles clínicos.
     Fuente y limitaciones en Ayuda → Referencias científicas
     ("referencias_rcv").
+  - **🎯 Objetivo indicado por mi médico** (botón debajo de la lista):
+    algunos médicos fijan para una persona concreta un objetivo distinto
+    del rango del laboratorio, por ejemplo **"LDL por debajo de 100
+    mg/dL"** en alguien con riesgo cardiovascular, o una HbA1c objetivo en
+    diabetes. **Analitix nunca propone ni calcula objetivos**: solo los
+    guarda si **tú los introduces a mano**, copiando lo que te haya
+    indicado tu médico. Elige la prueba, pulsa el botón y escribe el mínimo
+    y/o el máximo (deja vacío el que no te hayan indicado), con las mismas
+    unidades que el informe, y si quieres una nota (quién y cuándo te lo
+    indicó), que aparece junto al objetivo en el texto de debajo del
+    gráfico. Mientras exista, los gráficos de esa prueba (Evolución,
+    Comparativa y paneles) muestran **tu objetivo en lugar del rango del
+    laboratorio**, con la etiqueta "Objetivo indicado por su médico", y los
+    ▲/▼ y el resumen en texto se miden respecto a él. Se muestra en lugar
+    del rango, no junto a él, porque los estudios con pacientes encontraron
+    que así se entiende mejor (Scherer et al. 2018). La tabla del Resumen y
+    los informes PDF completo y de alterados siguen usando el rango del
+    laboratorio. Para quitarlo: mismo botón → **Quitar objetivo**.
   - **Últimos 5 años o todo el histórico**: por defecto, cada gráfico
     muestra los **5 años anteriores a la última analítica** de ese
     parámetro, para que los valores muy antiguos no compriman el estado
@@ -679,6 +710,27 @@ Es el "valor de referencia del cambio" (RCV).
 
 <p align="center">
   <img src="images/resumen_cambios.png" width="80%" alt="Gráfico Qué ha cambiado: barras divergentes por parámetro">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
+**Subpestaña "Posición en el rango".** Dónde está cada parámetro del
+último informe respecto a su rango de referencia, para comparar de un
+vistazo parámetros de escalas muy distintas: una fila por parámetro, la
+franja verde es su rango (de su límite inferior al superior; si solo tiene
+límite superior, desde 0), el **punto lleno** es el valor actual y el
+**hueco** el anterior. A la derecha, una palabra que lo resume ("dentro del
+rango", "ligeramente alto", "alto", "muy alto"…, con ▲/▼) y el valor.
+Arriba aparecen los más alejados del rango. Estar en el centro de la franja
+no es "mejor" que estar cerca de un límite: todo el rango es normal, y por
+eso no se marca el centro. Los parámetros sin rango o con solo límite
+inferior (p. ej. HDL "> 40") no tienen escala y se omiten (se indica
+cuántos). Las palabras ("ligeramente" = fuera por menos de una cuarta
+parte del ancho del rango; "muy" = por más de un ancho entero) son una
+ayuda de lectura, no una clasificación clínica.
+
+<p align="center">
+  <img src="images/resumen_posicion.png" width="80%" alt="Gráfico Posición en el rango: cada parámetro sobre la franja de su rango">
 </p>
 
 > Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).

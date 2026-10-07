@@ -219,6 +219,15 @@ Esquema completo en `db.SCHEMA` (SQLite). Tablas:
   para que una evolución sea representativa: agrupa la lista de
   Evolución/Comparativa y es el umbral del control de pocos datos de todos
   los gráficos de evolución, ver §5, `charts.data_sufficiency`).
+- **`targets`** — objetivo indicado por el médico por paciente y prueba
+  (`patient_id`, `canonical_id` como clave; `target_low`/`target_high`, uno
+  puede ser `NULL`; `note`; `set_on` `AAAA-MM-DD`). Solo lo introduce la
+  persona a mano (botón de Evolución); Analitix nunca lo calcula. Se
+  mantiene coherente con `merge_patients` (se conserva; si los dos tienen
+  uno para la misma prueba gana el del destino), `merge_canonical_ids`
+  (pasa a la prueba destino con el mismo criterio), `delete_patient`,
+  `delete_reports` (si el paciente se queda sin informes) y
+  `delete_all_data`.
 
 Todas las fechas se normalizan a `AAAA-MM-DD[ HH:MM:SS]` (string,
 ordenable lexicográficamente) por `pdf_parser._parse_date`, que admite
@@ -1140,6 +1149,9 @@ sentencias SQL a mano). Funciones relevantes:
   según `alias_audit.unit_relation`.
 - `get_setting`/`set_setting`: tabla `settings` clave/valor (persistencia de
   preferencias, p. ej. la carpeta de informes).
+- `get_target`/`set_target`/`delete_target`: objetivo indicado por el
+  médico (tabla `targets`, ver §4). `set_target` exige al menos un límite
+  y, con los dos, mínimo < máximo (`ValueError`); guarda la fecha del día.
 - `list_files_needing_review`: ficheros con `status="review"` (ver
   `ingest.py`), con su motivo y fecha de importación.
 - `get_stats`: recuento de pacientes/informes/resultados/fuera de
@@ -2141,6 +2153,36 @@ parámetros excluidos a propósito.
   `export.export_pdf` (informes completo y de alterados) no pasa por aquí:
   siempre todo el histórico. Elección de interfaz (Zikmund-Fisher, AHRQ
   2017, no revisado por pares), no un criterio clínico.
+- **Objetivo indicado por el médico**: `gui._edit_target` (botón de
+  Evolución) lo guarda en `targets`. `charts.apply_target(series, target)`
+  devuelve la serie con `ref_low`/`ref_high` = el objetivo, `flag_calc`
+  recalculado con `pdf_parser.compute_flag` y `objetivo=True`, que cambia la
+  leyenda ("Objetivo indicado por su médico") y el texto de
+  `series_summary`, que añade una línea con el objetivo y la nota
+  (`objetivo_nota`, recortada a 60 caracteres). En el diálogo, Máximo va
+  encima de Mínimo, como en un gráfico. **Sustituye** al rango, no se añade (Scherer et al.,
+  J Med Internet Res 2018;20(10):e11027, doi:10.2196/11027). Se aplica en
+  `_evolution_figure` **después** del RCV y del rango personal (ambos se
+  miden contra el rango del laboratorio) y en `_show_comparison`. No se
+  aplica a la tabla del Resumen ni a `export.export_pdf` (rango del
+  laboratorio).
+- **Intensidad del color** (`charts._point_style`): un punto fuera de
+  rango por menos de `DESVIACION_LEVE` (0,25) anchos de rango
+  (`range_distance`) se rellena con el mismo color aclarado
+  (`_tint`, mezcla con blanco) y contorno del color pleno. Cambia la
+  claridad, no el tono: la paleta apta para daltonismo y ▲/▼ no cambian.
+- **Posición en el rango** (`charts.position_figure`, subpestaña del
+  Resumen, `gui._draw_positions`): por parámetro del último informe, el
+  valor en anchos de rango (0 = límite inferior, 1 = superior; con solo
+  límite superior, desde 0; con solo inferior se omite), recortado a
+  [`POSITION_X_MIN`, `POSITION_X_MAX`] con marcador ▶/◀ si se sale, valor
+  anterior hueco y palabra de `deviation_label` ("ligeramente" <
+  `DESVIACION_LEVE`, "muy" ≥ `DESVIACION_GRANDE` = 1). Sin marca de centro
+  (Zikmund-Fisher et al., JAMIA 2017; Brewer et al., Med Decis Making
+  2012). Ordenado del más alejado al más cercano.
+- **Rango de un solo límite** (`_plot_series_on_ax`): se dibuja la línea
+  de ese límite (antes no se dibujaba nada), con "< x" o "> x" en la
+  leyenda.
 - **Solo datos abiertos**: cada fila del CSV cita su artículo (DOI y
   tabla); ningún valor procede de la web de la EFLM Biological Variation
   Database, cuyos términos no permiten redistribuirla.

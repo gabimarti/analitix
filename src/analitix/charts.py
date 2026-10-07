@@ -15,6 +15,7 @@ import matplotlib.dates as mdates
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap, to_rgba
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 # Paleta apta para daltonismo (2026-10-06): colores de Okabe & Ito, "Color
@@ -35,6 +36,52 @@ COLOR_TREND = "#555555"
 COLOR_BRUSCO = "#882255"
 # Símbolo que acompaña al color de alto/bajo (Evolución, Resumen, PDF).
 SIMBOLO_ESTADO = {"alto": "▲", "bajo": "▼"}
+
+# Desviación "leve": fuera del rango por menos de este múltiplo de su ancho
+# (`range_width`; con un único límite, de su valor). El punto se rellena con
+# el mismo color, más claro, y conserva el contorno del color pleno; a
+# partir de aquí, color pleno. Cambia la claridad, no el tono: se sigue
+# distinguiendo con daltonismo y ▲/▼ no cambia. Para distinguir desviaciones
+# leves de graves (Zikmund-Fisher et al., JAMIA 2017;24(3):520-528,
+# doi:10.1093/jamia/ocw169). Elección de interfaz, no un umbral clínico.
+DESVIACION_LEVE = 0.25
+# El mismo umbral da la palabra del gráfico de posición (`deviation_label`):
+# "ligeramente" por debajo de DESVIACION_LEVE, "muy" a partir de DESVIACION_GRANDE.
+DESVIACION_GRANDE = 1.0
+ETIQUETA_OBJETIVO = "Objetivo indicado por su médico"
+
+
+def _tint(color: str, amount: float = 0.55) -> tuple:
+    """El mismo color mezclado con blanco (`amount` = proporción de blanco)."""
+    r, g, b, _ = to_rgba(color)
+    return (r + (1 - r) * amount, g + (1 - g) * amount, b + (1 - b) * amount, 1.0)
+
+
+def _point_style(s: dict[str, Any], base_color: str) -> tuple:
+    """(relleno, contorno) del punto: color de su estado, más claro si la
+    desviación es leve (`DESVIACION_LEVE`)."""
+    color = {"alto": COLOR_ALTO, "bajo": COLOR_BAJO}.get(s.get("flag_calc"), base_color)
+    if s.get("flag_calc") in ("alto", "bajo"):
+        d = range_distance(s["value_num"], s.get("ref_low"), s.get("ref_high"))
+        if d is not None and abs(d) < DESVIACION_LEVE:
+            return _tint(color), color
+    return color, color
+
+
+def apply_target(series: list[dict[str, Any]], target: Optional[dict[str, Any]]) -> list[dict[str, Any]]:
+    """La serie medida contra el objetivo indicado por el médico (`targets`,
+    `repository.get_target`) en vez de contra el rango de cada informe: el
+    objetivo sustituye al rango, no se añade (Scherer et al., J Med Internet
+    Res 2018;20(10):e11027, doi:10.2196/11027: mostrar solo el objetivo se
+    entendió mejor que añadirlo junto al rango estándar). Sin objetivo,
+    devuelve la serie tal cual."""
+    if not target:
+        return series
+    from analitix.pdf_parser import compute_flag  # import local: charts no depende del parser
+
+    low, high = target.get("low"), target.get("high")
+    return [{**s, "ref_low": low, "ref_high": high, "flag_calc": compute_flag(s["value_num"], low, high),
+             "objetivo": True, "objetivo_nota": target.get("note")} for s in series]
 
 # Colores base de cada panel de la comparativa (paneles separados: solo
 # decorativos, pero sin coincidir con el azul de "bajo").
@@ -228,7 +275,8 @@ def series_summary(series: list[dict[str, Any]]) -> Optional[str]:
     if not con_rango:
         return None
     dentro = sum(1 for s in con_rango if s.get("flag_calc") not in ("alto", "bajo"))
-    texto = f"Dentro del rango en {dentro} de {len(con_rango)} analíticas"
+    que = "del objetivo indicado por su médico" if series[0].get("objetivo") else "del rango"
+    texto = f"Dentro {que} en {dentro} de {len(con_rango)} analíticas"
     ultima = series[-1]
     fecha = (ultima.get("fecha") or "")[:10]
     valor, flag = ultima["value_num"], ultima.get("flag_calc")
@@ -241,7 +289,20 @@ def series_summary(series: list[dict[str, Any]]) -> Optional[str]:
         texto += f"; la última ({fecha}), fuera del rango"
     elif ultima.get("ref_low") is not None or ultima.get("ref_high") is not None:
         texto += f"; la última ({fecha}), dentro"
-    return texto + "."
+    texto += "."
+    if series[0].get("objetivo"):
+        # Línea aparte con el objetivo y la nota que le haya puesto la
+        # persona (quién y cuándo se lo indicó), recortada para no ensanchar
+        # el recuadro.
+        lo, hi = ultima.get("ref_low"), ultima.get("ref_high")
+        objetivo = (f"entre {lo:g} y {hi:g}" if lo is not None and hi is not None
+                    else f"< {hi:g}" if hi is not None else f"> {lo:g}")
+        unidad = next((s.get("unit") for s in series if s.get("unit")), "")
+        nota = (series[0].get("objetivo_nota") or "").strip()
+        if len(nota) > 60:
+            nota = nota[:59] + "…"
+        texto += f"\n{ETIQUETA_OBJETIVO}: {objetivo} {unidad}".rstrip() + (f" · {nota}" if nota else "")
+    return texto
 
 
 def _draw_info_box(
@@ -365,19 +426,33 @@ def _plot_series_on_ax(
         ax.fill_between(band_fechas, band_low, band_high, color=base_color, alpha=0.08)
         (h_low,) = ax.plot(band_fechas, band_low, linestyle="--", linewidth=1, color=base_color, alpha=0.6)
         (h_high,) = ax.plot(band_fechas, band_high, linestyle="--", linewidth=1, color=base_color, alpha=0.6)
-        h_low.set_label("Rango de referencia")
+        h_low.set_label(ETIQUETA_OBJETIVO if series[0].get("objetivo") else "Rango de referencia")
         handles.append(h_low)
         y_extent.extend(low_vals)
         y_extent.extend(high_vals)
+    elif ref_low or ref_high:
+        # Un solo límite ("< 130", "> 40"; típico del LDL o de un objetivo
+        # del médico): solo su línea, sin banda, porque el otro lado no tiene
+        # tope. Antes no se dibujaba nada.
+        key, limits = ("ref_high", ref_high) if ref_high else ("ref_low", ref_low)
+        limit_vals = [s[key] if s[key] is not None else limits[-1] for s in series]
+        limit_fechas = fechas
+        if fit is not None:
+            limit_fechas = fechas + [fechas[-1] + dt.timedelta(days=TREND_PROJECTION_DAYS)]
+            limit_vals = limit_vals + [limit_vals[-1]]
+        (h_limit,) = ax.plot(limit_fechas, limit_vals, linestyle="--", linewidth=1, color=base_color, alpha=0.8)
+        nombre = ETIQUETA_OBJETIVO if series[0].get("objetivo") else "Límite de referencia"
+        h_limit.set_label(f"{nombre} ({'<' if key == 'ref_high' else '>'} {limit_vals[-1]:g})")
+        handles.append(h_limit)
+        y_extent.extend(limit_vals)
 
     (h_line,) = ax.plot(fechas, valores, color=base_color, linewidth=1.5, zorder=1)
     h_line.set_label(label)
     handles.append(h_line)
 
-    colors = [
-        COLOR_ALTO if s["flag_calc"] == "alto" else COLOR_BAJO if s["flag_calc"] == "bajo" else base_color
-        for s in series
-    ]
+    estilos = [_point_style(s, base_color) for s in series]
+    colors = [relleno for relleno, _ in estilos]
+    edges = [contorno for _, contorno in estilos]
     # El color del punto ya dice su estado (alto/bajo/normal); el
     # laboratorio de origen va en la FORMA del punto, para no mezclar dos
     # significados en el color. Solo si la serie viene de más de un
@@ -390,7 +465,7 @@ def _plot_series_on_ax(
             idx = [i for i, s in enumerate(series) if (s.get("lab") or LAB_UNKNOWN) == lab]
             scatter = ax.scatter(
                 [fechas[i] for i in idx], [valores[i] for i in idx], c=[colors[i] for i in idx],
-                marker=marker, s=50, zorder=2, edgecolors="white", linewidths=1,
+                marker=marker, s=50, zorder=2, edgecolors=[edges[i] for i in idx], linewidths=1.2,
             )
             # Datos para el tooltip al pasar el cursor (ver gui._attach_hover).
             scatter.analitix_series = [series[i] for i in idx]
@@ -398,7 +473,7 @@ def _plot_series_on_ax(
             h_lab.set_label(lab)
             handles.append(h_lab)
     else:
-        scatter = ax.scatter(fechas, valores, c=colors, zorder=2, s=40)
+        scatter = ax.scatter(fechas, valores, c=colors, zorder=2, s=40, edgecolors=edges, linewidths=1.2)
         # Datos para el tooltip al pasar el cursor (ver gui._attach_hover).
         scatter.analitix_series = series
 
@@ -835,4 +910,93 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
     fig.analitix_tight_rect = (0, 0, 1, 1)  # ver heatmap_figure
     ax.analitix_changes = items
     ax.analitix_changes_unchanged = unchanged
+    return fig
+
+
+# -- Posición dentro del rango (gráfico de bala) ----------------------------
+# Una fila por parámetro del último informe: la franja es su rango de
+# referencia, el punto lleno el valor actual y el hueco el anterior, con una
+# etiqueta verbal ("ligeramente alto"). Recta numérica con etiqueta verbal,
+# sin marcar el centro del rango para no insinuar que es el valor óptimo
+# (Zikmund-Fisher et al., JAMIA 2017;24(3):520-528, doi:10.1093/jamia/ocw169;
+# barras horizontales más rápidas de leer que una tabla con muchos
+# resultados: Brewer et al., Med Decis Making 2012;32(4):545-553,
+# doi:10.1177/0272989X12441395).
+POSITION_X_MIN, POSITION_X_MAX = -0.8, 1.8  # en anchos de rango; fuera, el punto se queda en el borde
+
+
+def deviation_label(distance: float) -> str:
+    """Palabra para la distancia al rango (`range_distance`, en anchos)."""
+    if distance == 0:
+        return "dentro del rango"
+    lado = "alto" if distance > 0 else "bajo"
+    if abs(distance) < DESVIACION_LEVE:
+        return f"ligeramente {lado}"
+    return f"muy {lado}" if abs(distance) >= DESVIACION_GRANDE else lado
+
+
+def position_figure(rows: list[dict[str, Any]], title: str) -> Figure:
+    """Gráfico de posición dentro del rango. `rows`: dicts con `label`,
+    `value`, `previous` (o `None`), `unit`, `ref_low`, `ref_high`. Con solo
+    límite superior ("< 200"), la escala empieza en 0; con solo límite
+    inferior no hay escala y se omite (cuántos, en
+    `ax.analitix_position_skipped`). Ordenado del más alejado del rango al
+    más cercano."""
+    items, skipped = [], 0
+    for r in rows:
+        low, high = r.get("ref_low"), r.get("ref_high")
+        base = 0.0 if low is None else low
+        if r.get("value") is None or high is None or high <= base:
+            skipped += 1
+            continue
+        width = high - base
+        d = range_distance(r["value"], low, high)
+        items.append({**r, "distance": d, "pos": (r["value"] - base) / width,
+                      "prev_pos": None if r.get("previous") is None else (r["previous"] - base) / width})
+    items.sort(key=lambda r: (-abs(r["distance"]), r["label"]))
+
+    n = max(len(items), 1)
+    fig = Figure(figsize=(10, max(3.0, 0.34 * n + 1.6)), dpi=100)
+    ax = fig.add_subplot(111)
+    for i, r in enumerate(items):
+        y = n - 1 - i
+        ax.barh(y, 1, left=0, height=0.4, color=_tint(COLOR_NORMAL, 0.75), zorder=1)
+        if r["prev_pos"] is not None:
+            ax.plot(min(max(r["prev_pos"], POSITION_X_MIN), POSITION_X_MAX), y, marker="o", mfc="white",
+                    mec=COLOR_INK_SECONDARY, ms=6, zorder=2, linestyle="none")
+        flag = "alto" if r["distance"] > 0 else "bajo" if r["distance"] < 0 else None
+        relleno, contorno = _point_style(
+            {"flag_calc": flag, "value_num": r["value"], "ref_low": r["ref_low"], "ref_high": r["ref_high"]},
+            COLOR_NORMAL,
+        )
+        x = min(max(r["pos"], POSITION_X_MIN), POSITION_X_MAX)
+        marker = ">" if r["pos"] > POSITION_X_MAX else "<" if r["pos"] < POSITION_X_MIN else "o"
+        ax.scatter([x], [y], s=70, c=[relleno], edgecolors=[contorno], linewidths=1.4, marker=marker, zorder=3)
+        simbolo = SIMBOLO_ESTADO.get(flag, "")
+        texto = f"{simbolo + ' ' if simbolo else ''}{deviation_label(r['distance'])} · {r['value']:g} {r.get('unit') or ''}"
+        ax.text(POSITION_X_MAX + 0.08, y, texto.rstrip(), va="center", fontsize=8,
+                color=contorno if flag else COLOR_INK_SECONDARY)
+    ax.set_yticks(range(n))
+    ax.set_yticklabels([r["label"] if len(r["label"]) <= 40 else r["label"][:39] + "…" for r in reversed(items)],
+                       fontsize=8)
+    ax.set_ylim(-0.6, n - 0.4)
+    ax.set_xlim(POSITION_X_MIN, POSITION_X_MAX + 1.6)
+    ax.set_xticks([0, 1], ["límite inferior", "límite superior"], fontsize=7, color=COLOR_INK_SECONDARY)
+    ax.tick_params(axis="both", length=0)
+    for side in ("top", "right", "left", "bottom"):
+        ax.spines[side].set_visible(False)
+    ax.set_title(title, fontsize=11, loc="left", pad=30)
+    legend = [
+        Patch(facecolor=_tint(COLOR_NORMAL, 0.75), label="Rango de referencia del laboratorio"),
+        Line2D([], [], marker="o", linestyle="none", mfc=COLOR_ALTO, mec=COLOR_ALTO, label="Último valor"),
+        Line2D([], [], marker="o", linestyle="none", mfc=_tint(COLOR_ALTO), mec=COLOR_ALTO,
+               label="Más claro = desviación leve"),
+        Line2D([], [], marker="o", linestyle="none", mfc="white", mec=COLOR_INK_SECONDARY, label="Valor anterior"),
+    ]
+    ax.legend(handles=legend, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=4, fontsize=7, frameon=False,
+              borderaxespad=0.2)
+    fig.tight_layout()
+    fig.analitix_tight_rect = (0, 0, 1, 1)  # ver heatmap_figure
+    ax.analitix_positions = items
+    ax.analitix_position_skipped = skipped
     return fig

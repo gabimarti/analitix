@@ -123,6 +123,12 @@ Reglas:
 - Nada de parejas verde/rojo o rojo/naranja como única diferencia. Un
   color nuevo se toma de Okabe-Ito o de las paletas de Paul Tol, y si va
   como texto sobre blanco, con contraste ≥ 4.5:1.
+- **Intensidad, no tono, para la gravedad**: una desviación leve usa el
+  mismo color aclarado (`charts._tint`) con contorno del color pleno; el
+  color pleno queda para las grandes. El texto (etiquetas, ▲/▼) va siempre
+  en color pleno, por contraste.
+- Un objetivo del médico, si existe, **sustituye** al rango en el gráfico y
+  se rotula siempre «Objetivo indicado por su médico».
 
 ## 6. Botones
 
