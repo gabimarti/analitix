@@ -3250,7 +3250,8 @@ Pasos para publicar una versión:
 1. **Probar el instalador** desde `develop`, sin publicar:
    **Actions → Release → Run workflow** eligiendo `develop`, o
    `gh workflow run release.yml --ref develop`. Deja el instalador como
-   artefacto descargable de esa ejecución. En local, también
+   artefacto descargable de esa ejecución durante 14 días
+   (`retention-days`; después se borra solo). En local, también
    `scripts\build_windows.bat`.
 2. **En `develop`**: subir la versión en `src/analitix/__init__.py`
    (`__version__`) y, en [`CHANGELOG.md`](../CHANGELOG.md), pasar lo
