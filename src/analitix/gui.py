@@ -8,6 +8,7 @@
 """Interfaz gráfica (Tkinter/ttkbootstrap) de Analitix."""
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import json
 import re
@@ -261,6 +262,24 @@ def _pages_of(filas: list) -> list[tuple[list, str]]:
     if len(trozos) <= 1:
         return [(t, "") for t in trozos]
     return [(t, f" ({n}/{len(trozos)})") for n, t in enumerate(trozos, start=1)]
+
+
+def _check_period(desde: str, hasta: str) -> tuple[str | None, str | None] | None:
+    """(desde, hasta) de dos campos de fecha, `None` si los dos están
+    vacíos, o `ValueError` si una fecha no es AAAA-MM-DD válida o están al
+    revés."""
+    desde, hasta = desde.strip() or None, hasta.strip() or None
+    if desde is None and hasta is None:
+        return None
+    for fecha in (desde, hasta):
+        if fecha is not None:
+            try:
+                dt.date.fromisoformat(fecha)
+            except ValueError:
+                raise ValueError(f"«{fecha}» no es una fecha válida") from None
+    if desde and hasta and desde > hasta:
+        raise ValueError("la fecha «desde» es posterior a «hasta»")
+    return desde, hasta
 
 
 def _same_size(figuras: list) -> list:
@@ -970,6 +989,44 @@ class AnalitixApp(ttk.Window):
         body = ttk.Frame(dialog, padding=PAD)
         body.pack(fill="both", expand=True)
         return dialog, body
+
+    @contextlib.contextmanager
+    def _progress(self, title: str, parent: tk.Misc | None = None):
+        """Ventana de progreso modal para procesos de varios segundos (p. ej.
+        generar un PDF), para que no parezca que la aplicación se ha colgado:
+        texto del paso, barra y cursor de espera. Da una función
+        `paso(texto, valor, total)` que actualiza la barra y repinta. Todo
+        sigue en el hilo principal (como la importación): `update()` procesa
+        los eventos pendientes, pero la ventana tiene el `grab`, así que el
+        usuario no puede lanzar otra acción a medias, y no se puede cerrar."""
+        ventana, body = self._new_dialog(title)
+        ventana.unbind("<Escape>")
+        ventana.protocol("WM_DELETE_WINDOW", lambda: None)
+        texto = tk.StringVar(value="Preparando...")
+        ttk.Label(body, textvariable=texto, width=48).pack(anchor="w")
+        barra = ttk.Progressbar(body, mode="determinate", length=380)
+        barra.pack(fill="x", pady=(6, 0))
+        self._center_dialog(ventana)
+        con_cursor = [w for w in (self, parent, ventana) if w is not None]
+        for w in con_cursor:
+            w.configure(cursor="watch")
+
+        def paso(mensaje: str, valor: int, total: int) -> None:
+            texto.set(mensaje)
+            barra.configure(maximum=max(total, 1), value=valor)
+            ventana.update()
+
+        ventana.update()
+        try:
+            yield paso
+        finally:
+            for w in con_cursor[:-1]:
+                if w.winfo_exists():
+                    w.configure(cursor="")
+            ventana.grab_release()
+            ventana.destroy()
+            if parent is not None and parent is not self and parent.winfo_exists():
+                parent.grab_set()
 
     def _center_dialog(self, dialog: tk.Toplevel) -> None:
         """Centra el diálogo sobre la ventana principal (Tk lo abre en la
@@ -1890,20 +1947,8 @@ class AnalitixApp(ttk.Window):
         self._refresh_bp_panel()
 
     def _bp_periodo(self, desde_clave: str, hasta_clave: str) -> tuple[str | None, str | None] | None:
-        """(desde, hasta) del formulario, `None` si los dos están vacíos, o
-        `ValueError` si una fecha no es AAAA-MM-DD válida o están al revés."""
-        desde, hasta = (self.vars_bp_periodo[k].get().strip() or None for k in (desde_clave, hasta_clave))
-        if desde is None and hasta is None:
-            return None
-        for fecha in (desde, hasta):
-            if fecha is not None:
-                try:
-                    dt.date.fromisoformat(fecha)
-                except ValueError:
-                    raise ValueError(f"«{fecha}» no es una fecha válida") from None
-        if desde and hasta and desde > hasta:
-            raise ValueError("la fecha «desde» es posterior a «hasta»")
-        return desde, hasta
+        """(desde, hasta) del formulario (ver `_check_period`)."""
+        return _check_period(*(self.vars_bp_periodo[k].get() for k in (desde_clave, hasta_clave)))
 
     def _refresh_bp_panel(self) -> None:
         if not hasattr(self, "text_bp_summary"):
@@ -4379,10 +4424,12 @@ class AnalitixApp(ttk.Window):
         filtro = self._lab_filter_text()
         if filtro:
             tipo_informe = f"{tipo_informe} · {filtro}"  # portada y pie de cada página
-        paginas = export_pdf(
-            patient_name, fecha, filas, series_by_canonical_id, labels, CAMBIO_BRUSCO_PCT, Path(path),
-            tipo_informe=tipo_informe, min_points=self.min_points,
-        )
+        with self._progress("Generando informe PDF") as paso:
+            paginas = export_pdf(
+                patient_name, fecha, filas, series_by_canonical_id, labels, CAMBIO_BRUSCO_PCT, Path(path),
+                tipo_informe=tipo_informe, min_points=self.min_points,
+                on_progress=lambda n, t: paso(f"Escribiendo página {n} de {t}...", n, t),
+            )
         messagebox.showinfo(
             "Exportado",
             f"Informe generado con {len(filas)} parámetros y {paginas} gráficos en:\n{path}",
@@ -4435,15 +4482,29 @@ class AnalitixApp(ttk.Window):
         var_cambios = tk.BooleanVar(value=False)
         var_mapa = tk.BooleanVar(value=False)
         var_tension = tk.BooleanVar(value=False)
-        hay_tension = bool(self._bp_readings_windowed()[0])
+        lecturas_bp = list_bp_readings(self.con, self.current_patient_id)
         for var, texto in (
             (var_tabla, f"{'⚠ ' if alterado_ahora else ''}Tabla del último informe ({summary['fecha'][:10]})"),
             (var_cambios, "Qué ha cambiado (respecto al informe anterior)"),
         ):
             ttk.Checkbutton(secciones, text=texto, variable=var).pack(anchor="w", padx=8, pady=1)
-        if hay_tension:
-            ttk.Checkbutton(secciones, text="Tensión arterial (resumen y gráfico)", variable=var_tension).pack(
-                anchor="w", padx=8, pady=1)
+        # Periodo de la tensión arterial en el informe: por defecto, el
+        # último año (los mismos 365 días que el botón "Último año" del panel).
+        hoy = dt.date.today()
+        vars_bp_pdf = (tk.StringVar(value=(hoy - dt.timedelta(days=BP_RANGO_DIAS["1a"] - 1)).isoformat()),
+                       tk.StringVar(value=hoy.isoformat()))
+        if lecturas_bp:
+            fila_tension = ttk.Frame(secciones)
+            fila_tension.pack(anchor="w", padx=8, pady=1)
+            ttk.Checkbutton(fila_tension, text="Tensión arterial (resumen y gráfico):", variable=var_tension).pack(
+                side="left")
+            for texto, var in (("desde", vars_bp_pdf[0]), ("hasta", vars_bp_pdf[1])):
+                ttk.Label(fila_tension, text=texto).pack(side="left", padx=(8, 4))
+                entrada = ttk.Entry(fila_tension, textvariable=var, width=11)
+                self._restrict(entrada, r"[\d-]{0,10}")
+                entrada.pack(side="left")
+            ttk.Label(secciones, text="Fechas AAAA-MM-DD; en blanco, sin límite.", bootstyle="secondary").pack(
+                anchor="w", padx=32)
         fila_mapa = ttk.Frame(secciones)
         fila_mapa.pack(anchor="w", padx=8, pady=1)
         ttk.Checkbutton(fila_mapa, text="Mapa de calor:", variable=var_mapa).pack(side="left")
@@ -4477,6 +4538,17 @@ class AnalitixApp(ttk.Window):
                 state="normal" if series else "disabled",
             ).grid(row=i // 2, column=i % 2, sticky="w", padx=8, pady=1)
 
+        graficos = ttk.Labelframe(body, text="Gráficos", padding=6)
+        graficos.pack(fill="x", pady=(6, 0))
+        var_por_pagina = tk.IntVar(value=1)
+        # La opción de 3 por página queda desactivada: con los gráficos de
+        # evolución (recuadro de notas) no caben más de 2 sin bajar de
+        # `export._CHARTS_MIN_SCALE`. `export._flow_pages` sigue admitiéndola;
+        # para recuperarla, añadir (3, "Tres por página, en vertical (menos hojas)").
+        for valor, texto in ((1, "Uno por página, en horizontal (más detalle)"),
+                             (2, "Dos por página, en vertical (menos hojas)")):
+            ttk.Radiobutton(graficos, text=texto, variable=var_por_pagina, value=valor).pack(anchor="w", padx=8, pady=1)
+
         def _marcar_alterados() -> None:
             for t, var in zip(tests, vars_tests):
                 var.set(bool(t["out_of_range"]))
@@ -4494,40 +4566,14 @@ class AnalitixApp(ttk.Window):
                     or elegidos):
                 messagebox.showwarning("Informe personalizado", "Elige al menos una sección.", parent=dialog)
                 return
-            paginas = []
-            if var_tabla.get():
-                filas = self._classify_latest_report(summary)
-                paginas.append(table_page(summary["fecha"], [f for f in filas if f["flag_calc"] in ("alto", "bajo")],
-                                          CAMBIO_BRUSCO_PCT, "Parámetros alterados en la última analítica"))
-                paginas.append(table_page(summary["fecha"], [f for f in filas if f["flag_calc"] not in ("alto", "bajo")],
-                                          CAMBIO_BRUSCO_PCT, "Resto de parámetros"))
-            if var_cambios.get():
-                medibles = [f for f in self._changes_rows(summary) if f["previous"] is not None
-                            and (f["ref_low"] is not None or f["ref_high"] is not None)]
-                # Orden global de mayor a menor cambio antes de repartir en
-                # páginas (cada página conserva ese orden).
-                def _magnitud(f):
-                    status = change_status(f["previous"], f["value"], f["ref_low"], f["ref_high"])
-                    return abs(status[0]) if status else 0.0
-                medibles.sort(key=_magnitud, reverse=True)
-                titulo = f"Qué ha cambiado — último informe ({summary['fecha'][:10]})"
-                paginas.extend(_same_size([changes_figure(trozo, titulo + sufijo) for trozo, sufijo in _pages_of(medibles)]))
-            if var_mapa.get():
-                conjunto = var_conjunto_mapa.get()
-                paginas.extend(_same_size([heatmap_figure(trozo, conjunto + sufijo)
-                                           for trozo, sufijo in _pages_of(self._heatmap_rows(conjunto))]))
-            for t in seleccion:
-                serie = get_series(self.con, t["canonical_id"], self.current_patient_id)
-                paginas.append(self._evolution_figure(serie, t["raw_name"], t["canonical_id"], with_personal=True))
+            periodo_bp = None
             if var_tension.get():
-                lecturas, ocultas = self._bp_readings_windowed()
-                paginas.append(text_page("Tensión arterial", bp_summary_text(lecturas)))
-                paginas.append(self._mark_window(bp_figure(lecturas, "Tensión arterial"), ocultas, "mediciones"))
-            for key, label in elegidos:
-                paginas.extend(self._panel_pdf_pages(key, label))
-            if not paginas:
-                messagebox.showinfo("Informe personalizado", "Las secciones elegidas no tienen datos.", parent=dialog)
-                return
+                try:
+                    periodo_bp = _check_period(*(v.get() for v in vars_bp_pdf)) or (None, None)
+                except ValueError as exc:
+                    messagebox.showwarning("Fechas no válidas", f"Revisa las fechas de la tensión arterial "
+                                           f"(AAAA-MM-DD): {exc}.", parent=dialog)
+                    return
             path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[(".pdf", "*.pdf")], parent=dialog)
             if not path:
                 return
@@ -4536,8 +4582,74 @@ class AnalitixApp(ttk.Window):
             if filtro:
                 tipo_informe = f"{tipo_informe} · {filtro}"
             patient = next((p for p in self.patients if p["id"] == self.current_patient_id), None)
-            total = export_pages_pdf(patient["full_name"] if patient else "—", summary["fecha"], paginas, Path(path),
-                                     tipo_informe=tipo_informe)
+            # Barra de progreso: primero cada sección (gráficos y tablas),
+            # después cada página escrita.
+            pasos = (var_tabla.get() + var_cambios.get() + var_mapa.get() + (periodo_bp is not None)
+                     + len(seleccion) + len(elegidos))
+            total = 0
+            with self._progress("Generando informe PDF", dialog) as paso:
+                hechos = 0
+
+                def avanza() -> None:
+                    nonlocal hechos
+                    hechos += 1
+                    paso(f"Preparando secciones ({hechos} de {pasos})...", hechos, pasos)
+
+                paginas = []
+                if var_tabla.get():
+                    filas = self._classify_latest_report(summary)
+                    paginas.append(table_page(summary["fecha"], [f for f in filas if f["flag_calc"] in ("alto", "bajo")],
+                                              CAMBIO_BRUSCO_PCT, "Parámetros alterados en la última analítica"))
+                    paginas.append(table_page(summary["fecha"], [f for f in filas if f["flag_calc"] not in ("alto", "bajo")],
+                                              CAMBIO_BRUSCO_PCT, "Resto de parámetros"))
+                    avanza()
+                if var_cambios.get():
+                    medibles = [f for f in self._changes_rows(summary) if f["previous"] is not None
+                                and (f["ref_low"] is not None or f["ref_high"] is not None)]
+                    # Orden global de mayor a menor cambio antes de repartir en
+                    # páginas (cada página conserva ese orden).
+                    def _magnitud(f):
+                        status = change_status(f["previous"], f["value"], f["ref_low"], f["ref_high"])
+                        return abs(status[0]) if status else 0.0
+                    medibles.sort(key=_magnitud, reverse=True)
+                    titulo = f"Qué ha cambiado — último informe ({summary['fecha'][:10]})"
+                    paginas.extend(_same_size([changes_figure(trozo, titulo + sufijo) for trozo, sufijo in _pages_of(medibles)]))
+                    avanza()
+                if var_mapa.get():
+                    conjunto = var_conjunto_mapa.get()
+                    paginas.extend(_same_size([heatmap_figure(trozo, conjunto + sufijo)
+                                               for trozo, sufijo in _pages_of(self._heatmap_rows(conjunto))]))
+                    avanza()
+                for t in seleccion:
+                    serie = get_series(self.con, t["canonical_id"], self.current_patient_id)
+                    paginas.append(self._evolution_figure(serie, t["raw_name"], t["canonical_id"], with_personal=True))
+                    avanza()
+                if periodo_bp is not None:
+                    # El periodo elegido manda sobre la ventana de años, como el
+                    # intervalo del panel; el gráfico agrupa según su duración.
+                    desde, hasta = periodo_bp
+                    lecturas = [r for r in lecturas_bp if (desde is None or r["measured_at"][:10] >= desde)
+                                and (hasta is None or r["measured_at"][:10] <= hasta)]
+                    inicio = dt.date.fromisoformat(desde) if desde else None
+                    fin = dt.date.fromisoformat(hasta) if hasta else hoy
+                    titulo = f"Tensión arterial · {desde or 'inicio'} a {hasta or 'hoy'}"
+                    paginas.append(text_page(titulo, bp_summary_text(lecturas)))
+                    if lecturas or inicio is not None:
+                        paginas.append(bp_figure(lecturas, titulo, dias=None if inicio is None else (fin - inicio).days + 1,
+                                                 desde=inicio if inicio is not None and fin >= hoy else None))
+                    avanza()
+                for key, label in elegidos:
+                    paginas.extend(self._panel_pdf_pages(key, label))
+                    avanza()
+                if paginas:
+                    total = export_pages_pdf(
+                        patient["full_name"] if patient else "—", summary["fecha"], paginas, Path(path),
+                        tipo_informe=tipo_informe, graficos_por_pagina=var_por_pagina.get(),
+                        on_progress=lambda n, t: paso(f"Escribiendo página {n} de {t}...", n, t),
+                    )
+            if not total:
+                messagebox.showinfo("Informe personalizado", "Las secciones elegidas no tienen datos.", parent=dialog)
+                return
             dialog.destroy()
             messagebox.showinfo("Exportado", f"Informe personalizado de {total} páginas en:\n{path}", parent=self)
 

@@ -33,6 +33,7 @@ aquí.
 | `LIST_COLUMN_CHARS = 38` | Ancho de la lista de la columna izquierda; fija el ancho de toda la columna. |
 | `self._new_dialog(título)` | Crea cualquier cuadro de diálogo (§7). |
 | `self._center_dialog(dialog)` | Centra el diálogo sobre la ventana principal. |
+| `with self._progress(título, parent) as paso:` | Ventana de progreso modal (barra, texto y cursor de espera) para cualquier proceso de varios segundos; `paso(texto, valor, total)` la actualiza. |
 | `self._same_width(b1, b2, ...)` | Mismo ancho para un grupo de botones (§6). |
 | `self._list_column(left, texto, height=...)` | Etiqueta + lista de la columna izquierda (§4). |
 | `self._fixed_column(left)` | Columna izquierda sin lista, con el mismo ancho (§4). |

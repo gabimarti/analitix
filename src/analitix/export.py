@@ -3,26 +3,29 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-07
-# Última actualización: 2026-10-06
+# Última actualización: 2026-10-08
 # ---------------------------------------------------------------------------
 """Exportación de resultados a Excel, CSV y PDF."""
 from __future__ import annotations
 
 import datetime as dt
+import io
 import textwrap
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Optional
 
 import matplotlib.image as mpimg
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 
+from analitix import __version__, __version_date__
 from analitix.charts import (
     COLOR_ALTO, COLOR_BAJO, COLOR_BRUSCO, DEFAULT_MIN_POINTS, data_sufficiency, evolution_figure,
 )
 from analitix.config import LOGO_PATH
 from analitix.pdf_parser import NUMERIC_TOKEN_RE
+from analitix.updates import REPO_URL
 
 # Excel/LibreOffice interpretan una celda de texto como fórmula si empieza por
 # uno de estos caracteres (inyección de fórmulas CSV/Excel, CWE-1236). Los
@@ -93,12 +96,20 @@ _PDF_DISCLAIMER = (
 )
 
 
+# Versión con la que se generó el informe, en la portada y en el pie de cada
+# página, para saber de dónde sale cualquier página suelta.
+_ANALITIX_VERSION = f"Analitix {__version__} ({__version_date__})"
 _FOOTER_STRIP_IN = 0.4  # franja propia del pie en las páginas que no eran A4
 # Tabla de parámetros: el nombre ocupa casi la mitad (antes las cinco
 # columnas medían igual y el nombre se cortaba); el estado es una palabra.
 _TABLE_COL_WIDTHS = (0.46, 0.15, 0.15, 0.09, 0.15)
 _TABLE_NAME_MAX = 60  # caracteres que caben en esa columna a 8 pt
 _A4_IN = (8.27, 11.69)
+
+
+def _is_a4(fig: Figure) -> bool:
+    ancho, alto = fig.get_size_inches()
+    return sorted((round(ancho, 2), round(alto, 2))) == sorted(_A4_IN)
 
 
 def _fit_page_a4(fig: Figure) -> None:
@@ -111,9 +122,9 @@ def _fit_page_a4(fig: Figure) -> None:
     comprime el resto en vertical (ejes, textos y leyendas de figura), para
     que el pie no se superponga a nada. Las páginas que ya son A4 (portada,
     tablas, textos) tienen su sitio para el pie y no se tocan."""
-    ancho, alto = fig.get_size_inches()
-    if sorted((round(ancho, 2), round(alto, 2))) == sorted(_A4_IN):
+    if _is_a4(fig):
         return
+    ancho, alto = fig.get_size_inches()
     nuevo_ancho, nuevo_alto = _A4_IN if alto > ancho else _A4_IN[::-1]
     escala, desplazamiento = 1 - _FOOTER_STRIP_IN / nuevo_alto, _FOOTER_STRIP_IN / nuevo_alto
     fig.set_size_inches(nuevo_ancho, nuevo_alto)
@@ -138,19 +149,25 @@ def _fit_page_a4(fig: Figure) -> None:
         leyenda.set_bbox_to_anchor((0, desplazamiento, 1, escala), transform=fig.transFigure)
 
 
-def _add_footer(fig: Figure, tipo_informe: str, pagina: int) -> None:
-    """Pie de página (tipo de informe a la izquierda, nº de página a la
-    derecha) en todas las páginas del PDF, incluida la portada, en una
-    franja propia que no tapa el contenido, en una página A4 (`_fit_page_a4`)."""
+def _add_footer(fig: Figure, tipo_informe: str, pagina: int, total: int) -> None:
+    """Pie de página en todas las páginas del PDF, incluida la portada, en
+    una franja propia que no tapa el contenido, en una página A4
+    (`_fit_page_a4`): tipo de informe a la izquierda y "Página n de N" a la
+    derecha; debajo, centrada, la versión de Analitix (en su propia línea
+    porque el tipo de informe puede ser largo, p. ej. con el filtro de
+    laboratorios)."""
     _fit_page_a4(fig)
-    y = 0.08 / fig.get_size_inches()[1]  # a 0,08 pulgadas del borde inferior
+    alto = fig.get_size_inches()[1]
+    y = 0.2 / alto  # a 0,2 pulgadas del borde inferior
     fig.text(0.06, y, tipo_informe, fontsize=8, color="#777777")
-    fig.text(0.94, y, f"Página {pagina}", fontsize=8, color="#777777", ha="right")
+    fig.text(0.94, y, f"Página {pagina} de {total}", fontsize=8, color="#777777", ha="right")
+    fig.text(0.5, 0.06 / alto, _ANALITIX_VERSION, fontsize=7, color="#777777", ha="center")
 
 
 def _cover_page(patient_name: str, tipo_informe: str, fecha: str) -> Figure:
-    """Portada: logo de Analitix, nombre del paciente, tipo de informe y
-    fecha — sin ninguna tabla (eso empieza en la página siguiente)."""
+    """Portada: logo de Analitix, nombre del paciente, tipo de informe,
+    fecha, versión de Analitix y URL del proyecto — sin ninguna tabla (eso
+    empieza en la página siguiente)."""
     fig = Figure(figsize=(8.27, 11.69), dpi=100)  # A4 vertical
     try:
         logo = mpimg.imread(str(LOGO_PATH))
@@ -166,6 +183,8 @@ def _cover_page(patient_name: str, tipo_informe: str, fecha: str) -> Figure:
         0.5, 0.40, f"Último informe de laboratorio: {fecha[:10]}  ·  Generado: {dt.date.today().isoformat()}",
         fontsize=10, ha="center", color="#555555",
     )
+    fig.text(0.5, 0.20, f"Generado con {_ANALITIX_VERSION}", fontsize=9, ha="center", color="#555555")
+    fig.text(0.5, 0.18, REPO_URL, fontsize=9, ha="center", color="#555555")
     fig.text(0.5, 0.1, _PDF_DISCLAIMER, fontsize=8, color="#555555", ha="center", wrap=True)
     return fig
 
@@ -226,6 +245,7 @@ def export_pdf(
     *,
     tipo_informe: str,
     min_points: int = DEFAULT_MIN_POINTS,
+    on_progress: Optional[Callable[[int, int], None]] = None,
 ) -> int:
     """Informe de seguimiento en PDF (ampliado 2026-09-21 en dos pasos:
     primero con dos tipos de informe — "completo"/"de alterados", ver
@@ -246,13 +266,19 @@ def export_pdf(
        `min_points` (el mismo ajuste de Configuración que la pantalla) el
        gráfico lleva el aviso de pocos datos de `charts.data_sufficiency`.
 
-    Todas las páginas llevan pie con `tipo_informe` a la izquierda y el
-    nº de página a la derecha. Devuelve el nº de páginas de gráfico
-    añadidas."""
+    Todas las páginas llevan pie (`_add_footer`). `on_progress(n, total)`
+    se llama tras escribir cada página (barra de progreso de `gui.py`).
+    Devuelve el nº de páginas de gráfico añadidas."""
     fuera_de_rango = [f for f in filas if f["flag_calc"] in ("alto", "bajo")]
     resto = [f for f in filas if f["flag_calc"] not in ("alto", "bajo")]
+    # Se sabe de antemano qué gráficos habrá, para el "de N" del pie.
+    graficos = []
+    for f in filas:
+        series = series_by_canonical_id.get(f["canonical_id"])
+        if series and data_sufficiency(len(series), min_points) not in ("sin_datos", "un_punto"):
+            graficos.append((f, series))
+    total = 3 + len(graficos)
 
-    paginas_graficos = 0
     pagina = 1
     with PdfPages(path) as pdf:
         for fig in (
@@ -260,20 +286,20 @@ def export_pdf(
             _table_page(fecha, fuera_de_rango, cambio_brusco_pct, "Parámetros alterados en la última analítica"),
             _table_page(fecha, resto, cambio_brusco_pct, "Resto de parámetros"),
         ):
-            _add_footer(fig, tipo_informe, pagina)
+            _add_footer(fig, tipo_informe, pagina, total)
             pdf.savefig(fig)
+            if on_progress:
+                on_progress(pagina, total)
             pagina += 1
 
-        for f in filas:
-            series = series_by_canonical_id.get(f["canonical_id"])
-            if not series or data_sufficiency(len(series), min_points) in ("sin_datos", "un_punto"):
-                continue
+        for f, series in graficos:
             fig = evolution_figure(series, labels.get(f["canonical_id"], f["raw_name"]), min_points)
-            _add_footer(fig, tipo_informe, pagina)
+            _add_footer(fig, tipo_informe, pagina, total)
             pdf.savefig(fig)
+            if on_progress:
+                on_progress(pagina, total)
             pagina += 1
-            paginas_graficos += 1
-    return paginas_graficos
+    return len(graficos)
 
 
 # -- Informe PDF personalizado (Exportar → "Informe PDF personalizado...") --
@@ -290,26 +316,148 @@ def text_page(titulo: str, texto: str) -> Figure:
     """Página A4 con un título y un texto (p. ej. el resumen de un panel
     clínico tal como se ve en pantalla). El texto se ajusta a lo ancho y
     se corta al final de la página si no cabe; los resúmenes de los
-    paneles caben de sobra."""
+    paneles caben de sobra. Guarda título y líneas en
+    `fig.analitix_text`: con varios gráficos por página, `_flow_pages`
+    pone el texto en el flujo y los gráficos siguen justo debajo."""
     fig = Figure(figsize=(8.27, 11.69), dpi=100)  # A4 vertical
-    fig.text(0.06, 0.95, titulo, fontsize=14, weight="bold")
     lineas = []
     for parrafo in texto.strip().splitlines():
         lineas.extend(textwrap.wrap(parrafo, width=_TEXT_PAGE_WIDTH) or [""])
-    fig.text(0.06, 0.91, "\n".join(lineas[:_TEXT_PAGE_MAX_LINES]), fontsize=9, va="top", linespacing=1.4)
+    lineas = lineas[:_TEXT_PAGE_MAX_LINES]
+    fig.analitix_text = (titulo, lineas)
+    fig.text(0.06, 0.95, titulo, fontsize=14, weight="bold")
+    fig.text(0.06, 0.95 - _TEXT_GAP_IN / 11.69, "\n".join(lineas), fontsize=9, va="top", linespacing=1.4)
     return fig
 
 
 _TEXT_PAGE_WIDTH = 100
 _TEXT_PAGE_MAX_LINES = 70
+_TEXT_GAP_IN = 0.3  # de la línea base del título al principio del texto
+_TEXT_LINE_IN = 9 * 1.4 / 72  # alto de cada línea de texto (9 pt, interlineado 1,4)
 
 
-def export_pages_pdf(patient_name: str, fecha: str, paginas: list[Figure], path: Path, *, tipo_informe: str) -> int:
+# Varios gráficos por página A4 vertical (informe personalizado): márgenes
+# y resolución a la que se rasteriza cada gráfico (suficiente para imprimir).
+_CHARTS_MARGIN_IN = 0.5
+_CHARTS_BOTTOM_IN = _FOOTER_STRIP_IN + 0.25
+_CHARTS_GAP_IN = 0.15
+_CHARTS_DPI = 200
+# Los gráficos se reducen como mucho a este tamaño para que quepan 2 o 3 por
+# página; uno más alto (recuadro de notas largo, tensión arterial con dos
+# ejes) ocupa más sitio en vez de quedar ilegible.
+_CHARTS_MIN_SCALE = 0.75
+
+
+def _is_chart(fig: Figure) -> bool:
+    """Gráfico agrupable: ni página A4 propia (portada, tablas, textos) ni
+    figura de altura variable ("Qué ha cambiado", mapa de calor), que
+    siguen ocupando su página."""
+    return not _is_a4(fig) and getattr(fig, "analitix_tight_rect", None) is None
+
+
+def _flow_pages(paginas: list[Figure], por_pagina: int) -> list[Figure | list[tuple[str, Any, float]]]:
+    """Con `por_pagina` 2 o 3, rellena páginas A4 verticales de arriba abajo
+    con los textos (`text_page`) y gráficos seguidos de `paginas`: cada
+    gráfico a todo el ancho útil y con alto 1/`por_pagina` del útil (sin
+    bajar de `_CHARTS_MIN_SCALE` de su tamaño), y un texto con el alto que
+    ocupa, así que los gráficos de un panel van justo debajo de su
+    resumen. Cada página es una lista de bloques `(tipo, contenido, alto)`
+    que `_flow_page` dibuja al escribirla (así la barra de progreso avanza
+    también mientras se rasterizan). Las demás páginas (tablas, "Qué ha
+    cambiado", mapa de calor) quedan igual y cortan el flujo. Con 1, todo
+    queda igual."""
+    if por_pagina <= 1:
+        return paginas
+    alto_util = _A4_IN[1] - _CHARTS_MARGIN_IN - _CHARTS_BOTTOM_IN
+    franja = alto_util / por_pagina - _CHARTS_GAP_IN
+    resultado, bloques, libre = [], [], alto_util
+
+    def cierra() -> None:
+        nonlocal bloques, libre
+        if bloques:
+            resultado.append(bloques)
+        bloques, libre = [], alto_util
+
+    def bloque_de(fig: Figure) -> Optional[tuple[str, Any, float]]:
+        texto = getattr(fig, "analitix_text", None)
+        if texto is not None:
+            return "texto", texto, _TEXT_GAP_IN + len(texto[1]) * _TEXT_LINE_IN + 0.15
+        if _is_chart(fig):
+            alto = fig.get_size_inches()[1]
+            return "grafico", fig, min(alto, max(franja, alto * _CHARTS_MIN_SCALE), alto_util)
+        return None
+
+    bloques_de = [bloque_de(fig) for fig in paginas]
+    for i, (fig, bloque) in enumerate(zip(paginas, bloques_de)):
+        if bloque is None or bloque[2] > alto_util:  # no fluye, o texto de más de una página
+            cierra()
+            resultado.append(fig)
+            continue
+        necesario = bloque[2]
+        siguiente = bloques_de[i + 1] if i + 1 < len(paginas) else None
+        if bloque[0] == "texto" and siguiente is not None and siguiente[0] == "grafico":
+            # El resumen de un panel no se queda solo al pie de la página:
+            # va con su primer gráfico.
+            necesario = min(necesario + _CHARTS_GAP_IN + siguiente[2], alto_util)
+        if necesario > libre:
+            cierra()
+        bloques.append(bloque)
+        libre -= bloque[2] + _CHARTS_GAP_IN
+    cierra()
+    return resultado
+
+
+def _flow_page(bloques: list[tuple[str, Any, float]]) -> Figure:
+    """Dibuja una página de `_flow_pages`. Los gráficos se rehacen al ancho
+    útil (se cambia el ancho de la figura, no se estira la imagen) y, si
+    tienen que encoger, se dibujan más anchos y se reduce la imagen
+    entera: nunca se deforman y todos ocupan el mismo ancho."""
+    # ponytail: rasterizado (el texto de los gráficos no se puede seleccionar);
+    # vectorial exigiría rehacer cada gráfico como subfigura.
+    ancho_a4, alto_a4 = _A4_IN
+    page = Figure(figsize=_A4_IN, dpi=100)
+    ancho_util = ancho_a4 - 2 * _CHARTS_MARGIN_IN
+    arriba = alto_a4 - _CHARTS_MARGIN_IN
+    for tipo, contenido, alto in bloques:
+        if tipo == "texto":
+            titulo, lineas = contenido
+            page.text(_CHARTS_MARGIN_IN / ancho_a4, (arriba - 0.2) / alto_a4, titulo, fontsize=14, weight="bold")
+            page.text(_CHARTS_MARGIN_IN / ancho_a4, (arriba - 0.2 - _TEXT_GAP_IN) / alto_a4, "\n".join(lineas),
+                      fontsize=9, va="top", linespacing=1.4)
+        else:
+            fig = contenido
+            escala = alto / fig.get_size_inches()[1]
+            fig.set_size_inches(ancho_util / escala, alto / escala)
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", dpi=_CHARTS_DPI * escala)
+            buf.seek(0)
+            ax = page.add_axes((_CHARTS_MARGIN_IN / ancho_a4, (arriba - alto) / alto_a4,
+                                ancho_util / ancho_a4, alto / alto_a4))
+            ax.imshow(mpimg.imread(buf), interpolation="none")
+            ax.axis("off")
+        arriba -= alto + _CHARTS_GAP_IN
+    return page
+
+
+def export_pages_pdf(patient_name: str, fecha: str, paginas: list[Figure], path: Path, *, tipo_informe: str,
+                     graficos_por_pagina: int = 1,
+                     on_progress: Optional[Callable[[int, int], None]] = None) -> int:
     """Escribe el informe personalizado: portada (`_cover_page`, con el
     aviso de que no es un diagnóstico) y después `paginas` en ese orden,
-    todas con pie (`_add_footer`). Devuelve el nº total de páginas."""
+    todas con pie (`_add_footer`). Con `graficos_por_pagina` 2 o 3, los
+    textos y gráficos seguidos llenan páginas A4 verticales, 2 o 3 gráficos
+    por página a todo el ancho (`_flow_pages`); con 1, cada uno en su
+    página (apaisada).
+    `on_progress(n, total)` se llama tras escribir cada página. Devuelve el
+    nº total de páginas."""
+    paginas = _flow_pages(paginas, graficos_por_pagina)
+    total = len(paginas) + 1
     with PdfPages(path) as pdf:
         for numero, fig in enumerate([_cover_page(patient_name, tipo_informe, fecha), *paginas], start=1):
-            _add_footer(fig, tipo_informe, numero)
+            if isinstance(fig, list):
+                fig = _flow_page(fig)
+            _add_footer(fig, tipo_informe, numero, total)
             pdf.savefig(fig)
-    return len(paginas) + 1
+            if on_progress:
+                on_progress(numero, total)
+    return total

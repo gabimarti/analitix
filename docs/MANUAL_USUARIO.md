@@ -1367,7 +1367,8 @@ Resultados de las mediciones registradas en Entrada manual → Tensión arterial
   su media. Abajo, el pulso. Respeta la ventana de 5 años / «Ver todo el
   histórico» (§2.4).
 - En **Exportar → Informe PDF personalizado** puedes añadir la sección
-  «Tensión arterial (resumen y gráfico)».
+  «Tensión arterial (resumen y gráfico)» del periodo que elijas («desde» y
+  «hasta»); por defecto, el último año hasta hoy.
 - Fuentes literales y limitaciones en Ayuda → Referencias científicas
   ("referencias_tension_arterial").
 
@@ -1387,6 +1388,12 @@ Exporta los resultados del paciente seleccionado a un fichero:
 - **Exportar a CSV...**: mismo contenido en formato CSV, compatible con
   Excel, hojas de cálculo y cualquier herramienta de análisis de datos.
 
+Mientras se genera cualquier informe PDF (puede tardar unos segundos si
+lleva muchos gráficos) aparece una ventana **«Generando informe PDF»** con
+una barra de progreso y el paso en curso («Preparando secciones…»,
+«Escribiendo página n de N…»), y el cursor se convierte en un reloj; se
+cierra sola al terminar.
+
 Dos informes en PDF pensados para llevar a una consulta médica, no un
 volcado de todos los datos — **apoyo informativo y de seguimiento, nunca
 un diagnóstico**. Los dos siguen la misma estructura de página:
@@ -1400,8 +1407,11 @@ un diagnóstico**. Los dos siguen la misma estructura de página:
    un cambio brusco (≥30%) — nunca para los normales, ni para uno del
    que solo hay un valor registrado (no hay evolución que mostrar).
 
-Cada página lleva un pie con el tipo de informe a la izquierda y el
-número de página a la derecha. En la tabla, cada fila muestra valor,
+La portada indica también la versión de Analitix con la que se generó
+el informe (y su fecha) y la dirección del proyecto en GitHub. Cada página
+lleva un pie con el tipo de informe a la izquierda, «Página n de N» a la
+derecha y, debajo, la versión de Analitix: así se sabe de dónde sale
+cualquier página aunque se imprima suelta. En la tabla, cada fila muestra valor,
 rango de referencia, estado (▲ Alto/▼ Bajo/Normal, coloreado) y variación
 respecto al informe anterior, marcada con "(*)" si es un cambio brusco.
 
@@ -1458,10 +1468,24 @@ panel clínico para llevar a una consulta:
   el interruptor en Evolución, tu rango personal en los gráficos de
   parámetros.
 - Empieza siempre con la portada y el aviso de que no es un diagnóstico, y
-  cada página lleva su pie con el número de página.
+  cada página lleva su pie con «Página n de N» y la versión de Analitix.
 - **Todas las páginas son A4**, también en los otros dos informes PDF: los
   gráficos se adaptan a una hoja vertical u horizontal, según su forma, y
   aprovechan todo el ancho para imprimirlos.
+- **Gráficos por página**: en el apartado «Gráficos» eliges **uno por
+  página, en horizontal** (más detalle, como hasta ahora), o **dos por
+  página, en vertical**, para gastar menos hojas. En vertical,
+  cada página se llena de arriba abajo: los gráficos van a todo el ancho
+  (todos con el mismo ancho, sin deformarse) y el resumen de cada panel y
+  de la tensión arterial va justo encima de sus gráficos, nunca solo al pie
+  de una página. Un gráfico con muchas notas o con dos ejes (tensión
+  arterial) se reduce menos, para que siga legible, y ocupa algo más de
+  sitio. Las tablas, «Qué ha cambiado» y el mapa de calor siguen en su
+  propia página.
+- **Tensión arterial**: escribe el periodo del informe en «desde» y
+  «hasta» (AAAA-MM-DD); por defecto, el último año hasta hoy. En blanco,
+  sin límite. El periodo manda sobre la ventana de 5 años y el gráfico se
+  agrupa según su duración, igual que en el panel.
 - **Secciones largas en varias páginas**: "Qué ha cambiado" y el mapa de
   calor muestran como mucho 25 parámetros por página. Si hay más, siguen en
   la página siguiente con el título marcado "(1/2)", "(2/2)"…, su leyenda

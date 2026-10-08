@@ -128,7 +128,8 @@ Desde el repositorio ambas rutas son el mismo `data/test_aliases.csv`; en el
 ejecutable, `catalog.add_aliases` escribe solo en la del usuario, así una
 versión nueva de la app puede corregir sus propios alias sin pisar los
 suyos. La versión de la app es `analitix.__version__` (título de la ventana
-y "Acerca de"); la etiqueta de cada Release de GitHub es `v` + esa versión.
+y "Acerca de") y su fecha de publicación `analitix.__version_date__`
+(portada y pie de los informes PDF); la etiqueta de cada Release de GitHub es `v` + esa versión.
 
 La variación biológica del RCV sigue el mismo esquema de dos capas:
 `config.BUNDLED_BV_PATH` (la de la app, versionada y citada) y
@@ -1348,7 +1349,9 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
      `fig.add_axes` + `imshow`, dentro de un `try/except OSError` — si
      falta el fichero de logo no bloquea la generación del informe),
      "Informe de seguimiento", `tipo_informe`, paciente, fecha del
-     último informe, fecha de generación, aviso legal.
+     último informe, fecha de generación, "Generado con Analitix X.Y.Z
+     (AAAA-MM-DD)" (`_ANALITIX_VERSION`, de `__version__` y
+     `__version_date__`), `updates.REPO_URL` y aviso legal.
   2. **Tabla de fuera de rango** (`_table_page`, título "Parámetros
      alterados en la última analítica"): solo `flag_calc in
      ("alto","bajo")`.
@@ -1364,11 +1367,13 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
      filas (el propio criterio de selección de
      `gui.AnalitixApp._build_altered_rows` ya es "una alteración
      importante" en sí mismo, esté o no dentro de rango ahora mismo).
-  - `_add_footer(fig, tipo_informe, pagina)`: en **todas** las páginas
-    (incluida la portada) — `tipo_informe` a la izquierda, "Página N" a
-    la derecha. El nº de página es un contador simple incrementado según
-    se van guardando páginas con `pdf.savefig`, no requiere conocer el
-    total de antemano (no se pide formato "N de M").
+  - `_add_footer(fig, tipo_informe, pagina, total)`: en **todas** las
+    páginas (incluida la portada) — `tipo_informe` a la izquierda,
+    "Página n de N" a la derecha y, en una segunda línea centrada,
+    `_ANALITIX_VERSION` (línea propia porque `tipo_informe` puede ser
+    largo con el filtro de laboratorios). Para conocer N, `export_pdf`
+    decide antes de escribir qué parámetros tendrán gráfico (los que
+    tienen al menos 2 puntos): total = 3 + nº de gráficos.
   - Usa "(*)" como marca de cambio brusco en vez del emoji "⚡" de la
     pestaña Resumen: a diferencia de Tkinter (con Segoe UI Emoji), el
     backend PDF de matplotlib no garantiza tener una fuente con glifos
@@ -1387,10 +1392,44 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
 - `export.py` solo monta el documento:
   - `export_pages_pdf(patient_name, fecha, paginas, path, tipo_informe=...)`
     escribe la portada (`_cover_page`, con el aviso de que no es un
-    diagnóstico) y las figuras recibidas, en orden y con pie;
+    diagnóstico) y las figuras recibidas, en orden y con pie (total =
+    portada + páginas tras agrupar);
+  - `graficos_por_pagina` (1 o 2 en el diálogo, casilla «Gráficos»; el
+    código admite también 3, pero la opción está desactivada en `gui.py`
+    porque con los gráficos de evolución y su recuadro de notas no caben
+    más de 2 sin bajar de `_CHARTS_MIN_SCALE`): con 2 o 3, `_flow_pages` llena páginas A4 verticales de arriba abajo con
+    los textos (`text_page` guarda título y líneas en `fig.analitix_text`)
+    y los gráficos (`_is_chart`: ni página A4 propia ni
+    `analitix_tight_rect`) **seguidos**; el resto de páginas corta el
+    flujo. Cada gráfico mide de alto 1/n del útil (`_CHARTS_MARGIN_IN`,
+    `_CHARTS_BOTTOM_IN` para el pie), sin bajar de `_CHARTS_MIN_SCALE`
+    (0,75) de su alto original; un texto, lo que ocupan sus líneas. Un
+    texto seguido de un gráfico solo se pone si cabe también ese gráfico
+    (el resumen de un panel no se queda solo al pie). `_flow_page` dibuja
+    la página: cada gráfico se **rehace al ancho útil** con
+    `set_size_inches(ancho_util / escala, alto / escala)` (cambia el ancho
+    de la figura en vez de estirar la imagen, así que todos ocupan el mismo
+    ancho y ninguno se deforma), se rasteriza a `_CHARTS_DPI` × escala
+    (200 ppp efectivos; el texto del gráfico deja de ser seleccionable) y
+    se coloca con `imshow(interpolation="none")`, para que el PDF guarde la
+    imagen sin remuestrear. Vectorial exigiría rehacer cada gráfico como
+    subfigura;
   - `table_page` es la misma tabla de `export_pdf`;
   - `text_page(titulo, texto)` es una página A4 de texto ajustado (resumen
-    de un panel).
+    de un panel); el texto empieza `_TEXT_GAP_IN` (0,3") bajo el título.
+- Progreso: `export_pdf` y `export_pages_pdf` aceptan
+  `on_progress(n, total)`, llamado tras escribir cada página. En `gui.py`,
+  el gestor de contexto `_progress(titulo, parent)` abre una ventana modal
+  (`_new_dialog`, sin Escape ni cierre) con texto y `ttk.Progressbar`,
+  pone el cursor `watch` y da `paso(texto, valor, total)`, que hace
+  `update()`: como la importación, todo sigue en el hilo principal (la
+  conexión SQLCipher no se comparte entre hilos) y el `grab` de la ventana
+  impide lanzar otra acción a medias. El informe personalizado pide antes
+  el nombre del fichero, para que la barra cubra también la preparación de
+  las secciones (un paso por sección, parámetro o panel). Con varios
+  gráficos por página, `_flow_pages` solo reparte y la rasterización se
+  hace al escribir cada página (`_flow_page`), así que también cuenta en
+  la barra.
 - `_add_footer` llama antes a `_fit_page_a4`, que pone **todas** las
   páginas en A4:
   - las figuras que no lo son (gráficos de evolución, mapa de calor, "Qué
@@ -1440,6 +1479,14 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
   Los gráficos salen de `_evolution_figure`, así que aplican el umbral de
   pocos datos, el RCV y el rango personal si su interruptor está activo.
   El filtro de laboratorios se añade a `tipo_informe`.
+
+  Tensión arterial: periodo «desde»/«hasta» del diálogo (por defecto
+  `BP_RANGO_DIAS["1a"]` días hasta hoy), validado con `_check_period`
+  (la misma función que el intervalo del panel, `_bp_periodo`). Como en el
+  panel, el periodo manda sobre la ventana de años; `bp_figure` recibe
+  `dias` = duración del periodo (agrupado por día, semana o mes) y
+  `desde` solo si el periodo llega hasta hoy (si no, el eje se ajusta a
+  los datos).
 
 ### `charts.py`
 
@@ -3254,7 +3301,7 @@ Pasos para publicar una versión:
    (`retention-days`; después se borra solo). En local, también
    `scripts\build_windows.bat`.
 2. **En `develop`**: subir la versión en `src/analitix/__init__.py`
-   (`__version__`) y, en [`CHANGELOG.md`](../CHANGELOG.md), pasar lo
+   (`__version__` y su fecha, `__version_date__`) y, en [`CHANGELOG.md`](../CHANGELOG.md), pasar lo
    acumulado en `## [Sin publicar]` a una sección nueva
    `## [X.Y.Z] - AAAA-MM-DD`, dejando `[Sin publicar]` vacía. Commit y
    push a `develop`.
@@ -3324,7 +3371,7 @@ decimales: después de 0.9.0 viene 0.10.0, no 1.0.0.
 **Una sola versión para todo el proyecto.** Los módulos `.py` no llevan
 numeración propia: la única fuente es `analitix.__version__`
 (`src/analitix/__init__.py`), y de ella la leen el título de la ventana,
-"Acerca de", `scripts\build_windows.bat` (nombre y metadatos del instalador)
+"Acerca de", los informes PDF (con `__version_date__`), `scripts\build_windows.bat` (nombre y metadatos del instalador)
 y el workflow de Release (que exige que la etiqueta `vX.Y.Z` coincida).
 Todos los módulos se publican juntos en el mismo instalador y no se
 distribuyen por separado, así que una versión por archivo solo crearía
