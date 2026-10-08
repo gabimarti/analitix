@@ -105,3 +105,26 @@ def test_personal_range_uses_only_in_range_values():
     # Con menos de 3 valores dentro de rango (sin contar el último) no hay rango personal.
     assert personal_range("x", serie[:3], table=table) is None
     assert personal_range("y", serie, table=table) is None  # sin variación biológica
+
+
+def test_cusum_detects_small_sustained_drift_and_resets_on_lab_change():
+    from analitix.rcv import VariacionBiologica, cusum_drift, cusum_note
+
+    tabla = {"x": VariacionBiologica("X", 5.0, None, None, 2.5, "fuente", "", "", "")}
+
+    def serie(valores, labs=None):
+        labs = labs or ["A"] * len(valores)
+        return [{"fecha": f"2020-{i + 1:02d}-01", "value_num": v, "ref_low": 50.0, "ref_high": 150.0,
+                 "flag_calc": "normal", "lab": lab} for i, (v, lab) in enumerate(zip(valores, labs))]
+
+    estable = serie([100, 102, 98, 101, 99, 103, 100, 98])
+    assert cusum_drift("x", estable, table=tabla)["direccion"] is None
+    # sube ~1,5 σ (σ ≈ 5,6 %) de forma sostenida, sin ningún salto grande
+    deriva = serie([100, 102, 98, 100, 108, 109, 108, 110, 109, 110])
+    resultado = cusum_drift("x", deriva, table=tabla)
+    assert resultado["direccion"] == "sube" and resultado["desde"] == "2020-05-01"
+    assert "Cambio lento" in cusum_note(resultado)
+    # el cambio de laboratorio reinicia: el tramo nuevo no tiene base suficiente
+    assert cusum_drift("x", serie([100, 101, 99, 100, 120, 121], ["A"] * 4 + ["B"] * 2), table=tabla) is None
+    assert cusum_drift("sin_variacion", deriva, table=tabla) is None
+    assert cusum_note(None) is None

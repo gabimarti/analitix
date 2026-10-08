@@ -213,3 +213,88 @@ def personal_range(
         "punto": punto, "n": n, "labs": len({s.get("lab") for s in base}),
         "fuente": bv.fuente, "nota": bv.nota,
     }
+
+
+# -- Deriva lenta (CUSUM) ----------------------------------------------------
+# CUSUM tabular (Page ES, "Continuous inspection schemes", Biometrika
+# 1954;41(1-2):100-115, doi:10.1093/biomet/41.1-2.100) sobre la propia serie,
+# en unidades de la variación esperable (σ = √(ln(CVA²+1) + ln(CVI²+1)), la
+# misma que el RCV): detecta un desplazamiento pequeño y sostenido que el RCV
+# entre dos analíticas no ve. k = 0,5 y h = 5 son los valores habituales
+# (Montgomery DC, Introduction to Statistical Quality Control): falsa alarma
+# media cada ~465 puntos sin cambio real y un desplazamiento de 1 σ detectado
+# en ~10. Precedentes clínicos: CUSUM de creatinina en trasplante renal
+# (Piccoli A et al., Nephron 1987;47(2):87-94, doi:10.1159/000184467) y
+# gráficos de control en pacientes individuales (Tennant R et al., Int J Qual
+# Health Care 2007;19(4):187-94, doi:10.1093/intqhc/mzm015).
+CUSUM_K = 0.5
+CUSUM_H = 5.0
+# Punto de equilibrio: media de las primeras CUSUM_BASELINE analíticas dentro
+# de rango del tramo (fase de referencia), para no vigilar con los mismos
+# datos que lo definen; hacen falta al menos CUSUM_MIN_MONITORED después.
+CUSUM_BASELINE = 4
+CUSUM_MIN_MONITORED = 3
+
+
+def cusum_drift(
+    canonical_id: Optional[str],
+    series: list[dict[str, Any]],
+    sex: Optional[str] = None,
+    table: Optional[dict[str, VariacionBiologica]] = None,
+) -> Optional[dict[str, Any]]:
+    """Deriva lenta y sostenida respecto al punto de equilibrio propio.
+
+    Solo el tramo final de un mismo laboratorio (un cambio de método se
+    confundiría con una deriva). Punto de equilibrio = media de sus primeras
+    `CUSUM_BASELINE` analíticas dentro de rango; después, para cada valor,
+    z = (ln x − ln punto) / σ, S⁺ = máx(0, S⁺ + z − k), S⁻ = máx(0, S⁻ − z − k).
+    Devuelve `None` sin variación biológica o con datos insuficientes; si
+    no, `direccion` ("sube", "baja" o `None` si ninguna suma supera h en la
+    última analítica), `desde` (fecha en que empezó a acumularse esa suma),
+    `punto`, `n` (analíticas vigiladas) y `fuente`."""
+    if canonical_id is None or not series:
+        return None
+    bv = (load_table() if table is None else table).get(canonical_id)
+    cvi = bv.cvi_para(sex) if bv else None
+    if cvi is None:
+        return None
+    lab = series[-1].get("lab")
+    inicio = len(series)
+    while inicio > 0 and series[inicio - 1].get("lab") == lab:
+        inicio -= 1
+    tramo = [s for s in series[inicio:] if s.get("value_num") and s["value_num"] > 0]
+    base_idx = [i for i, s in enumerate(tramo)
+                if s.get("flag_calc") not in ("alto", "bajo")
+                and (s.get("ref_low") is not None or s.get("ref_high") is not None)][:CUSUM_BASELINE]
+    if len(base_idx) < CUSUM_BASELINE:
+        return None
+    vigilados = tramo[base_idx[-1] + 1:]
+    if len(vigilados) < CUSUM_MIN_MONITORED:
+        return None
+    punto = sum(tramo[i]["value_num"] for i in base_idx) / CUSUM_BASELINE
+    cva = max(bv.cva_pct or 0.0, CVA_FRACCION_DE_CVI * cvi)
+    sigma = math.sqrt(math.log((cva / 100) ** 2 + 1) + math.log((cvi / 100) ** 2 + 1))
+    s_alta = s_baja = 0.0
+    desde_alta = desde_baja = None
+    for s in vigilados:
+        z = (math.log(s["value_num"]) - math.log(punto)) / sigma
+        s_alta, s_baja = max(0.0, s_alta + z - CUSUM_K), max(0.0, s_baja - z - CUSUM_K)
+        desde_alta = (desde_alta or s.get("fecha")) if s_alta > 0 else None
+        desde_baja = (desde_baja or s.get("fecha")) if s_baja > 0 else None
+    direccion, desde = None, None
+    if s_alta > CUSUM_H:
+        direccion, desde = "sube", desde_alta
+    elif s_baja > CUSUM_H:
+        direccion, desde = "baja", desde_baja
+    return {"direccion": direccion, "desde": desde, "punto": punto, "n": len(vigilados), "fuente": bv.fuente}
+
+
+def cusum_note(drift: Optional[dict[str, Any]]) -> Optional[str]:
+    """Frase para el recuadro bajo el gráfico, solo si hay deriva."""
+    if not drift or not drift.get("direccion"):
+        return None
+    lado = "por encima" if drift["direccion"] == "sube" else "por debajo"
+    return (f"Cambio lento: desde {(drift['desde'] or '')[:7]} tus valores han ido quedando {lado} de tu "
+            f"valor habitual ({drift['punto']:.3g}, la media de tus primeras analíticas normales). En cada "
+            "analítica la diferencia es pequeña, pero se repite: puede ser un cambio real y lento. No es un "
+            "diagnóstico; si continúa, coméntalo con tu médico.")

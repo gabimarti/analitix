@@ -151,7 +151,7 @@ from analitix import (
     thyroid_risk as _thyroid,
     uric_acid_risk as _uric,
 )
-from analitix.rcv import classify_change, personal_range
+from analitix.rcv import classify_change, cusum_drift, cusum_note, personal_range
 from analitix.textutils import strip_accents
 from analitix.tyg_risk import INDEX_LABELS as TYG_INDEX_LABELS, get_tyg_series
 from analitix.thyroid_risk import get_latest_thyroid_summary, get_thyroid_series
@@ -342,6 +342,11 @@ COLOR_ALTERADO, COLOR_GRIS = COLOR_ALTO, "#999999"
 # clínicos. `COLOR_BRUSCO` vive en `charts.py` (reutilizado también por
 # `export.export_pdf`).
 CAMBIO_BRUSCO_PCT = 30.0
+
+# Botones de periodo del panel de tensión arterial (días hacia atrás desde hoy).
+BP_RANGOS = (("10d", "Últimos 10 días"), ("1m", "Último mes"), ("3m", "Últimos 3 meses"),
+             ("1a", "Último año"), ("todo", "Todo"), ("intervalo", "Elegir intervalo de fechas"))
+BP_RANGO_DIAS = {"10d": 10, "1m": 31, "3m": 92, "1a": 365}
 
 # Aviso común de las pantallas de entrada manual (analíticas y tensión).
 AVISO_ENTRADA_MANUAL = (
@@ -1825,8 +1830,22 @@ class AnalitixApp(ttk.Window):
 
         # Intervalo a ver y periodo de comparación (fechas AAAA-MM-DD; en
         # blanco = sin límite). Las medias son descriptivas, sin clasificar.
+        # Periodo del gráfico: los cuatro primeros cuentan hacia atrás desde
+        # hoy; "Todo" es la vista general (con la ventana de años) y "Elegir
+        # intervalo" muestra los campos de fechas y la comparación.
+        self.bp_rango = "todo"
+        botones_rango = ttk.Frame(frame)
+        botones_rango.pack(fill="x", padx=PAD, pady=(0, 4))
+        self.botones_bp_rango = {}
+        for clave, texto in BP_RANGOS:
+            boton = ttk.Button(botones_rango, text=texto, command=lambda c=clave: self._set_bp_rango(c),
+                               bootstyle="primary" if clave == "todo" else "secondary-outline")
+            boton.pack(side="left", padx=(0, 6))
+            self.botones_bp_rango[clave] = boton
+        self._same_width(*self.botones_bp_rango.values())
         periodos = ttk.Frame(frame)
-        periodos.pack(fill="x", padx=PAD, pady=(0, 4))
+        self.frame_bp_fechas = periodos
+        self._bp_fechas_antes = botones_rango
         self.vars_bp_periodo = {k: tk.StringVar() for k in ("desde", "hasta", "cmp_desde", "cmp_hasta")}
         for col, (clave, texto) in enumerate((("desde", "Intervalo: desde"), ("hasta", "hasta"),
                                               ("cmp_desde", "Comparar con: desde"), ("cmp_hasta", "hasta"))):
@@ -1836,9 +1855,6 @@ class AnalitixApp(ttk.Window):
             entrada.grid(row=0, column=2 * col + 1, sticky="w")
         aplicar = ttk.Button(periodos, text="Aplicar", bootstyle="primary", command=self._refresh_bp_panel)
         aplicar.grid(row=0, column=8, padx=(12, 4))
-        todo = ttk.Button(periodos, text="Todo", bootstyle="secondary-outline", command=self._reset_bp_periodo)
-        todo.grid(row=0, column=9)
-        self._same_width(aplicar, todo)
         ttk.Label(periodos, text="Fechas AAAA-MM-DD; en blanco, sin límite. Las medias son de las mediciones "
                   "en casa y no se clasifican.", bootstyle="secondary").grid(row=1, column=0, columnspan=10,
                                                                               sticky="w", pady=(2, 0))
@@ -1861,9 +1877,16 @@ class AnalitixApp(ttk.Window):
         en_ventana = self._windowed([{**r, "fecha": r["measured_at"]} for r in lecturas])
         return en_ventana, len(lecturas) - len(en_ventana)
 
-    def _reset_bp_periodo(self) -> None:
-        for var in self.vars_bp_periodo.values():
-            var.set("")
+    def _set_bp_rango(self, clave: str) -> None:
+        """Botón de periodo del panel de tensión: resalta el elegido, muestra
+        los campos de fechas solo con "Elegir intervalo" y redibuja."""
+        self.bp_rango = clave
+        for c, boton in self.botones_bp_rango.items():
+            boton.configure(bootstyle="primary" if c == clave else "secondary-outline")
+        if clave == "intervalo":
+            self.frame_bp_fechas.pack(fill="x", padx=PAD, pady=(0, 4), after=self._bp_fechas_antes)
+        else:
+            self.frame_bp_fechas.pack_forget()
         self._refresh_bp_panel()
 
     def _bp_periodo(self, desde_clave: str, hasta_clave: str) -> tuple[str | None, str | None] | None:
@@ -1885,15 +1908,22 @@ class AnalitixApp(ttk.Window):
     def _refresh_bp_panel(self) -> None:
         if not hasattr(self, "text_bp_summary"):
             return
-        try:
-            intervalo = self._bp_periodo("desde", "hasta")
-            comparacion = self._bp_periodo("cmp_desde", "cmp_hasta")
-        except ValueError as exc:
-            messagebox.showwarning("Fechas no válidas", f"Revisa las fechas (AAAA-MM-DD): {exc}.", parent=self)
-            return
+        dias = desde_eje = None
+        intervalo = comparacion = None
+        if self.bp_rango in BP_RANGO_DIAS:
+            dias = BP_RANGO_DIAS[self.bp_rango]
+            desde_eje = dt.date.today() - dt.timedelta(days=dias - 1)
+            intervalo = (desde_eje.isoformat(), None)
+        elif self.bp_rango == "intervalo":
+            try:
+                intervalo = self._bp_periodo("desde", "hasta")
+                comparacion = self._bp_periodo("cmp_desde", "cmp_hasta")
+            except ValueError as exc:
+                messagebox.showwarning("Fechas no válidas", f"Revisa las fechas (AAAA-MM-DD): {exc}.", parent=self)
+                return
         todas = list_bp_readings(self.con, self.current_patient_id) if self.current_patient_id else []
         self.tree_bp_medias.delete(*self.tree_bp_medias.get_children())
-        for nombre, periodo in (("Todo el histórico", (None, None)), ("Intervalo seleccionado", intervalo),
+        for nombre, periodo in (("Todo el histórico", (None, None)), ("Periodo mostrado", intervalo),
                                 ("Periodo de comparación", comparacion)):
             if periodo is None or (nombre == "Todo el histórico" and not todas):
                 continue
@@ -1917,11 +1947,11 @@ class AnalitixApp(ttk.Window):
         self.text_bp_summary.configure(state="disabled")
         for child in self.chart_canvas_tension.winfo_children():
             child.destroy()
-        if lecturas:
-            titulo = "Tensión arterial" if intervalo is None else (
-                f"Tensión arterial · {intervalo[0] or 'inicio'} a {intervalo[1] or 'hoy'}")
-            self._embed_figure(self._mark_window(bp_figure(lecturas, titulo), ocultas, "mediciones"),
-                               self.chart_canvas_tension)
+        titulo = "Tensión arterial" if intervalo is None else (
+            f"Tensión arterial · {intervalo[0] or 'inicio'} a {intervalo[1] or 'hoy'}")
+        if lecturas or desde_eje is not None:
+            self._embed_figure(self._mark_window(bp_figure(lecturas, titulo, dias=dias, desde=desde_eje), ocultas,
+                                                 "mediciones"), self.chart_canvas_tension)
 
     # -- Evolución --------------------------------------------------------
     def _build_tab_evolucion(self) -> None:
@@ -4073,6 +4103,9 @@ class AnalitixApp(ttk.Window):
         personal = (
             personal_range(canonical_id, series, sex) if with_personal and self.var_personal_range.get() else None
         )
+        # Deriva lenta (CUSUM con la variación biológica), también contra el
+        # rango del laboratorio y antes del objetivo del médico.
+        deriva = cusum_note(cusum_drift(canonical_id, series, sex))
         # Después del RCV y del rango personal, que se miden contra el rango
         # del laboratorio: el objetivo del médico solo cambia lo que se dibuja.
         if canonical_id:
@@ -4082,7 +4115,8 @@ class AnalitixApp(ttk.Window):
         # `charts.KDIGO_RAPID_DECLINE_PER_YEAR`).
         if canonical_id in FG_IDS or canonical_id == "fg":
             series = [{**s, "kdigo_fg": True} for s in series]
-        return self._mark_window(evolution_figure(series, label, self.min_points, rcv=rcv, personal=personal), hidden)
+        return self._mark_window(
+            evolution_figure(series, label, self.min_points, rcv=rcv, personal=personal, note=deriva), hidden)
 
     def _comparison_figure(self, series_by_test: dict[str, list[dict]]):
         """`charts.comparison_figure` con la misma ventana de años que
@@ -4108,8 +4142,8 @@ class AnalitixApp(ttk.Window):
         (`que`: "analíticas" o, en tensión arterial, "mediciones")."""
         if hidden:
             fig.text(
-                0.99, 0.99, f"Últimos {HISTORY_YEARS} años · {hidden} {que} anteriores ocultas "
-                "(Análisis → Ver todo el histórico)", ha="right", va="top", fontsize=7, color="#777777",
+                0.99, 0.005, f"Últimos {HISTORY_YEARS} años · {hidden} {que} anteriores ocultas "
+                "(Análisis → Ver todo el histórico)", ha="right", va="bottom", fontsize=7, color="#777777",
             )
         return fig
 

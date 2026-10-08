@@ -2161,6 +2161,14 @@ parámetros excluidos a propósito.
   (`repository.get_patient_sex`); sin sexo, el mayor.
 - `load_table()` (`lru_cache`, se lee una vez por sesión) = capa de la app
   + capa del usuario. `read_table` ignora las líneas que empiezan por "#".
+- `cusum_drift(canonical_id, series, sex)` / `cusum_note`: deriva lenta por
+  CUSUM tabular (Page 1954) en unidades de σ = √(ln(CVA²+1) + ln(CVI²+1)),
+  `CUSUM_K = 0.5`, `CUSUM_H = 5`; solo el tramo final del mismo laboratorio,
+  punto de equilibrio = media de las primeras `CUSUM_BASELINE` (4) analíticas
+  dentro de rango, mínimo `CUSUM_MIN_MONITORED` (3) vigiladas; señal solo si
+  una suma supera h en la última analítica. `gui._evolution_figure` lo pasa
+  como `note` a `charts.evolution_figure` (recuadro de texto), antes de
+  aplicar el objetivo del médico. Fuentes en `referencias_rcv.md` §6b.
 - `personal_range(canonical_id, series, sex)` (rango personal, Coşkun 2021,
   ecuación 4): SP = media de los valores anteriores al último que tienen
   rango y no están fuera de él (mínimo `PERSONAL_MIN_POINTS = 3`); semiancho
@@ -2708,7 +2716,13 @@ Notas de implementación:
   lectura en casa, sin el primer día, válida con ≥ `HBPM_MIN_DAYS` días y ≥
   `HBPM_MIN_READINGS` lecturas) y `bp_category` los umbrales de la tabla 5
   de ESC 2024 (`BP_THRESHOLDS`, casa y consulta; manda la peor cifra). El PDF
-  personalizado ofrece la sección si hay mediciones. Intervalo y periodo de
+  personalizado ofrece la sección si hay mediciones. Botones de periodo
+  (`BP_RANGOS`, `BP_RANGO_DIAS`, `_set_bp_rango`): 10 días, 1, 3 y 12 meses
+  hacia atrás desde hoy, "todo" o intervalo; `charts.bp_figure(lecturas,
+  titulo, dias, desde)` agrupa según `dias`: ≤ `BP_DAY_MAX_DAYS` (31) cada
+  medición con línea mínimo-máximo del día, ≤ `BP_WEEK_MAX_DAYS` (183) por
+  semanas y si no por meses (`_bp_groups`/`_bp_bucket`: línea mínimo-máximo
+  y círculo en la media). Intervalo y periodo de
   comparación (`vars_bp_periodo`, `_bp_periodo` valida AAAA-MM-DD) con tabla
   de medias `blood_pressure.period_stats` (solo mediciones en casa, sin
   clasificar); con intervalo, el gráfico ignora la ventana de años. Guía de

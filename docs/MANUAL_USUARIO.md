@@ -647,6 +647,16 @@ anota (ver "🎯 Objetivo indicado por mi médico" más abajo).
     aplica al elegir el siguiente índice); la elección se recuerda. Los
     informes PDF completo y de alterados incluyen siempre todo el
     histórico.
+  - **Cambio lento** (pruebas con variación biológica conocida): si
+    tus últimas analíticas se han ido separando poco a poco de tu valor
+    habitual, aunque ningún cambio entre dos analíticas sea grande, el texto
+    de debajo del gráfico lo indica ("Cambio lento: desde …, tus valores han ido
+    quedando por encima de tu valor habitual…"; en cada analítica la diferencia
+    es pequeña, pero se repite). Se calcula con un método estadístico de control (CUSUM)
+    sobre tu propio historial: tu "valor habitual" es la media de tus 4
+    primeras analíticas dentro de rango del laboratorio actual, y hacen falta
+    al menos 3 analíticas posteriores. Solo aparece si se detecta; no es una
+    alarma ni un diagnóstico. Fuentes en "referencias_rcv".
   - **Banda gris en el último punto** (pruebas con variación biológica
     conocida, ver "¿Cambio real o variación normal?" en §2.6): el margen
     de variación esperable desde el valor anterior. Si el último punto cae
@@ -1330,7 +1340,18 @@ Resultados de las mediciones registradas en Entrada manual → Tensión arterial
   qué falta. Una lectura suelta nunca se clasifica: tiene poca precisión.
 - **Última toma en la consulta**, aparte: en la consulta los umbrales son
   otros (hipertensión desde 140/90).
-- **Intervalo y comparación:** escribe un intervalo («desde» y «hasta», en
+- **Periodo del gráfico:** botones **Últimos 10 días**, **Último mes**,
+  **Últimos 3 meses** y **Último año** (cuentan hacia atrás desde hoy),
+  **Todo** (vista general) y **Elegir intervalo de fechas** (muestra los
+  campos de fechas y el periodo de comparación). Para que el gráfico no se
+  sature, el detalle depende de la duración del periodo: **hasta un mes**, un
+  punto por medición y, si un día tiene varias, una línea vertical de la
+  mínima a la máxima de ese día; **hasta 6 meses**, por **semanas**; **más de 6
+  meses**, por **meses**. En las vistas por semanas o meses, cada periodo es
+  una línea vertical de la mínima a la máxima de cada parámetro (sistólica,
+  diastólica y pulso) con un círculo en la media; el último periodo lleva un
+  anillo con su media.
+- **Intervalo y comparación:** con **Elegir intervalo de fechas**, escribe un intervalo («desde» y «hasta», en
   AAAA-MM-DD; uno de los dos puede quedar en blanco) y pulsa **Aplicar** para
   ver solo ese periodo en el gráfico; **Todo** vuelve a la vista general. Puedes
   añadir un **periodo de comparación** (por ejemplo, marzo a junio de 2020
