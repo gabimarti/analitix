@@ -123,6 +123,8 @@ de seguridad, privacidad e integridad que debe cumplir toda aportación.
 Para cualquier consulta sobre la aplicación, escribe a
 [contact@analitix.slmail.me](mailto:contact@analitix.slmail.me).
 
+Autor: Gabriel Marti — [gabimarti.github.io](https://gabimarti.github.io/).
+
 ## Formatos de informe soportados
 
 El reconocimiento de cada centro/laboratorio (etiquetas de cabecera,

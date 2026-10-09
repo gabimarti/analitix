@@ -88,6 +88,7 @@ def test_export_pdf_fixed_page_structure(tmp_path: Path):
         assert "Página 1 de 4" in portada
         assert f"Analitix {__version__} ({__version_date__})" in portada
         assert "github.com/gabimarti/analitix" in portada
+        assert "gabimarti.github.io" in portada
 
         pagina_fuera_rango = pdf.pages[1].extract_text()
         assert "Glucosa" in pagina_fuera_rango and "Sodi" not in pagina_fuera_rango

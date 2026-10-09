@@ -3,7 +3,7 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-30
-# Última actualización: 2026-09-30
+# Última actualización: 2026-10-09
 # ---------------------------------------------------------------------------
 """Comprobación de versiones nuevas en GitHub Releases.
 
@@ -19,6 +19,8 @@ import urllib.request
 from analitix import __version__
 
 REPO_URL = "https://github.com/gabimarti/analitix"
+# Página personal del autor ("Acerca de" y portada de los informes PDF).
+AUTHOR_URL = "https://gabimarti.github.io/"
 RELEASES_URL = f"{REPO_URL}/releases"
 # `/releases/latest` no sirve: excluye las *pre-release*, y todas las 0.x lo
 # son (ver release.yml). La lista viene ordenada de más nueva a más antigua.

@@ -3,7 +3,7 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-07
-# Última actualización: 2026-10-08
+# Última actualización: 2026-10-09
 # ---------------------------------------------------------------------------
 """Exportación de resultados a Excel, CSV y PDF."""
 from __future__ import annotations
@@ -25,7 +25,7 @@ from analitix.charts import (
 )
 from analitix.config import LOGO_PATH
 from analitix.pdf_parser import NUMERIC_TOKEN_RE
-from analitix.updates import REPO_URL
+from analitix.updates import AUTHOR_URL, REPO_URL
 
 # Excel/LibreOffice interpretan una celda de texto como fórmula si empieza por
 # uno de estos caracteres (inyección de fórmulas CSV/Excel, CWE-1236). Los
@@ -166,8 +166,8 @@ def _add_footer(fig: Figure, tipo_informe: str, pagina: int, total: int) -> None
 
 def _cover_page(patient_name: str, tipo_informe: str, fecha: str) -> Figure:
     """Portada: logo de Analitix, nombre del paciente, tipo de informe,
-    fecha, versión de Analitix y URL del proyecto — sin ninguna tabla (eso
-    empieza en la página siguiente)."""
+    fecha, versión de Analitix, URL del proyecto y página del autor — sin
+    ninguna tabla (eso empieza en la página siguiente)."""
     fig = Figure(figsize=(8.27, 11.69), dpi=100)  # A4 vertical
     try:
         logo = mpimg.imread(str(LOGO_PATH))
@@ -185,6 +185,7 @@ def _cover_page(patient_name: str, tipo_informe: str, fecha: str) -> Figure:
     )
     fig.text(0.5, 0.20, f"Generado con {_ANALITIX_VERSION}", fontsize=9, ha="center", color="#555555")
     fig.text(0.5, 0.18, REPO_URL, fontsize=9, ha="center", color="#555555")
+    fig.text(0.5, 0.16, f"Autor: Gabriel Marti · {AUTHOR_URL}", fontsize=9, ha="center", color="#555555")
     fig.text(0.5, 0.1, _PDF_DISCLAIMER, fontsize=8, color="#555555", ha="center", wrap=True)
     return fig
 

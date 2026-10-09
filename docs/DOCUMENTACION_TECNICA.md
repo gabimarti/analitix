@@ -1351,7 +1351,8 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
      "Informe de seguimiento", `tipo_informe`, paciente, fecha del
      último informe, fecha de generación, "Generado con Analitix X.Y.Z
      (AAAA-MM-DD)" (`_ANALITIX_VERSION`, de `__version__` y
-     `__version_date__`), `updates.REPO_URL` y aviso legal.
+     `__version_date__`), `updates.REPO_URL`, autor con `updates.AUTHOR_URL`
+     (página personal) y aviso legal.
   2. **Tabla de fuera de rango** (`_table_page`, título "Parámetros
      alterados en la última analítica"): solo `flag_calc in
      ("alto","bajo")`.

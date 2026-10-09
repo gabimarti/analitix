@@ -2,6 +2,7 @@
 
 **Autor:** Gabriel Marti
 **Contacto:** [github.com/gabimarti](https://github.com/gabimarti)
+**Web:** [gabimarti.github.io](https://gabimarti.github.io/)
 
 ---
 
@@ -1771,8 +1772,8 @@ desplazamiento.
 
 Muestra el logo de Analitix, el nombre de la aplicación, el autor (Gabriel
 Marti), el **correo de contacto del proyecto** (contact@analitix.slmail.me; pulsable,
-abre tu programa de correo) y un enlace a su perfil de GitHub (pulsable,
-abre el navegador).
+abre tu programa de correo) y enlaces a su perfil de GitHub y a su página
+personal, gabimarti.github.io (pulsables, abren el navegador).
 
 <p align="center">
   <img src="images/acerca_de.png" width="35%" alt="Ventana Acerca de Analitix">

@@ -3,7 +3,7 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-25
-# Última actualización: 2026-10-06
+# Última actualización: 2026-10-09
 # ---------------------------------------------------------------------------
 """Genera las capturas de pantalla y figuras de la documentación
 (`docs/images/`) y el informe PDF de ejemplo (`docs/ejemplos/`) con un
@@ -278,9 +278,9 @@ def capture_startup(tmp: Path) -> None:
             root.after(1000, then)
         dialog.ok()
 
-    app_main.DB_PATH = tmp / "nueva.db"  # no existe: pide crear la contraseña
+    # Contraseña de una base de datos nueva (diálogo "Nueva base de datos").
     root.after(1000, lambda: _password("contrasena_crear.png", lambda: _password("contrasena_repetir.png")))
-    assert app_main._ask_password(root) == DEMO_PASSWORD
+    assert app_main._ask_new_password(root) == DEMO_PASSWORD
     root.destroy()
 
 

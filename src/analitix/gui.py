@@ -3,7 +3,7 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-07
-# Última actualización: 2026-10-06
+# Última actualización: 2026-10-09
 # ---------------------------------------------------------------------------
 """Interfaz gráfica (Tkinter/ttkbootstrap) de Analitix."""
 from __future__ import annotations
@@ -65,7 +65,7 @@ from analitix.blood_pressure import (
     period_stats as bp_period_stats,
     validate_reading,
 )
-from analitix.config import DB_PATH, FROZEN, PROJECT_ROOT, REPORTS_DIR, copy_home, set_installed_home_dir
+from analitix.config import DB_LIST_PATH, FROZEN, PATIENTS_DIR, PROJECT_ROOT, REPORTS_DIR, copy_home, set_installed_home_dir
 from analitix.db import rekey
 from analitix.export import export_csv, export_excel, export_pages_pdf, export_pdf, table_page, text_page
 from analitix.glycemic_risk import (
@@ -156,7 +156,7 @@ from analitix.rcv import classify_change, cusum_drift, cusum_note, personal_rang
 from analitix.textutils import strip_accents
 from analitix.tyg_risk import INDEX_LABELS as TYG_INDEX_LABELS, get_tyg_series
 from analitix.thyroid_risk import get_latest_thyroid_summary, get_thyroid_series
-from analitix.updates import RELEASES_URL, REPO_URL, fetch_latest_release, is_newer
+from analitix.updates import AUTHOR_URL, RELEASES_URL, REPO_URL, fetch_latest_release, is_newer
 from analitix.uric_acid_risk import (
     INDEX_LABELS as URIC_ACID_INDEX_LABELS,
     URATE_LOWERING_TARGET,
@@ -396,9 +396,18 @@ STATS_LABELS = [
 
 
 class AnalitixApp(ttk.Window):
-    def __init__(self, con):
-        super().__init__(title=f"Analitix {__version__} — análisis de informes de laboratorio", themename=THEME)
+    def __init__(self, con, db_path: Path | None = None, db_name: str | None = None):
+        """`con`: la base de datos del paciente abierta (`db.connect`);
+        `db_path`/`db_name`: su fichero y su nombre en la lista de bases de
+        datos (`databases.py`), para el título y Estadísticas."""
+        titulo = f"Analitix {__version__} — {db_name}" if db_name else (
+            f"Analitix {__version__} — análisis de informes de laboratorio")
+        super().__init__(title=titulo, themename=THEME)
         self.con = con
+        self.db_path = db_path
+        # `main.py` vuelve a la lista de bases de datos al cerrar la ventana
+        # con Archivo → "Cambiar de base de datos...".
+        self.switch_db = False
         # +15% sobre el tamaño original (1100x700/900x600): con el tamaño
         # anterior, algunas etiquetas de los gráficos de Evolución/
         # Riesgo cardiovascular/Salud hepática/Función renal/Hemograma se
@@ -451,12 +460,20 @@ class AnalitixApp(ttk.Window):
             self.after(1000, lambda: self._check_updates(manual=False))
 
     # -- estructura general -------------------------------------------------
+    def _switch_database(self) -> None:
+        """Cierra la ventana y vuelve a la lista de bases de datos de
+        `main.py` (que cierra esta conexión y abre la elegida)."""
+        self.switch_db = True
+        self.destroy()
+
     def _build_menu(self) -> None:
         menubar = tk.Menu(self)
 
         archivo = tk.Menu(menubar, tearoff=0)
         archivo.add_command(label="Importar", command=lambda: self._show_page("importar"))
         archivo.add_command(label="Exportar", command=lambda: self._show_page("exportar"))
+        archivo.add_separator()
+        archivo.add_command(label="Cambiar de base de datos...", command=self._switch_database)
         archivo.add_separator()
         archivo.add_command(label="Salir", command=self.destroy)
         menubar.add_cascade(label="Archivo", menu=archivo)
@@ -610,8 +627,12 @@ class AnalitixApp(ttk.Window):
         contacto = ttk.Label(
             body, text="github.com/gabimarti", bootstyle="info", cursor="hand2"
         )
-        contacto.pack(pady=(0, PAD))
+        contacto.pack()
         contacto.bind("<Button-1>", lambda _e: webbrowser.open("https://github.com/gabimarti"))
+        web = ttk.Label(body, text=AUTHOR_URL.removeprefix("https://").rstrip("/"), bootstyle="info",
+                        cursor="hand2")
+        web.pack(pady=(0, PAD))
+        web.bind("<Button-1>", lambda _e: webbrowser.open(AUTHOR_URL))
 
         ttk.Button(body, text="Cerrar", command=dialog.destroy).pack(pady=(0, PAD * 2))
         dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
@@ -5119,7 +5140,7 @@ class AnalitixApp(ttk.Window):
         ttk.Label(stats_frame, text="Ubicación de la base de datos:").grid(
             row=len(STATS_LABELS) + 1, column=0, sticky="w", pady=2
         )
-        ttk.Label(stats_frame, text=str(DB_PATH), font=("Segoe UI", 10, "bold")).grid(
+        ttk.Label(stats_frame, text=str(self.db_path or "—"), font=("Segoe UI", 10, "bold")).grid(
             row=len(STATS_LABELS) + 1, column=1, sticky="w", padx=(10, 0), pady=2
         )
         buttons = ttk.Frame(stats_frame)
@@ -5128,7 +5149,7 @@ class AnalitixApp(ttk.Window):
         if sys.platform == "win32":
             ttk.Button(
                 buttons, text="Abrir carpeta de datos", bootstyle="secondary-outline",
-                command=lambda: os.startfile(DB_PATH.parent),  # noqa: S606 - carpeta propia de la app
+                command=lambda: os.startfile(PATIENTS_DIR),  # noqa: S606 - carpeta propia de la app
             ).pack(side="left", padx=(8, 0))
         if FROZEN:
             ttk.Button(
@@ -5152,7 +5173,7 @@ class AnalitixApp(ttk.Window):
         if new_home.resolve() == PROJECT_ROOT.resolve():
             messagebox.showinfo("Analitix", "Los datos ya están en esa carpeta.", parent=self)
             return
-        existing = (new_home / "data" / "analitix.db").exists()
+        existing = (new_home / "data" / DB_LIST_PATH.name).exists()
         if existing:
             question = (
                 f"Ya hay datos de Analitix en:\n{new_home}\n\nSe usarán esos datos (con la contraseña con la "
@@ -5285,8 +5306,8 @@ class AnalitixApp(ttk.Window):
         for key, var in self.stats_labels.items():
             value = stats.get(key)
             var.set(str(value) if value not in (None, "") else "—")
-        if DB_PATH.exists():
-            size_kb = DB_PATH.stat().st_size / 1024
+        if self.db_path is not None and self.db_path.exists():
+            size_kb = self.db_path.stat().st_size / 1024
             self.var_db_size.set(f"{size_kb:,.0f} KB" if size_kb < 1024 else f"{size_kb / 1024:,.1f} MB")
         else:
             self.var_db_size.set("—")

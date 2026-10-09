@@ -3,7 +3,7 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-07
-# Última actualización: 2026-09-29
+# Última actualización: 2026-10-09
 # ---------------------------------------------------------------------------
 import shutil
 import sys
@@ -85,7 +85,14 @@ else:
     PROJECT_ROOT = PACKAGE_DIR.parents[1]
     REPORTS_DIR = PROJECT_ROOT / "informes_analiticas"
     DATA_DIR = PROJECT_ROOT / "data"
-DB_PATH = DATA_DIR / "analitix.db"
+# Una base de datos cifrada por paciente, cada una con su contraseña, en
+# `PATIENTS_DIR`; la lista de bases de datos y la configuración de la
+# aplicación son JSON sin cifrar, sin datos sensibles (ver `databases.py`).
+# La antigua `DATA_DIR / "analitix.db"` (todos los pacientes en una) ya no se
+# usa: los datos se reimportan desde los PDF.
+PATIENTS_DIR = DATA_DIR / "pacientes"
+DB_LIST_PATH = DATA_DIR / "bases_de_datos.json"
+APP_CONFIG_PATH = DATA_DIR / "config.json"
 
 # Alias de pruebas en dos capas: los que trae la aplicación
 # (`BUNDLED_CATALOG_PATH`, versionados) y los que el usuario añade al fusionar
@@ -107,5 +114,6 @@ ICON_PATH = RES_DIR / "analitix_icon.png"
 LOGO_PATH = RES_DIR / "analitix_logo.png"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+PATIENTS_DIR.mkdir(parents=True, exist_ok=True)
 if FROZEN:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
