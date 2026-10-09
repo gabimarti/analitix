@@ -93,6 +93,9 @@ jobs:
           path: |
             dist/Analitix-Setup-*.exe
             dist/SHA256SUMS.txt
+          # Solo sirve para probar el instalador antes de etiquetar: se borra
+          # solo a las dos semanas (por defecto serían 90 días).
+          retention-days: 14
 
       - name: Create GitHub Release
         if: github.ref_type == 'tag'

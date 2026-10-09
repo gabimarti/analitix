@@ -10,6 +10,33 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ## [Sin publicar]
 
+## [0.12.0] - 2026-10-09
+
+### Añadido
+
+- Registro de tensión arterial (menú Entrada manual → Tensión arterial...): sistólica, diastólica, pulso, fecha y hora, lugar (casa o consulta) y nota, para el paciente activo, con importación de CSV (plantilla propia y exportaciones de Omron Connect y Withings) que informa de cada línea con error y no duplica mediciones.
+- Paneles clínicos → Tensión arterial: media de la última semana de automedida en casa según el protocolo europeo (7 días, sin el primero; ESH 2021), con presión de pulso y pulso medio, su categoría informativa según la guía ESC 2024 para medidas en casa (solo si la semana cumple el protocolo; nunca de una lectura suelta), la última toma en la consulta y un gráfico de sistólica, diastólica y pulso con los umbrales de la guía. También como sección del informe PDF personalizado. Se puede elegir un intervalo de fechas para el gráfico y un periodo de comparación, con una tabla de medias (todo el histórico, intervalo y comparación) de sistólica, diastólica y pulso.
+- Informe PDF personalizado: opción «Gráficos» para poner uno por página en horizontal (como hasta ahora) o dos por página en vertical, para gastar menos hojas. En vertical, los gráficos van a todo el ancho y sin deformarse, y el resumen de cada panel y de la tensión arterial va en la misma página, justo encima de sus gráficos.
+- Informes PDF: menos espacio entre el título y el texto en las páginas de resumen.
+- Ventana de progreso al generar cualquier informe PDF (barra, paso en curso y cursor de espera), para que no parezca que la aplicación se ha colgado mientras tarda unos segundos. El informe personalizado pide ahora el nombre del fichero antes de prepararlo.
+- Informe PDF personalizado: periodo de la tensión arterial («desde» y «hasta»), por defecto el último año hasta hoy.
+- Panel de tensión arterial: botones de periodo (últimos 10 días, último mes, últimos 3 meses, último año, todo o intervalo de fechas) y gráfico que se adapta a la duración: cada medición hasta un mes (con la línea mínimo-máximo del día si hay varias), por semanas hasta 6 meses y por meses a partir de ahí, con la línea mínimo-máximo y la media de cada periodo.
+- Guía «¿Cómo medirla?» en la pantalla de tensión arterial (y en el manual): cuántas mediciones, cuándo y en qué condiciones, según la guía europea ESH 2021.
+- «Cambio lento» en los gráficos de evolución (detector de deriva): si los últimos valores se separan poco a poco del valor habitual propio, de forma sostenida aunque ningún cambio entre dos analíticas sea grande, el texto bajo el gráfico lo indica (método CUSUM con la variación biológica publicada; solo dentro de un mismo laboratorio).
+- Configuración → Entrada manual: límites ajustables (mínimo y máximo) para validar la sistólica, la diastólica y el pulso; por defecto 80-250, 45-140 y 45-225, ajustables dentro de 50-300, 20-200 y 20-250.
+- Objetivo indicado por tu médico (Evolución → «🎯 Objetivo indicado por mi médico...»): si tu médico te ha fijado un objetivo concreto para una prueba (por ejemplo, LDL por debajo de 100 mg/dL), puedes anotarlo a mano y los gráficos de esa prueba lo muestran en lugar del rango del laboratorio, con la etiqueta «Objetivo indicado por su médico». Analitix nunca propone ni calcula objetivos.
+- Tiempo dentro del rango (u objetivo del médico) bajo cada gráfico de evolución: el % del tiempo, interpolando entre analíticas (método de Rosendaal, estándar en anticoagulación), sin contar periodos de más de un año sin analíticas.
+- Para el filtrado glomerular, aviso de la guía KDIGO si baja de forma demostrable más de 5 mL/min/1,73 m² al año («progresión rápida»: coméntalo con tu médico).
+- Resumen → «Posición en el rango»: cada parámetro del último informe sobre la franja de su rango, con el valor anterior y una palabra que lo resume («ligeramente alto», «muy bajo»…), para comparar de un vistazo parámetros de escalas distintas.
+
+### Cambiado
+
+- Los informes PDF indican con qué versión de Analitix se generaron: la portada muestra la versión, su fecha y la dirección del proyecto en GitHub, y el pie de cada página, la versión y «Página n de N» (antes solo «Página n»).
+- Menú nuevo «Entrada manual» con «Analíticas...» y «Tensión arterial...» (antes, Pacientes → Entrada manual). Las dos pantallas avisan de que los gráficos e informes dependen de lo que se introduce, y los campos solo admiten caracteres válidos y longitudes razonables.
+- La tendencia se calcula con un método robusto (pendiente de Theil-Sen) que un valor raro no arrastra, con su margen de confianza del 95 %: si no permite afirmar que el valor cambie dice «sin tendencia demostrable», y con menos de 5 analíticas o 2 años, «pocos datos para confirmarla» (antes bastaban 3 analíticas). La columna «Tendencia» del Resumen usa el mismo criterio.
+- El color intenso queda para las desviaciones grandes: un valor fuera de rango por poco se dibuja con el mismo color, más claro. Los colores aptos para daltonismo y los símbolos ▲/▼ no cambian.
+- Los rangos con un solo límite (por ejemplo LDL «< 130») ya dibujan su línea en los gráficos de evolución; antes no se veía ninguna.
+
 ## [0.11.0] - 2026-10-06
 
 ### Cambiado

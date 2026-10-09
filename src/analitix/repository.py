@@ -582,6 +582,18 @@ def merge_patients(con, source_ids: list[int], target_id: int) -> int:
             else:
                 cur.execute("UPDATE reports SET patient_id = ? WHERE id = ?", (target_id, report_id))
                 moved += 1
+        # Objetivos del médico: se conservan; si los dos tienen uno para la
+        # misma prueba, gana el del destino.
+        cur.execute(
+            "INSERT OR IGNORE INTO targets SELECT ?, canonical_id, target_low, target_high, note, set_on "
+            "FROM targets WHERE patient_id = ?",
+            (target_id, source_id),
+        )
+        cur.execute("DELETE FROM targets WHERE patient_id = ?", (source_id,))
+        # Mediciones de tensión: pasan al destino; una del mismo minuto que
+        # ya tenga el destino se descarta (UNIQUE patient_id + measured_at).
+        cur.execute("UPDATE OR IGNORE bp_readings SET patient_id = ? WHERE patient_id = ?", (target_id, source_id))
+        cur.execute("DELETE FROM bp_readings WHERE patient_id = ?", (source_id,))
         cur.execute("DELETE FROM patients WHERE id = ?", (source_id,))
     con.commit()
     return moved
@@ -744,6 +756,13 @@ def merge_canonical_ids(con, source_ids: list[str], target_id: str) -> int:
         (target_id, *source_ids),
     )
     updated = cur.rowcount
+    # Objetivos del médico de las variantes: pasan a la prueba destino salvo
+    # que el paciente ya tenga uno para ella (gana el del destino).
+    con.execute(
+        f"UPDATE OR IGNORE targets SET canonical_id = ? WHERE canonical_id IN ({placeholders})",  # noqa: S608
+        (target_id, *source_ids),
+    )
+    con.execute(f"DELETE FROM targets WHERE canonical_id IN ({placeholders})", source_ids)  # noqa: S608
     con.commit()
     add_aliases({normalize_test_name(name): target_id for name in raw_names})
     return updated
@@ -875,6 +894,8 @@ def delete_patient(con, patient_id: int) -> None:
         con.execute("DELETE FROM results WHERE report_id = ?", (report_id,))
         con.execute("DELETE FROM processed_files WHERE report_id = ?", (report_id,))
         con.execute("DELETE FROM reports WHERE id = ?", (report_id,))
+    con.execute("DELETE FROM targets WHERE patient_id = ?", (patient_id,))
+    con.execute("DELETE FROM bp_readings WHERE patient_id = ?", (patient_id,))
     con.execute("DELETE FROM patients WHERE id = ?", (patient_id,))
     con.commit()
 
@@ -926,6 +947,8 @@ def delete_reports(con, report_ids: list[int]) -> int:
             "SELECT COUNT(*) FROM reports WHERE patient_id = ?", (patient_id,)
         ).fetchone()[0]
         if remaining == 0:
+            cur.execute("DELETE FROM targets WHERE patient_id = ?", (patient_id,))
+            cur.execute("DELETE FROM bp_readings WHERE patient_id = ?", (patient_id,))
             cur.execute("DELETE FROM patients WHERE id = ?", (patient_id,))
     con.commit()
     return len(report_ids)
@@ -934,8 +957,80 @@ def delete_reports(con, report_ids: list[int]) -> int:
 def delete_all_data(con) -> None:
     """Vacía por completo pacientes/informes/resultados/marcas de
     importación (irreversible). No toca `settings` (preferencias de la app)."""
-    for table in ("results", "processed_files", "reports", "patients"):
+    for table in ("results", "processed_files", "reports", "targets", "bp_readings", "patients"):
         con.execute(f"DELETE FROM {table}")
+    con.commit()
+
+
+def get_target(con, patient_id: int, canonical_id: str) -> Optional[dict[str, Any]]:
+    """Objetivo indicado por el médico para esa prueba y paciente (ver
+    `db.SCHEMA`, tabla `targets`), o `None` si no se ha introducido."""
+    row = con.execute(
+        "SELECT target_low, target_high, note, set_on FROM targets WHERE patient_id = ? AND canonical_id = ?",
+        (patient_id, canonical_id),
+    ).fetchone()
+    return dict(zip(("low", "high", "note", "set_on"), row)) if row else None
+
+
+def set_target(con, patient_id: int, canonical_id: str, low: Optional[float], high: Optional[float],
+               note: Optional[str]) -> None:
+    """Guarda (o sustituye) el objetivo del médico. Al menos un límite y,
+    con los dos, el mínimo por debajo del máximo."""
+    if low is None and high is None:
+        raise ValueError("Indica al menos un límite del objetivo.")
+    if low is not None and high is not None and low >= high:
+        raise ValueError("El mínimo del objetivo debe ser menor que el máximo.")
+    con.execute(
+        "INSERT INTO targets (patient_id, canonical_id, target_low, target_high, note, set_on) "
+        "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(patient_id, canonical_id) DO UPDATE SET "
+        "target_low = excluded.target_low, target_high = excluded.target_high, "
+        "note = excluded.note, set_on = excluded.set_on",
+        (patient_id, canonical_id, low, high, note or None, dt.date.today().isoformat()),
+    )
+    con.commit()
+
+
+def add_bp_reading(con, patient_id: int, reading: dict[str, Any], source: str = "manual") -> bool:
+    """Guarda una medición de tensión ya validada (`blood_pressure.
+    validate_reading`). Devuelve `False` si el paciente ya tenía una en ese
+    mismo minuto (no se duplica ni se sobrescribe). No hace commit: quien
+    llama lo hace al final (una importación entera, una sola vez)."""
+    cur = con.execute(
+        "INSERT OR IGNORE INTO bp_readings (patient_id, measured_at, systolic, diastolic, pulse, place, note, source) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (patient_id, reading["measured_at"], reading["systolic"], reading["diastolic"], reading.get("pulse"),
+         reading.get("place") or "casa", reading.get("note"), source),
+    )
+    return cur.rowcount == 1
+
+
+def list_bp_readings(con, patient_id: int) -> list[dict[str, Any]]:
+    """Mediciones de tensión del paciente, de la más antigua a la más reciente."""
+    cur = con.execute(
+        "SELECT id, measured_at, systolic, diastolic, pulse, place, note, source FROM bp_readings "
+        "WHERE patient_id = ? ORDER BY measured_at",
+        (patient_id,),
+    )
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def delete_bp_readings(con, patient_id: int, reading_ids: list[int]) -> int:
+    """Borra mediciones concretas del paciente (solo las suyas). Devuelve
+    cuántas se han borrado."""
+    if not reading_ids:
+        return 0
+    marcas = ",".join("?" * len(reading_ids))
+    cur = con.execute(
+        f"DELETE FROM bp_readings WHERE patient_id = ? AND id IN ({marcas})",  # noqa: S608
+        (patient_id, *reading_ids),
+    )
+    con.commit()
+    return cur.rowcount
+
+
+def delete_target(con, patient_id: int, canonical_id: str) -> None:
+    con.execute("DELETE FROM targets WHERE patient_id = ? AND canonical_id = ?", (patient_id, canonical_id))
     con.commit()
 
 
@@ -961,7 +1056,7 @@ def get_stats(con) -> dict[str, Any]:
 # Tablas que se pueden inspeccionar desde la pestaña "Explorador BD" (de
 # solo lectura). Se enumeran explícitamente para no interpolar nunca un
 # nombre de tabla arbitrario en una sentencia SQL.
-EXPLORABLE_TABLES = ("patients", "reports", "results", "processed_files", "settings")
+EXPLORABLE_TABLES = ("patients", "reports", "results", "processed_files", "settings", "targets", "bp_readings")
 
 
 def get_table_rows(con, table: str) -> tuple[list[str], list[tuple]]:

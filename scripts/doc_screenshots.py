@@ -196,6 +196,23 @@ def build_demo_db(path: Path):
                 value_raw=f"{value:g}", value_num=value, unit=units[li], ref_low=low, ref_high=high,
                 ref_text=None, flag_pdf=None, flag_calc=compute_flag(value, low, high), sample_date=f"{fecha} 08:30:00",
             ))
+    # Tensión arterial de ejemplo (ficticia): dos semanas de mañana y noche
+    # en casa, con deriva lenta, y dos tomas en la consulta.
+    rng = random.Random("tension")
+    sis, dia = 128.0, 82.0
+    for d in range(14):
+        for hora in ("07:45", "21:30"):
+            sis = 0.7 * sis + 0.3 * 128 + rng.gauss(0, 5)
+            dia = 0.7 * dia + 0.3 * 82 + rng.gauss(0, 3)
+            repository.add_bp_reading(con, pid, {
+                "measured_at": f"2026-03-{d + 1:02d} {hora}", "systolic": round(sis), "diastolic": round(dia),
+                "pulse": rng.randint(60, 76), "place": "casa", "note": "antes del desayuno" if hora == "07:45" else None,
+            }, source="csv")
+    for fecha, s, di in (("2026-02-10 10:30", 138, 88), ("2026-04-14 09:15", 134, 85)):
+        repository.add_bp_reading(con, pid, {"measured_at": fecha, "systolic": s, "diastolic": di, "pulse": 70,
+                                             "place": "consulta", "note": "revisión"})
+    # Objetivo del médico de ejemplo (ficticio), para las capturas del LDL.
+    repository.set_target(con, pid, "colesterol_ldl", None, 100.0, "Ejemplo ficticio")
     con.commit()
     return con, pid
 
@@ -299,12 +316,16 @@ def capture_app(con, pid) -> None:
 
     show("manual")
     _grab(app, "entrada_manual.png")
+    show("tension")
+    _grab(app, "tension_arterial.png")
 
     show("evolucion")
     for match, name in (("Hemoglobina", "evolucion.png"), ("Colesterol LDL", "evolucion_ldl.png")):
         _select(app.list_tests_evolucion, match)
         app._show_evolution()
         _grab(app, name)
+    dialog_after("objetivo_medico.png")  # con el LDL elegido
+    app._edit_target()
 
     show("comparativa")
     for i, (_cid, label) in enumerate(app._evolution_tests):
@@ -319,6 +340,8 @@ def capture_app(con, pid) -> None:
     _grab(app, "resumen_tabla.png")
     notebook.select(1)
     _grab(app, "resumen_cambios.png")
+    notebook.select(2)
+    _grab(app, "resumen_posicion.png")
 
     show("mapa_calor")
     app.var_mapa_calor_set.set(gui.HEATMAP_OUT_OF_RANGE)
@@ -336,6 +359,7 @@ def capture_app(con, pid) -> None:
         ("calcio", app.list_calcio_indices, app._show_calcio_index, "panel_calcio.png"),
         ("glucemia", app.list_glucemia_indices, app._show_glucemia_index, "panel_glucemia.png"),
         ("tiroides", None, app._show_thyroid_chart, "panel_tiroides.png"),
+        ("tension_panel", None, lambda: None, "panel_tension.png"),
     ):
         show(page)
         if listbox is not None:

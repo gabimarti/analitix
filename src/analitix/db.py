@@ -83,6 +83,38 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- Objetivo indicado por el médico para un paciente y una prueba (p. ej. LDL
+-- < 100 mg/dL): lo introduce la persona a mano, nunca lo calcula Analitix.
+-- En los gráficos sustituye al rango del laboratorio. Un límite puede faltar
+-- ("< 100" = solo target_high). set_on: "AAAA-MM-DD".
+CREATE TABLE IF NOT EXISTS targets (
+    patient_id INTEGER NOT NULL REFERENCES patients(id),
+    canonical_id TEXT NOT NULL,
+    target_low REAL,
+    target_high REAL,
+    note TEXT,
+    set_on TEXT,
+    PRIMARY KEY (patient_id, canonical_id)
+);
+
+-- Mediciones de tensión arterial (entrada manual o CSV, ver
+-- blood_pressure.py). measured_at: "AAAA-MM-DD HH:MM"; place: "casa" o
+-- "consulta" (los umbrales de las guías difieren); source: "manual" o "csv".
+-- Una sola medición por paciente y minuto: reimportar un CSV no duplica.
+CREATE TABLE IF NOT EXISTS bp_readings (
+    id INTEGER PRIMARY KEY,
+    patient_id INTEGER NOT NULL REFERENCES patients(id),
+    measured_at TEXT NOT NULL,
+    systolic INTEGER NOT NULL,
+    diastolic INTEGER NOT NULL,
+    pulse INTEGER,
+    place TEXT NOT NULL DEFAULT 'casa',
+    note TEXT,
+    source TEXT NOT NULL DEFAULT 'manual',
+    UNIQUE(patient_id, measured_at)
+);
+CREATE INDEX IF NOT EXISTS idx_bp_patient ON bp_readings(patient_id, measured_at);
 """
 
 

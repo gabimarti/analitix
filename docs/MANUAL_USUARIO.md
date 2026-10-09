@@ -195,7 +195,8 @@ Al arrancar y escribir tu contraseña, se abre la ventana principal con una
 se ve el logo de Analitix como pantalla de bienvenida. Los menús son:
 
 - **Archivo**: Importar, Exportar, Salir.
-- **Pacientes**: Cambiar paciente activo..., Pacientes, Entrada manual.
+- **Pacientes**: Cambiar paciente activo..., Pacientes.
+- **Entrada manual**: Analíticas..., Tensión arterial... (siempre para el paciente activo).
 - **Análisis**: Evolución, Comparativa, Resumen, Mapa de calor — gráficos a la carta de uno o dos
   parámetros elegidos por ti — y Resumen, una tabla tipo "semáforo" con
   todos los parámetros del último informe de un vistazo. Al final,
@@ -420,11 +421,19 @@ explícitamente — así no se corre el riesgo de ver o exportar sin darte
 cuenta los datos de otra persona. Con un único paciente en la base de datos
 no hay ambigüedad posible y se selecciona solo.
 
-### 2.3 ✏ Entrada manual (menú Pacientes → Entrada manual)
+### 2.3 ✏ Entrada manual de analíticas (menú Entrada manual → Analíticas...)
 
 Para registrar una analítica cuando el PDF no se ha podido interpretar (o
 cuando simplemente no viene en PDF). No sustituye a la importación
 automática: es el respaldo para esos casos puntuales.
+
+**Importante:** los gráficos, cálculos e informes de Analitix se basan en lo
+que introduces. Un valor mal escrito (por ejemplo 18 en vez de 180, o la
+unidad equivocada) daría gráficos, resúmenes e informes erróneos. Los campos
+solo admiten caracteres válidos (cifras y coma o punto decimal en los
+valores, cifras y guiones en la fecha, textos sin caracteres de control y
+de longitud limitada), pero la aplicación no puede saber si un valor
+posible es el correcto: revísalo antes de guardar.
 
 <p align="center">
   <img src="images/entrada_manual.png" width="80%" alt="Pantalla de Entrada manual de una analítica">
@@ -464,6 +473,66 @@ El valor y el rango admiten coma o punto como separador decimal. El nombre y
 el valor son obligatorios; la unidad y el rango son opcionales (sin rango, el
 punto se dibuja pero no se marca como fuera de rango en ningún sentido).
 
+### 2.3.1 🩺 Tensión arterial (menú Entrada manual → Tensión arterial...)
+
+Registro de tus mediciones de tensión arterial, siempre para el **paciente
+activo**. Los resultados (media de la semana de automedida, categoría según la
+guía y gráfico) se ven en **Paneles clínicos → Tensión arterial** (§2.16.1). El
+cruce con las analíticas (riesgo cardiovascular) llegará más adelante.
+
+<p align="center">
+  <img src="images/tension_arterial.png" width="80%" alt="Pantalla de registro de tensión arterial con mediciones de ejemplo">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
+- **ℹ️ ¿Cómo medirla?**: abre la guía para medir la tensión en casa de forma
+  que la media sirva (ver el apartado siguiente).
+- **Añadir medición**: fecha (AAAA-MM-DD), hora (HH:MM), sistólica (la
+  "alta"), diastólica (la "baja"), pulso (opcional), **lugar** y una nota
+  opcional. Los campos solo admiten cifras (o fecha y hora) y, al guardar,
+  se comprueba que la sistólica sea mayor que la diastólica, que la fecha
+  no sea futura y que los valores estén dentro de unos **límites**: por
+  defecto, sistólica entre 80 y 250, diastólica entre 45 y 140 y pulso
+  entre 45 y 225. Son límites para cazar errores de tecleo, **no** valores
+  normales; se pueden ajustar en **Configuración → Entrada manual** (§2.20)
+  dentro de un margen (sistólica 50-300, diastólica 20-200, pulso 20-250).
+  Los mismos límites se aplican al importar un CSV. El mismo aviso que en
+  las analíticas vale aquí.
+- **Lugar** (casa o consulta, por defecto casa): las guías usan umbrales
+  distintos para la tensión medida en casa y en la consulta, y el riesgo
+  cardiovascular se calcula con la de consulta; guardarlo ahora permitirá
+  hacer bien esos cálculos.
+- No se guardan dos mediciones del mismo paciente en el mismo minuto: si
+  ya existe, se avisa (y al importar, se omite sin duplicarla).
+- **Borrar marcadas**: marca las casillas de las mediciones y pulsa el
+  botón (pide confirmación; no se puede deshacer).
+- **Importar CSV...**: importa un fichero de texto con una medición por
+  línea. **Guardar plantilla CSV...** guarda un ejemplo con el formato
+  exacto:
+
+  ```
+  fecha_hora;sistolica;diastolica;pulso;lugar;notas
+  2026-01-15 08:10;128;82;64;casa;antes del desayuno
+  2026-02-02 10:45;134;86;;consulta;revisión anual
+  ```
+
+  - Separador `;`, `,` o tabulador (se detecta solo). Primera línea con los
+    nombres de las columnas; el orden da igual.
+  - Obligatorias: `fecha_hora` (o `fecha` y `hora` en columnas separadas),
+    `sistolica` y `diastolica`. Opcionales: `pulso`, `lugar` (casa o
+    consulta; si falta, casa) y `notas`.
+  - Fechas `AAAA-MM-DD HH:MM` (también con segundos), `DD/MM/AAAA HH:MM` o
+    `DD-MM-AAAA HH:MM`.
+  - También se aceptan directamente las exportaciones de **Omron Connect**
+    (`Date`, `Time`, `Systolic (mmHg)`…, fechas como `Jan 12 2025`) y
+    **Withings** (`Date`, `Heart rate`, `Systolic`, `Diastolic`). Otras
+    cabeceras habituales (`SYS`, `DIA`, `PUL`, `Pulse`…) también se
+    reconocen.
+  - Al terminar se muestra cuántas se han importado, cuántas ya existían y
+    qué líneas tenían errores (con el número de línea y el motivo); las
+    líneas con error no se importan.
+
 ### 2.4 📈 Evolución (menú Análisis → Evolución)
 
 Gráfico de una prueba concreta a lo largo del tiempo.
@@ -473,7 +542,15 @@ Gráfico de una prueba concreta a lo largo del tiempo.
 </p>
 
 <p align="center">
-  <img src="images/evolucion_ldl.png" width="80%" alt="Evolución del colesterol LDL con valores por encima del límite marcados con ▲">
+  <img src="images/evolucion_ldl.png" width="80%" alt="Evolución del colesterol LDL medida contra un objetivo indicado por el médico (menor de 100), con los valores por encima marcados con ▲">
+</p>
+
+Arriba, el LDL con un **objetivo indicado por el médico** (< 100 mg/dL, de
+ejemplo) en lugar del rango del laboratorio; abajo, el diálogo donde se
+anota (ver "🎯 Objetivo indicado por mi médico" más abajo).
+
+<p align="center">
+  <img src="images/objetivo_medico.png" width="50%" alt="Diálogo para anotar el objetivo indicado por el médico">
 </p>
 
 > Capturas con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
@@ -501,13 +578,18 @@ Gráfico de una prueba concreta a lo largo del tiempo.
 - Selecciona una prueba y pulsa **Ver evolución**. El gráfico muestra:
   - La línea de valores en el tiempo, con un punto por análisis.
   - Las líneas discontinuas de mínimo y máximo del rango de referencia (más
-    la banda sombreada entre ambas).
+    la banda sombreada entre ambas). Si el rango tiene un solo límite (por
+    ejemplo, LDL "< 130"), una sola línea con ese límite en la leyenda.
   - Los puntos **fuera de rango** en rojo anaranjado (alto) o azul (bajo),
     con el valor exacto escrito junto al punto precedido de **▲** (alto) o
     **▼** (bajo), con margen suficiente para que no quede pegado al borde
     del gráfico ni a la leyenda. Los colores están elegidos para
     distinguirse también con daltonismo, y el símbolo permite leerlos sin
-    color (por ejemplo, impresos en blanco y negro).
+    color (por ejemplo, impresos en blanco y negro). Si la desviación es
+    **leve** (fuera del rango por menos de una cuarta parte de su ancho),
+    el punto es del mismo color pero **más claro**: el color intenso queda
+    para las desviaciones grandes. Es una ayuda visual, no un criterio
+    clínico.
   - El **último valor** destacado con un anillo y la etiqueta
     **"Último: valor"** (con ▲/▼ si está fuera de rango), para ver de un
     vistazo cómo estás ahora, sin que se pierda entre el histórico.
@@ -535,6 +617,24 @@ Gráfico de una prueba concreta a lo largo del tiempo.
     recuerda. Solo está en esta pantalla, no en los paneles clínicos.
     Fuente y limitaciones en Ayuda → Referencias científicas
     ("referencias_rcv").
+  - **🎯 Objetivo indicado por mi médico** (botón debajo de la lista):
+    algunos médicos fijan para una persona concreta un objetivo distinto
+    del rango del laboratorio, por ejemplo **"LDL por debajo de 100
+    mg/dL"** en alguien con riesgo cardiovascular, o una HbA1c objetivo en
+    diabetes. **Analitix nunca propone ni calcula objetivos**: solo los
+    guarda si **tú los introduces a mano**, copiando lo que te haya
+    indicado tu médico. Elige la prueba, pulsa el botón y escribe el mínimo
+    y/o el máximo (deja vacío el que no te hayan indicado), con las mismas
+    unidades que el informe, y si quieres una nota (quién y cuándo te lo
+    indicó), que aparece junto al objetivo en el texto de debajo del
+    gráfico. Mientras exista, los gráficos de esa prueba (Evolución,
+    Comparativa y paneles) muestran **tu objetivo en lugar del rango del
+    laboratorio**, con la etiqueta "Objetivo indicado por su médico", y los
+    ▲/▼ y el resumen en texto se miden respecto a él. Se muestra en lugar
+    del rango, no junto a él, porque los estudios con pacientes encontraron
+    que así se entiende mejor (Scherer et al. 2018). La tabla del Resumen y
+    los informes PDF completo y de alterados siguen usando el rango del
+    laboratorio. Para quitarlo: mismo botón → **Quitar objetivo**.
   - **Últimos 5 años o todo el histórico**: por defecto, cada gráfico
     muestra los **5 años anteriores a la última analítica** de ese
     parámetro, para que los valores muy antiguos no compriman el estado
@@ -547,6 +647,16 @@ Gráfico de una prueba concreta a lo largo del tiempo.
     aplica al elegir el siguiente índice); la elección se recuerda. Los
     informes PDF completo y de alterados incluyen siempre todo el
     histórico.
+  - **Cambio lento** (pruebas con variación biológica conocida): si
+    tus últimas analíticas se han ido separando poco a poco de tu valor
+    habitual, aunque ningún cambio entre dos analíticas sea grande, el texto
+    de debajo del gráfico lo indica ("Cambio lento: desde …, tus valores han ido
+    quedando por encima de tu valor habitual…"; en cada analítica la diferencia
+    es pequeña, pero se repite). Se calcula con un método estadístico de control (CUSUM)
+    sobre tu propio historial: tu "valor habitual" es la media de tus 4
+    primeras analíticas dentro de rango del laboratorio actual, y hacen falta
+    al menos 3 analíticas posteriores. Solo aparece si se detecta; no es una
+    alarma ni un diagnóstico. Fuentes en "referencias_rcv".
   - **Banda gris en el último punto** (pruebas con variación biológica
     conocida, ver "¿Cambio real o variación normal?" en §2.6): el margen
     de variación esperable desde el valor anterior. Si el último punto cae
@@ -554,11 +664,34 @@ Gráfico de una prueba concreta a lo largo del tiempo.
     probablemente real (no necesariamente malo). Si el último valor es de
     otro laboratorio, la leyenda lo indica y no se dibuja la banda. También
     aparece en los gráficos de los paneles clínicos.
-  - Con al menos 3 valores, además una **línea de tendencia** punteada
-    (regresión lineal simple) con si el valor tiende a subir, bajar o
-    mantenerse estable, la tasa de cambio aproximada al año y una
-    proyección a 3 meses vista. Es una orientación visual sencilla, **no
-    un diagnóstico ni una predicción médica** — para eso, tu médico.
+  - Con al menos 3 valores, además una **línea de tendencia** punteada y,
+    debajo, si sube, baja o no cambia, con su **ritmo al año** y un
+    **margen de confianza del 95 %** (por ejemplo "↓ bajando ~-2/año (IC
+    95 %: -3,1 a -0,8)"). Se calcula con un método estadístico robusto
+    (pendiente de Theil-Sen, Sen 1968): un único valor raro apenas la
+    mueve, al contrario que una recta normal. Si el margen incluye el 0
+    (puede estar subiendo, bajando o igual), dice **"sin tendencia
+    demostrable"**: con esos datos no se puede afirmar que cambie. Con
+    menos de 5 analíticas o menos de 2 años dice **"pocos datos para
+    confirmarla"**. Si hay tendencia, añade una proyección a 3 meses vista.
+    Es una orientación, **no un diagnóstico ni una predicción médica**.
+  - Solo para el **filtrado glomerular estimado** (FG) existe un umbral de
+    ritmo de cambio respaldado por una guía clínica: si el FG baja de forma
+    demostrable más de 5 mL/min/1,73 m² al año, el texto recuerda que la
+    guía KDIGO llama a eso "progresión rápida" y que conviene comentarlo
+    con tu médico. Para el resto de pruebas no se muestra ningún umbral de
+    ritmo, porque no hay uno validado (por ejemplo, la "velocidad del PSA"
+    se desaconseja en estudios grandes).
+  - En el texto de debajo, junto a "Dentro del rango en X de Y analíticas",
+    el **% del tiempo** que el valor ha estado dentro del rango (o del
+    objetivo de tu médico): entre dos analíticas se supone que el valor
+    cambia en línea recta y se cuentan los días dentro (método de
+    Rosendaal, el estándar del "tiempo en rango" de los tratamientos
+    anticoagulantes, pensado para analíticas a intervalos irregulares).
+    No se cuentan los periodos de más de un año sin analíticas (se indica
+    si los hay), y solo aparece si lo contado suma al menos un año.
+    Fuentes y limitaciones de todo esto en Ayuda → Referencias
+    científicas ("referencias_tendencia_tiempo_en_rango").
 - **ℹ️ ¿Qué es este parámetro?**: la descripción en lenguaje llano del
   parámetro (qué mide y por qué se pide) en un diálogo aparte, para quien
   no esté familiarizado con los términos médicos — no se muestra
@@ -616,11 +749,11 @@ nunca un diagnóstico.**
   un punto de corte clínico.
 - **Tendencia**: a diferencia de "Variación" (que solo mira el último
   informe frente al anterior), esta columna usa **todo el histórico** del
-  parámetro — ↑ si la tendencia general es a subir, → si se mantiene
-  estable, ↓ si es a bajar. Mismo cálculo (regresión lineal) y mismo
-  criterio de "estable" que ya usa el gráfico de Evolución (§2.4) bajo el
-  propio gráfico. Con menos de 3 analíticas de ese parámetro se muestra
-  "—": con tan pocos puntos una tendencia no es fiable.
+  parámetro — ↑ si la tendencia general es a subir, ↓ si es a bajar, →
+  si no hay una tendencia demostrable o es mínima. Mismo cálculo
+  (pendiente robusta con margen de confianza) que el texto bajo el
+  gráfico de Evolución (§2.4). Con menos de 5 analíticas o menos de 2 años
+  se muestra "—": con tan pocos datos una tendencia no es fiable.
   - Si sube o baja, se acompaña de un **% anual** (p. ej. "↑ +38%/año"):
     qué parte del rango de referencia recorrería el parámetro en un año a
     este ritmo — un +100%/año cruza todo el rango normal en un año
@@ -679,6 +812,27 @@ Es el "valor de referencia del cambio" (RCV).
 
 <p align="center">
   <img src="images/resumen_cambios.png" width="80%" alt="Gráfico Qué ha cambiado: barras divergentes por parámetro">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
+**Subpestaña "Posición en el rango".** Dónde está cada parámetro del
+último informe respecto a su rango de referencia, para comparar de un
+vistazo parámetros de escalas muy distintas: una fila por parámetro, la
+franja verde es su rango (de su límite inferior al superior; si solo tiene
+límite superior, desde 0), el **punto lleno** es el valor actual y el
+**hueco** el anterior. A la derecha, una palabra que lo resume ("dentro del
+rango", "ligeramente alto", "alto", "muy alto"…, con ▲/▼) y el valor.
+Arriba aparecen los más alejados del rango. Estar en el centro de la franja
+no es "mejor" que estar cerca de un límite: todo el rango es normal, y por
+eso no se marca el centro. Los parámetros sin rango o con solo límite
+inferior (p. ej. HDL "> 40") no tienen escala y se omiten (se indica
+cuántos). Las palabras ("ligeramente" = fuera por menos de una cuarta
+parte del ancho del rango; "muy" = por más de un ancho entero) son una
+ayuda de lectura, no una clasificación clínica.
+
+<p align="center">
+  <img src="images/resumen_posicion.png" width="80%" alt="Gráfico Posición en el rango: cada parámetro sobre la franja de su rango">
 </p>
 
 > Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
@@ -1132,6 +1286,92 @@ embarazo, algo que Analitix no registra.
 - **ℹ ¿Qué es esto?**: explicación en lenguaje sencillo y técnico (con
   cita completa) de por qué no hay clasificación automática.
 
+#### Cómo medir la tensión en casa
+
+Lo que dice la guía europea de medición de la tensión arterial (ESH 2021,
+recuadros 4 y 6) para que la media sirva para valorar tu tensión; es lo
+mismo que muestra el botón **ℹ️ ¿Cómo medirla?**:
+
+- **Cuántas veces:** 7 días seguidos (como mínimo 3), mejor justo antes de
+  una visita médica; cada día por la mañana y por la noche; **cada vez, 2
+  mediciones con 1 minuto entre ellas** (anota las dos). Por la mañana, antes
+  de la medicación (si tomas) y antes de desayunar; por la noche, antes de
+  cenar. Para el seguimiento a largo plazo con tratamiento: 2 mediciones una o
+  dos veces por semana (como mínimo, una vez al mes).
+- **Condiciones:** habitación tranquila y con temperatura agradable; nada de
+  tabaco, cafeína, comida ni ejercicio en los 30 minutos previos; sentado y
+  relajado 3-5 minutos antes; sin hablar durante ni entre las mediciones.
+- **Postura:** sentado con la espalda apoyada, piernas sin cruzar y pies en el
+  suelo, brazo desnudo apoyado en la mesa con la mitad del brazo a la altura
+  del corazón.
+- **Aparato:** tensiómetro electrónico de brazo validado clínicamente, con el
+  manguito de la talla de tu brazo.
+- **Cómo lo usa Analitix:** la media de la semana de automedida descarta el
+  primer día y necesita al menos 3 días y 12 mediciones (siguiendo la pauta,
+  tendrás unas 24). Una medición suelta no se clasifica. Marca «casa» como
+  lugar.
+
+Fuente: Stergiou GS et al. 2021 European Society of Hypertension practice
+guidelines for office and out-of-office blood pressure measurement. *J
+Hypertens* 2021;39(7):1293-1302 (ver Ayuda → Referencias científicas,
+"referencias_tension_arterial").
+
+### 2.16.1 🩺 Tensión arterial (menú Paneles clínicos → Tensión arterial)
+
+Resultados de las mediciones registradas en Entrada manual → Tensión arterial
+(§2.3.1) — **apoyo informativo, nunca un diagnóstico**.
+
+<p align="center">
+  <img src="images/panel_tension.png" width="80%" alt="Panel de tensión arterial con la media de la semana de automedida y el gráfico">
+</p>
+
+> Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
+
+- **Media de la última semana de automedida en casa**, como indica la guía
+  europea de medición (ESH 2021): las mediciones **en casa** de los 7 días que
+  terminan en la última, **sin el primer día**, con cuántas lecturas y días
+  entran, la **presión de pulso** (alta − baja) y el **pulso medio**.
+- **Categoría informativa** según la guía europea ESC 2024 para medidas en
+  casa: PA no elevada (por debajo de 120/70), PA elevada (desde 120/70 hasta
+  por debajo de 135/85) o hipertensión (135/85 o más); manda la peor de las dos
+  cifras. **Solo se da si la semana cumple el protocolo**: al menos 3 días y 12
+  lecturas sin contar el primero (lo ideal: 7 días con dos tomas por la mañana
+  y dos por la noche). Si no, se muestra la media sin clasificar y se explica
+  qué falta. Una lectura suelta nunca se clasifica: tiene poca precisión.
+- **Última toma en la consulta**, aparte: en la consulta los umbrales son
+  otros (hipertensión desde 140/90).
+- **Periodo del gráfico:** botones **Últimos 10 días**, **Último mes**,
+  **Últimos 3 meses** y **Último año** (cuentan hacia atrás desde hoy),
+  **Todo** (vista general) y **Elegir intervalo de fechas** (muestra los
+  campos de fechas y el periodo de comparación). Para que el gráfico no se
+  sature, el detalle depende de la duración del periodo: **hasta un mes**, un
+  punto por medición y, si un día tiene varias, una línea vertical de la
+  mínima a la máxima de ese día; **hasta 6 meses**, por **semanas**; **más de 6
+  meses**, por **meses**. En las vistas por semanas o meses, cada periodo es
+  una línea vertical de la mínima a la máxima de cada parámetro (sistólica,
+  diastólica y pulso) con un círculo en la media; el último periodo lleva un
+  anillo con su media.
+- **Intervalo y comparación:** con **Elegir intervalo de fechas**, escribe un intervalo («desde» y «hasta», en
+  AAAA-MM-DD; uno de los dos puede quedar en blanco) y pulsa **Aplicar** para
+  ver solo ese periodo en el gráfico; **Todo** vuelve a la vista general. Puedes
+  añadir un **periodo de comparación** (por ejemplo, marzo a junio de 2020
+  frente a marzo a junio de 2025). La tabla de **medias** muestra, para todo el
+  histórico, el intervalo y el periodo de comparación, cuántas mediciones y
+  días hay y la media de sistólica, diastólica y pulso. Son medias
+  descriptivas de las mediciones **en casa**, sin clasificar: la categoría de
+  la guía solo se da a una semana de automedida que cumple el protocolo.
+- **Gráfico**: arriba, sistólica y diastólica (un punto por medición, ● en
+  casa y ■ en la consulta, y una línea con la media de cada día en casa, que se
+  corta si pasa más de una semana sin medir); las líneas horizontales marcan
+  135/85 (discontinua) y 120/70 (punteada). El último día lleva un anillo con
+  su media. Abajo, el pulso. Respeta la ventana de 5 años / «Ver todo el
+  histórico» (§2.4).
+- En **Exportar → Informe PDF personalizado** puedes añadir la sección
+  «Tensión arterial (resumen y gráfico)» del periodo que elijas («desde» y
+  «hasta»); por defecto, el último año hasta hoy.
+- Fuentes literales y limitaciones en Ayuda → Referencias científicas
+  ("referencias_tension_arterial").
+
 ### 2.17 💾 Exportar (menú Archivo → Exportar)
 
 Exporta los resultados del paciente seleccionado a un fichero:
@@ -1148,6 +1388,12 @@ Exporta los resultados del paciente seleccionado a un fichero:
 - **Exportar a CSV...**: mismo contenido en formato CSV, compatible con
   Excel, hojas de cálculo y cualquier herramienta de análisis de datos.
 
+Mientras se genera cualquier informe PDF (puede tardar unos segundos si
+lleva muchos gráficos) aparece una ventana **«Generando informe PDF»** con
+una barra de progreso y el paso en curso («Preparando secciones…»,
+«Escribiendo página n de N…»), y el cursor se convierte en un reloj; se
+cierra sola al terminar.
+
 Dos informes en PDF pensados para llevar a una consulta médica, no un
 volcado de todos los datos — **apoyo informativo y de seguimiento, nunca
 un diagnóstico**. Los dos siguen la misma estructura de página:
@@ -1161,8 +1407,11 @@ un diagnóstico**. Los dos siguen la misma estructura de página:
    un cambio brusco (≥30%) — nunca para los normales, ni para uno del
    que solo hay un valor registrado (no hay evolución que mostrar).
 
-Cada página lleva un pie con el tipo de informe a la izquierda y el
-número de página a la derecha. En la tabla, cada fila muestra valor,
+La portada indica también la versión de Analitix con la que se generó
+el informe (y su fecha) y la dirección del proyecto en GitHub. Cada página
+lleva un pie con el tipo de informe a la izquierda, «Página n de N» a la
+derecha y, debajo, la versión de Analitix: así se sabe de dónde sale
+cualquier página aunque se imprima suelta. En la tabla, cada fila muestra valor,
 rango de referencia, estado (▲ Alto/▼ Bajo/Normal, coloreado) y variación
 respecto al informe anterior, marcada con "(*)" si es un cambio brusco.
 
@@ -1219,10 +1468,24 @@ panel clínico para llevar a una consulta:
   el interruptor en Evolución, tu rango personal en los gráficos de
   parámetros.
 - Empieza siempre con la portada y el aviso de que no es un diagnóstico, y
-  cada página lleva su pie con el número de página.
+  cada página lleva su pie con «Página n de N» y la versión de Analitix.
 - **Todas las páginas son A4**, también en los otros dos informes PDF: los
   gráficos se adaptan a una hoja vertical u horizontal, según su forma, y
   aprovechan todo el ancho para imprimirlos.
+- **Gráficos por página**: en el apartado «Gráficos» eliges **uno por
+  página, en horizontal** (más detalle, como hasta ahora), o **dos por
+  página, en vertical**, para gastar menos hojas. En vertical,
+  cada página se llena de arriba abajo: los gráficos van a todo el ancho
+  (todos con el mismo ancho, sin deformarse) y el resumen de cada panel y
+  de la tensión arterial va justo encima de sus gráficos, nunca solo al pie
+  de una página. Un gráfico con muchas notas o con dos ejes (tensión
+  arterial) se reduce menos, para que siga legible, y ocupa algo más de
+  sitio. Las tablas, «Qué ha cambiado» y el mapa de calor siguen en su
+  propia página.
+- **Tensión arterial**: escribe el periodo del informe en «desde» y
+  «hasta» (AAAA-MM-DD); por defecto, el último año hasta hoy. En blanco,
+  sin límite. El periodo manda sobre la ventana de 5 años y el gráfico se
+  agrupa según su duración, igual que en el panel.
 - **Secciones largas en varias páginas**: "Qué ha cambiado" y el mapa de
   calor muestran como mucho 25 parámetros por página. Si hay más, siguen en
   la página siguiente con el título marcado "(1/2)", "(2/2)"…, su leyenda
@@ -1419,9 +1682,10 @@ líneas es una molestia; una fusión equivocada da información incorrecta.
 
 ### 2.20 ⚙ Configuración (menú Configuración)
 
-Este panel se organiza a su vez en cuatro subpestañas (**General**,
-**Seguridad**, **Datos**, **Estadísticas**), para que quepa todo sin
-necesidad de ampliar la ventana ni usar barras de desplazamiento.
+Este panel se organiza a su vez en cinco subpestañas (**General**,
+**Entrada manual**, **Seguridad**, **Datos**, **Estadísticas**), para que
+quepa todo sin necesidad de ampliar la ventana ni usar barras de
+desplazamiento.
 
 <p align="center">
   <img src="images/configuracion.png" width="80%" alt="Configuración, subpestaña General">
@@ -1444,6 +1708,18 @@ necesidad de ampliar la ventana ni usar barras de desplazamiento.
   mire si hay una versión nueva cada vez que se abre (desactivado por
   defecto), o pulsa **Buscar ahora** para comprobarlo en el momento (ver
   §2.22).
+
+**Entrada manual**
+
+- **Límites de la tensión arterial**: mínimo y máximo admitidos para la
+  sistólica, la diastólica y el pulso al guardar o importar mediciones
+  (§2.3.1). Por defecto, sistólica 80-250, diastólica 45-140 y pulso
+  45-225 (mmHg / latidos por minuto); cada límite se puede ajustar dentro
+  del margen que se indica al lado (sistólica 50-300, diastólica 20-200,
+  pulso 20-250), con el mínimo siempre por debajo del máximo. **Guardar
+  límites** los aplica y **Valores por defecto** los restablece. No son
+  valores normales ni objetivos de salud: solo sirven para rechazar
+  errores evidentes, como 18 en vez de 180.
 
 **Seguridad**
 

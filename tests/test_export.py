@@ -4,6 +4,7 @@ from pathlib import Path
 import openpyxl
 import pdfplumber
 
+from analitix import __version__, __version_date__
 from analitix.export import export_csv, export_excel, export_pdf, to_dataframe
 
 
@@ -84,7 +85,9 @@ def test_export_pdf_fixed_page_structure(tmp_path: Path):
 
         portada = pdf.pages[0].extract_text()
         assert "Paciente de Prueba" in portada and "Informe completo" in portada
-        assert "Página 1" in portada
+        assert "Página 1 de 4" in portada
+        assert f"Analitix {__version__} ({__version_date__})" in portada
+        assert "github.com/gabimarti/analitix" in portada
 
         pagina_fuera_rango = pdf.pages[1].extract_text()
         assert "Glucosa" in pagina_fuera_rango and "Sodi" not in pagina_fuera_rango
@@ -95,7 +98,36 @@ def test_export_pdf_fixed_page_structure(tmp_path: Path):
         assert "Página 3" in pagina_resto
 
         pagina_grafico = pdf.pages[3].extract_text()
-        assert "Página 4" in pagina_grafico
+        assert "Página 4 de 4" in pagina_grafico
+        assert f"Analitix {__version__}" in pagina_grafico
+
+
+def test_custom_pdf_flows_texts_and_charts_on_portrait_pages(tmp_path: Path):
+    from matplotlib.figure import Figure
+
+    from analitix.export import export_pages_pdf, text_page
+
+    def grafico():
+        fig = Figure(figsize=(8, 4.5))
+        fig.add_subplot().plot([1, 2], [1, 2])
+        return fig
+
+    paginas = [text_page("Panel", "Resumen"), grafico(), grafico(), grafico(), text_page("Otro", "Texto"), grafico()]
+    path = tmp_path / "agrupado.pdf"
+    avances = []
+    # Dos por página: portada + (texto, 2 gráficos) + (gráfico, texto, gráfico).
+    assert export_pages_pdf("Paciente de Prueba", "2024-06-01", paginas, path, tipo_informe="Informe personalizado",
+                            graficos_por_pagina=2, on_progress=lambda n, total: avances.append((n, total))) == 3
+    assert avances == [(n, 3) for n in range(1, 4)]
+    with pdfplumber.open(path) as pdf:
+        assert len(pdf.pages) == 3
+        assert all(p.width < p.height for p in pdf.pages)  # todo A4 vertical
+        assert [len(p.images) for p in pdf.pages[1:]] == [2, 2]
+        texto = pdf.pages[1].extract_text()
+        assert "Panel" in texto and "Resumen" in texto and "Página 2 de 3" in texto
+        # Todos los gráficos a todo el ancho útil, con el mismo ancho.
+        anchos = {round(im["x1"] - im["x0"]) for p in pdf.pages[1:] for im in p.images}
+        assert len(anchos) == 1 and anchos.pop() > 0.85 * pdf.pages[1].width
 
 
 def test_custom_pdf_pages_fit_a4_with_footer_room(tmp_path: Path):

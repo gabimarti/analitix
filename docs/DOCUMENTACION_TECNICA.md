@@ -128,7 +128,8 @@ Desde el repositorio ambas rutas son el mismo `data/test_aliases.csv`; en el
 ejecutable, `catalog.add_aliases` escribe solo en la del usuario, así una
 versión nueva de la app puede corregir sus propios alias sin pisar los
 suyos. La versión de la app es `analitix.__version__` (título de la ventana
-y "Acerca de"); la etiqueta de cada Release de GitHub es `v` + esa versión.
+y "Acerca de") y su fecha de publicación `analitix.__version_date__`
+(portada y pie de los informes PDF); la etiqueta de cada Release de GitHub es `v` + esa versión.
 
 La variación biológica del RCV sigue el mismo esquema de dos capas:
 `config.BUNDLED_BV_PATH` (la de la app, versionada y citada) y
@@ -219,6 +220,32 @@ Esquema completo en `db.SCHEMA` (SQLite). Tablas:
   para que una evolución sea representativa: agrupa la lista de
   Evolución/Comparativa y es el umbral del control de pocos datos de todos
   los gráficos de evolución, ver §5, `charts.data_sufficiency`).
+- **`bp_readings`** — mediciones de tensión arterial: `patient_id`,
+  `measured_at` (`AAAA-MM-DD HH:MM`), `systolic`, `diastolic`, `pulse`
+  (opcional), `place` (`casa`/`consulta`), `note`, `source`
+  (`manual`/`csv`); `UNIQUE(patient_id, measured_at)` para que reimportar
+  un CSV no duplique. Funciones en `repository`: `add_bp_reading` (sin
+  commit, `INSERT OR IGNORE`), `list_bp_readings`, `delete_bp_readings`;
+  coherente con `merge_patients`, `delete_patient`, `delete_reports` y
+  `delete_all_data`, y visible en el Explorador BD. Validación y lectura de
+  CSV en `blood_pressure.py` (`validate_reading`, `read_csv`,
+  `HEADER_ALIASES` con las cabeceras de Omron Connect y Withings,
+  `CSV_TEMPLATE`). Límites de plausibilidad, no clínicos: `DEFAULT_LIMITS`
+  (sistólica 80-250, diastólica 45-140, pulso 45-225) ajustables en
+  Configuración → Entrada manual (ajuste `bp_limits` en `settings`, JSON
+  `{"systolic": [min, max], ...}`) dentro de `ABSOLUTE_LIMITS` (50-300,
+  20-200, 20-250); `check_limits` los valida y `gui._bp_limits` vuelve a los
+  de por defecto si el ajuste guardado no es válido. `validate_reading` y
+  `read_csv` reciben `limits`.
+- **`targets`** — objetivo indicado por el médico por paciente y prueba
+  (`patient_id`, `canonical_id` como clave; `target_low`/`target_high`, uno
+  puede ser `NULL`; `note`; `set_on` `AAAA-MM-DD`). Solo lo introduce la
+  persona a mano (botón de Evolución); Analitix nunca lo calcula. Se
+  mantiene coherente con `merge_patients` (se conserva; si los dos tienen
+  uno para la misma prueba gana el del destino), `merge_canonical_ids`
+  (pasa a la prueba destino con el mismo criterio), `delete_patient`,
+  `delete_reports` (si el paciente se queda sin informes) y
+  `delete_all_data`.
 
 Todas las fechas se normalizan a `AAAA-MM-DD[ HH:MM:SS]` (string,
 ordenable lexicográficamente) por `pdf_parser._parse_date`, que admite
@@ -1140,6 +1167,9 @@ sentencias SQL a mano). Funciones relevantes:
   según `alias_audit.unit_relation`.
 - `get_setting`/`set_setting`: tabla `settings` clave/valor (persistencia de
   preferencias, p. ej. la carpeta de informes).
+- `get_target`/`set_target`/`delete_target`: objetivo indicado por el
+  médico (tabla `targets`, ver §4). `set_target` exige al menos un límite
+  y, con los dos, mínimo < máximo (`ValueError`); guarda la fecha del día.
 - `list_files_needing_review`: ficheros con `status="review"` (ver
   `ingest.py`), con su motivo y fecha de importación.
 - `get_stats`: recuento de pacientes/informes/resultados/fuera de
@@ -1319,7 +1349,9 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
      `fig.add_axes` + `imshow`, dentro de un `try/except OSError` — si
      falta el fichero de logo no bloquea la generación del informe),
      "Informe de seguimiento", `tipo_informe`, paciente, fecha del
-     último informe, fecha de generación, aviso legal.
+     último informe, fecha de generación, "Generado con Analitix X.Y.Z
+     (AAAA-MM-DD)" (`_ANALITIX_VERSION`, de `__version__` y
+     `__version_date__`), `updates.REPO_URL` y aviso legal.
   2. **Tabla de fuera de rango** (`_table_page`, título "Parámetros
      alterados en la última analítica"): solo `flag_calc in
      ("alto","bajo")`.
@@ -1335,11 +1367,13 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
      filas (el propio criterio de selección de
      `gui.AnalitixApp._build_altered_rows` ya es "una alteración
      importante" en sí mismo, esté o no dentro de rango ahora mismo).
-  - `_add_footer(fig, tipo_informe, pagina)`: en **todas** las páginas
-    (incluida la portada) — `tipo_informe` a la izquierda, "Página N" a
-    la derecha. El nº de página es un contador simple incrementado según
-    se van guardando páginas con `pdf.savefig`, no requiere conocer el
-    total de antemano (no se pide formato "N de M").
+  - `_add_footer(fig, tipo_informe, pagina, total)`: en **todas** las
+    páginas (incluida la portada) — `tipo_informe` a la izquierda,
+    "Página n de N" a la derecha y, en una segunda línea centrada,
+    `_ANALITIX_VERSION` (línea propia porque `tipo_informe` puede ser
+    largo con el filtro de laboratorios). Para conocer N, `export_pdf`
+    decide antes de escribir qué parámetros tendrán gráfico (los que
+    tienen al menos 2 puntos): total = 3 + nº de gráficos.
   - Usa "(*)" como marca de cambio brusco en vez del emoji "⚡" de la
     pestaña Resumen: a diferencia de Tkinter (con Segoe UI Emoji), el
     backend PDF de matplotlib no garantiza tener una fuente con glifos
@@ -1358,10 +1392,44 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
 - `export.py` solo monta el documento:
   - `export_pages_pdf(patient_name, fecha, paginas, path, tipo_informe=...)`
     escribe la portada (`_cover_page`, con el aviso de que no es un
-    diagnóstico) y las figuras recibidas, en orden y con pie;
+    diagnóstico) y las figuras recibidas, en orden y con pie (total =
+    portada + páginas tras agrupar);
+  - `graficos_por_pagina` (1 o 2 en el diálogo, casilla «Gráficos»; el
+    código admite también 3, pero la opción está desactivada en `gui.py`
+    porque con los gráficos de evolución y su recuadro de notas no caben
+    más de 2 sin bajar de `_CHARTS_MIN_SCALE`): con 2 o 3, `_flow_pages` llena páginas A4 verticales de arriba abajo con
+    los textos (`text_page` guarda título y líneas en `fig.analitix_text`)
+    y los gráficos (`_is_chart`: ni página A4 propia ni
+    `analitix_tight_rect`) **seguidos**; el resto de páginas corta el
+    flujo. Cada gráfico mide de alto 1/n del útil (`_CHARTS_MARGIN_IN`,
+    `_CHARTS_BOTTOM_IN` para el pie), sin bajar de `_CHARTS_MIN_SCALE`
+    (0,75) de su alto original; un texto, lo que ocupan sus líneas. Un
+    texto seguido de un gráfico solo se pone si cabe también ese gráfico
+    (el resumen de un panel no se queda solo al pie). `_flow_page` dibuja
+    la página: cada gráfico se **rehace al ancho útil** con
+    `set_size_inches(ancho_util / escala, alto / escala)` (cambia el ancho
+    de la figura en vez de estirar la imagen, así que todos ocupan el mismo
+    ancho y ninguno se deforma), se rasteriza a `_CHARTS_DPI` × escala
+    (200 ppp efectivos; el texto del gráfico deja de ser seleccionable) y
+    se coloca con `imshow(interpolation="none")`, para que el PDF guarde la
+    imagen sin remuestrear. Vectorial exigiría rehacer cada gráfico como
+    subfigura;
   - `table_page` es la misma tabla de `export_pdf`;
   - `text_page(titulo, texto)` es una página A4 de texto ajustado (resumen
-    de un panel).
+    de un panel); el texto empieza `_TEXT_GAP_IN` (0,3") bajo el título.
+- Progreso: `export_pdf` y `export_pages_pdf` aceptan
+  `on_progress(n, total)`, llamado tras escribir cada página. En `gui.py`,
+  el gestor de contexto `_progress(titulo, parent)` abre una ventana modal
+  (`_new_dialog`, sin Escape ni cierre) con texto y `ttk.Progressbar`,
+  pone el cursor `watch` y da `paso(texto, valor, total)`, que hace
+  `update()`: como la importación, todo sigue en el hilo principal (la
+  conexión SQLCipher no se comparte entre hilos) y el `grab` de la ventana
+  impide lanzar otra acción a medias. El informe personalizado pide antes
+  el nombre del fichero, para que la barra cubra también la preparación de
+  las secciones (un paso por sección, parámetro o panel). Con varios
+  gráficos por página, `_flow_pages` solo reparte y la rasterización se
+  hace al escribir cada página (`_flow_page`), así que también cuenta en
+  la barra.
 - `_add_footer` llama antes a `_fit_page_a4`, que pone **todas** las
   páginas en A4:
   - las figuras que no lo son (gráficos de evolución, mapa de calor, "Qué
@@ -1411,6 +1479,14 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
   Los gráficos salen de `_evolution_figure`, así que aplican el umbral de
   pocos datos, el RCV y el rango personal si su interruptor está activo.
   El filtro de laboratorios se añade a `tipo_informe`.
+
+  Tensión arterial: periodo «desde»/«hasta» del diálogo (por defecto
+  `BP_RANGO_DIAS["1a"]` días hasta hoy), validado con `_check_period`
+  (la misma función que el intervalo del panel, `_bp_periodo`). Como en el
+  panel, el periodo manda sobre la ventana de años; `bp_figure` recibe
+  `dias` = duración del periodo (agrupado por día, semana o mes) y
+  `desde` solo si el periodo llega hasta hoy (si no, el eje se ajusta a
+  los datos).
 
 ### `charts.py`
 
@@ -1505,10 +1581,27 @@ ha cambiado".
   final de la proyección** (mismo `x` que usará `_draw_trend`); si no se
   extendiera, la banda quedaría visualmente "cortada" antes del borde
   derecho del gráfico en cuanto la proyección amplía el eje X.
-- `_fit_trend(fechas, valores) -> (slope, intercept, x) | None`: regresión
-  lineal simple (`numpy.polyfit`, sobre fechas convertidas a número con
-  `matplotlib.dates.date2num`); `None` con menos de `MIN_POINTS_FOR_TREND=3`
-  puntos.
+- `_fit_trend(fechas, valores) -> (slope, intercept, x, ic_bajo, ic_alto) |
+  None`: pendiente robusta de **Theil-Sen** (mediana de las pendientes entre
+  todos los pares, fechas en número con `matplotlib.dates.date2num`) con su
+  IC del 95 % por la τ de Kendall (Sen 1968, doi:10.1080/01621459.1968.10480934;
+  sin corrección por empates), ordenada de Conover; `None` con menos de
+  `MIN_POINTS_FOR_TREND=3` puntos. Sustituye a la regresión por mínimos
+  cuadrados (2026-10-07): un valor atípico ya no arrastra la recta.
+  `_trend_direction` devuelve "pocos datos para confirmarla" con menos de
+  `MIN_POINTS_CONFIRM_TREND=5` puntos o menos de `MIN_DAYS_CONFIRM_TREND`
+  (2 años), "sin tendencia demostrable" si el IC incluye 0, y si no el
+  criterio de "estable" de siempre. `_kdigo_note` añade al recuadro la
+  nota de "progresión rápida" de KDIGO 2012 (doi:10.1038/kisup.2012.64,
+  `KDIGO_RAPID_DECLINE_PER_YEAR=5`) solo en series con `kdigo_fg=True`
+  (`gui._evolution_figure`: `renal_risk.FG_IDS` o el índice "fg" del panel
+  renal) y descenso demostrable. `time_in_range(series)`: % del tiempo
+  dentro del rango por interpolación lineal (Rosendaal 1993, PMID 8470047),
+  sin interpolar huecos de más de `TIR_MAX_GAP_DAYS` y solo si se cubren
+  `TIR_MIN_DAYS`; lo añade `series_summary`. `_draw_info_box` parte las
+  líneas a `INFO_BOX_WIDTH` caracteres y `evolution_figure` agranda el
+  margen inferior según `ax.analitix_info_lines`. Fuentes y decisiones en
+  `docs/referencias_medicas/referencias_tendencia_tiempo_en_rango.md`.
 - `_draw_trend_lines(ax, fit)` / `_trend_text(fit, valores, ref_low,
   ref_high)`: el dibujo de la recta y la construcción del texto están
   separados, para poder combinar el texto de tendencia con el de variación
@@ -2115,6 +2208,14 @@ parámetros excluidos a propósito.
   (`repository.get_patient_sex`); sin sexo, el mayor.
 - `load_table()` (`lru_cache`, se lee una vez por sesión) = capa de la app
   + capa del usuario. `read_table` ignora las líneas que empiezan por "#".
+- `cusum_drift(canonical_id, series, sex)` / `cusum_note`: deriva lenta por
+  CUSUM tabular (Page 1954) en unidades de σ = √(ln(CVA²+1) + ln(CVI²+1)),
+  `CUSUM_K = 0.5`, `CUSUM_H = 5`; solo el tramo final del mismo laboratorio,
+  punto de equilibrio = media de las primeras `CUSUM_BASELINE` (4) analíticas
+  dentro de rango, mínimo `CUSUM_MIN_MONITORED` (3) vigiladas; señal solo si
+  una suma supera h en la última analítica. `gui._evolution_figure` lo pasa
+  como `note` a `charts.evolution_figure` (recuadro de texto), antes de
+  aplicar el objetivo del médico. Fuentes en `referencias_rcv.md` §6b.
 - `personal_range(canonical_id, series, sex)` (rango personal, Coşkun 2021,
   ecuación 4): SP = media de los valores anteriores al último que tienen
   rango y no están fuera de él (mínimo `PERSONAL_MIN_POINTS = 3`); semiancho
@@ -2141,6 +2242,36 @@ parámetros excluidos a propósito.
   `export.export_pdf` (informes completo y de alterados) no pasa por aquí:
   siempre todo el histórico. Elección de interfaz (Zikmund-Fisher, AHRQ
   2017, no revisado por pares), no un criterio clínico.
+- **Objetivo indicado por el médico**: `gui._edit_target` (botón de
+  Evolución) lo guarda en `targets`. `charts.apply_target(series, target)`
+  devuelve la serie con `ref_low`/`ref_high` = el objetivo, `flag_calc`
+  recalculado con `pdf_parser.compute_flag` y `objetivo=True`, que cambia la
+  leyenda ("Objetivo indicado por su médico") y el texto de
+  `series_summary`, que añade una línea con el objetivo y la nota
+  (`objetivo_nota`, recortada a 60 caracteres). En el diálogo, Máximo va
+  encima de Mínimo, como en un gráfico. **Sustituye** al rango, no se añade (Scherer et al.,
+  J Med Internet Res 2018;20(10):e11027, doi:10.2196/11027). Se aplica en
+  `_evolution_figure` **después** del RCV y del rango personal (ambos se
+  miden contra el rango del laboratorio) y en `_show_comparison`. No se
+  aplica a la tabla del Resumen ni a `export.export_pdf` (rango del
+  laboratorio).
+- **Intensidad del color** (`charts._point_style`): un punto fuera de
+  rango por menos de `DESVIACION_LEVE` (0,25) anchos de rango
+  (`range_distance`) se rellena con el mismo color aclarado
+  (`_tint`, mezcla con blanco) y contorno del color pleno. Cambia la
+  claridad, no el tono: la paleta apta para daltonismo y ▲/▼ no cambian.
+- **Posición en el rango** (`charts.position_figure`, subpestaña del
+  Resumen, `gui._draw_positions`): por parámetro del último informe, el
+  valor en anchos de rango (0 = límite inferior, 1 = superior; con solo
+  límite superior, desde 0; con solo inferior se omite), recortado a
+  [`POSITION_X_MIN`, `POSITION_X_MAX`] con marcador ▶/◀ si se sale, valor
+  anterior hueco y palabra de `deviation_label` ("ligeramente" <
+  `DESVIACION_LEVE`, "muy" ≥ `DESVIACION_GRANDE` = 1). Sin marca de centro
+  (Zikmund-Fisher et al., JAMIA 2017; Brewer et al., Med Decis Making
+  2012). Ordenado del más alejado al más cercano.
+- **Rango de un solo límite** (`_plot_series_on_ax`): se dibuja la línea
+  de ese límite (antes no se dibujaba nada), con "< x" o "> x" en la
+  leyenda.
 - **Solo datos abiertos**: cada fila del CSV cita su artículo (DOI y
   tabla); ningún valor procede de la web de la EFLM Biological Variation
   Database, cuyos términos no permiten redistribuirla.
@@ -2195,7 +2326,8 @@ impropio dado que la navegación ya no es por pestañas, aunque se mantiene
 por todo el proyecto. Estructura del menú (`_build_menu`):
 
 - **Archivo**: Importar, Exportar, —, Salir.
-- **Pacientes**: Pacientes, Entrada manual.
+- **Pacientes**: Cambiar paciente activo..., Pacientes.
+- **Entrada manual**: Analíticas... (`manual`), Tensión arterial... (`tension`).
 - **Análisis**: Evolución, Comparativa — gráficos "a la carta" de uno o dos
   parámetros elegidos a mano por el usuario, sin interpretación clínica
   propia — y Resumen, una tabla de
@@ -2389,12 +2521,12 @@ Notas de implementación:
   ref_high)`, con `serie = repository.get_series(con, canonical_id,
   patient_id)` — a diferencia de "Variación" (que solo compara el último
   informe con el anterior), usa **todo el histórico** del parámetro.
-  Reutiliza la regresión lineal y el umbral de "estable" (±5% del rango de
-  referencia a lo largo de todo el periodo) que ya usaba el recuadro de
+  Reutiliza la pendiente de Theil-Sen, su IC y el umbral de "estable" (±5%
+  del rango de referencia a lo largo de todo el periodo) del recuadro de
   tendencia del gráfico de Evolución (`charts._fit_trend`/
-  `_trend_direction`, `MIN_POINTS_FOR_TREND = 3`) en vez de definir un
-  criterio nuevo — con menos de 3 puntos se muestra "—", igual que la
-  ausencia de recta de tendencia en el gráfico. Si sube/baja (no estable),
+  `_trend_direction`) en vez de definir un criterio nuevo — "→" si no hay
+  tendencia demostrable y "—" con menos de 5 puntos o 2 años ("pocos datos
+  para confirmarla"). Si sube/baja (no estable),
   `trend_arrow` añade una magnitud (p. ej. `"↑ +38%/año"`) para distinguir
   una tendencia leve de una brusca: `pendiente × 365.25 / span × 100`, el mismo `span`
   (rango de referencia, o rango de valores si no hay rango) que decide el
@@ -2612,6 +2744,38 @@ Notas de implementación:
   de solo lectura por construcción (un `Treeview` no permite editar celdas
   sin cableado extra, que aquí no existe): sirve para verificar qué hay
   guardado exactamente, no para modificarlo.
+- Pantalla "Tensión arterial" (`_build_tab_tension`, menú Entrada manual):
+  formulario, tabla con casillas (`_checkbox_tree`), Importar CSV, Guardar
+  plantilla y Borrar marcadas, siempre para el paciente activo
+  (`_refresh_tension_page` al cambiarlo). Valida con
+  `blood_pressure.validate_reading` y guarda con `repository.add_bp_reading`;
+  el registro (`analitix.log`) solo anota recuentos de la importación, nunca
+  valores. Las dos pantallas de entrada manual muestran
+  `AVISO_ENTRADA_MANUAL` y validan al teclear con `_restrict(entry, patron)`
+  (validación "key" de Tk: cifras donde van cifras, sin caracteres de
+  control, longitud máxima).
+- Panel "Tensión arterial" (`_build_tab_tension_panel`, Paneles clínicos,
+  página `tension_panel`): `blood_pressure.bp_summary_text` +
+  `charts.bp_figure` sobre `_bp_readings_windowed` (ventana de años con
+  `_windowed`); `_refresh_bp_panel` se llama desde `_refresh_tension_page`
+  (cambio de paciente, guardar, importar, borrar) y `_toggle_full_history`.
+  `home_week_summary` aplica el protocolo ESH 2021 (7 días hasta la última
+  lectura en casa, sin el primer día, válida con ≥ `HBPM_MIN_DAYS` días y ≥
+  `HBPM_MIN_READINGS` lecturas) y `bp_category` los umbrales de la tabla 5
+  de ESC 2024 (`BP_THRESHOLDS`, casa y consulta; manda la peor cifra). El PDF
+  personalizado ofrece la sección si hay mediciones. Botones de periodo
+  (`BP_RANGOS`, `BP_RANGO_DIAS`, `_set_bp_rango`): 10 días, 1, 3 y 12 meses
+  hacia atrás desde hoy, "todo" o intervalo; `charts.bp_figure(lecturas,
+  titulo, dias, desde)` agrupa según `dias`: ≤ `BP_DAY_MAX_DAYS` (31) cada
+  medición con línea mínimo-máximo del día, ≤ `BP_WEEK_MAX_DAYS` (183) por
+  semanas y si no por meses (`_bp_groups`/`_bp_bucket`: línea mínimo-máximo
+  y círculo en la media). Intervalo y periodo de
+  comparación (`vars_bp_periodo`, `_bp_periodo` valida AAAA-MM-DD) con tabla
+  de medias `blood_pressure.period_stats` (solo mediciones en casa, sin
+  clasificar); con intervalo, el gráfico ignora la ventana de años. Guía de
+  medición `blood_pressure.MEASUREMENT_GUIDE` (ESH 2021, recuadros 4 y 6) en
+  el botón «¿Cómo medirla?» de la pantalla de entrada. Fuentes literales en
+  `docs/referencias_medicas/referencias_tension_arterial.md`.
 - Pestaña "✏ Entrada manual" (`_build_tab_manual`): para analíticas cuyo PDF
   no se ha podido interpretar (o que no vienen en PDF). Ya no tiene selector
   de paciente propio: usa el paciente activo (`self.current_patient_id`,
@@ -2923,8 +3087,9 @@ La suite cubre, sin abrir la GUI, las partes con mayor riesgo de regresión:
   dígito suelto en medio);
 - carga y detección de perfiles de parser por centro/laboratorio
   (`parser_profiles.py`), con texto sintético (nunca un PDF real);
-- tendencia de una serie completa (regresión lineal, flecha y magnitud
-  anual) usada tanto por el gráfico de Evolución como por la columna
+- tendencia de una serie completa (pendiente de Theil-Sen con IC, flecha y
+  magnitud anual), tiempo en rango y nota de KDIGO, usados tanto por el
+  gráfico de Evolución como por la columna
   "Tendencia" de Resumen (`charts.py`);
 - fórmulas del perfil lipídico, de los índices hepáticos (De Ritis, APRI,
   FIB-4), de la función renal (categorías KDIGO, ratio urea/creatinina,
@@ -3132,10 +3297,11 @@ Pasos para publicar una versión:
 1. **Probar el instalador** desde `develop`, sin publicar:
    **Actions → Release → Run workflow** eligiendo `develop`, o
    `gh workflow run release.yml --ref develop`. Deja el instalador como
-   artefacto descargable de esa ejecución. En local, también
+   artefacto descargable de esa ejecución durante 14 días
+   (`retention-days`; después se borra solo). En local, también
    `scripts\build_windows.bat`.
 2. **En `develop`**: subir la versión en `src/analitix/__init__.py`
-   (`__version__`) y, en [`CHANGELOG.md`](../CHANGELOG.md), pasar lo
+   (`__version__` y su fecha, `__version_date__`) y, en [`CHANGELOG.md`](../CHANGELOG.md), pasar lo
    acumulado en `## [Sin publicar]` a una sección nueva
    `## [X.Y.Z] - AAAA-MM-DD`, dejando `[Sin publicar]` vacía. Commit y
    push a `develop`.
@@ -3205,7 +3371,7 @@ decimales: después de 0.9.0 viene 0.10.0, no 1.0.0.
 **Una sola versión para todo el proyecto.** Los módulos `.py` no llevan
 numeración propia: la única fuente es `analitix.__version__`
 (`src/analitix/__init__.py`), y de ella la leen el título de la ventana,
-"Acerca de", `scripts\build_windows.bat` (nombre y metadatos del instalador)
+"Acerca de", los informes PDF (con `__version_date__`), `scripts\build_windows.bat` (nombre y metadatos del instalador)
 y el workflow de Release (que exige que la etiqueta `vX.Y.Z` coincida).
 Todos los módulos se publican juntos en el mismo instalador y no se
 distribuyen por separado, así que una versión por archivo solo crearía

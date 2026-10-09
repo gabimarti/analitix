@@ -387,3 +387,30 @@ def test_lab_filter_applies_to_series_summary_and_test_list(db):
     assert get_excluded_labs(db) == {"Lab A", ""}
     set_excluded_labs(db, [])
     assert len(get_series(db, "glucosa", pid)) == 3
+
+
+def test_doctor_targets_follow_patient_and_test_merges(db):
+    from analitix.repository import (
+        delete_patient, delete_target, get_or_create_patient, get_target, merge_canonical_ids, merge_patients,
+        set_target,
+    )
+
+    a, _ = get_or_create_patient(db, "PACIENTE UNO", "1970-01-01", "00000000T", "1")
+    b, _ = get_or_create_patient(db, "PACIENTE DOS", "1980-01-01", "00000000T", "2")
+    with pytest.raises(ValueError):
+        set_target(db, a, "ldl", None, None, None)
+    with pytest.raises(ValueError):
+        set_target(db, a, "ldl", 120, 100, None)
+    set_target(db, b, "ldl_variante", None, 100, "indicado por su médico")
+    set_target(db, b, "hba1c", None, 7, None)
+    set_target(db, a, "hba1c", None, 6.5, None)
+    merge_patients(db, [b], a)
+    assert get_target(db, a, "ldl_variante")["high"] == 100  # se conserva
+    assert get_target(db, a, "hba1c")["high"] == 6.5  # gana el del destino
+    merge_canonical_ids(db, ["ldl_variante"], "ldl")
+    assert get_target(db, a, "ldl")["note"] == "indicado por su médico"
+    assert get_target(db, a, "ldl_variante") is None
+    delete_target(db, a, "hba1c")
+    assert get_target(db, a, "hba1c") is None
+    delete_patient(db, a)
+    assert db.execute("SELECT COUNT(*) FROM targets").fetchone()[0] == 0

@@ -9,12 +9,14 @@
 from __future__ import annotations
 
 import datetime as dt
+import textwrap
 from typing import Any, Optional
 
 import matplotlib.dates as mdates
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap, to_rgba
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 # Paleta apta para daltonismo (2026-10-06): colores de Okabe & Ito, "Color
@@ -36,6 +38,52 @@ COLOR_BRUSCO = "#882255"
 # Símbolo que acompaña al color de alto/bajo (Evolución, Resumen, PDF).
 SIMBOLO_ESTADO = {"alto": "▲", "bajo": "▼"}
 
+# Desviación "leve": fuera del rango por menos de este múltiplo de su ancho
+# (`range_width`; con un único límite, de su valor). El punto se rellena con
+# el mismo color, más claro, y conserva el contorno del color pleno; a
+# partir de aquí, color pleno. Cambia la claridad, no el tono: se sigue
+# distinguiendo con daltonismo y ▲/▼ no cambia. Para distinguir desviaciones
+# leves de graves (Zikmund-Fisher et al., JAMIA 2017;24(3):520-528,
+# doi:10.1093/jamia/ocw169). Elección de interfaz, no un umbral clínico.
+DESVIACION_LEVE = 0.25
+# El mismo umbral da la palabra del gráfico de posición (`deviation_label`):
+# "ligeramente" por debajo de DESVIACION_LEVE, "muy" a partir de DESVIACION_GRANDE.
+DESVIACION_GRANDE = 1.0
+ETIQUETA_OBJETIVO = "Objetivo indicado por su médico"
+
+
+def _tint(color: str, amount: float = 0.55) -> tuple:
+    """El mismo color mezclado con blanco (`amount` = proporción de blanco)."""
+    r, g, b, _ = to_rgba(color)
+    return (r + (1 - r) * amount, g + (1 - g) * amount, b + (1 - b) * amount, 1.0)
+
+
+def _point_style(s: dict[str, Any], base_color: str) -> tuple:
+    """(relleno, contorno) del punto: color de su estado, más claro si la
+    desviación es leve (`DESVIACION_LEVE`)."""
+    color = {"alto": COLOR_ALTO, "bajo": COLOR_BAJO}.get(s.get("flag_calc"), base_color)
+    if s.get("flag_calc") in ("alto", "bajo"):
+        d = range_distance(s["value_num"], s.get("ref_low"), s.get("ref_high"))
+        if d is not None and abs(d) < DESVIACION_LEVE:
+            return _tint(color), color
+    return color, color
+
+
+def apply_target(series: list[dict[str, Any]], target: Optional[dict[str, Any]]) -> list[dict[str, Any]]:
+    """La serie medida contra el objetivo indicado por el médico (`targets`,
+    `repository.get_target`) en vez de contra el rango de cada informe: el
+    objetivo sustituye al rango, no se añade (Scherer et al., J Med Internet
+    Res 2018;20(10):e11027, doi:10.2196/11027: mostrar solo el objetivo se
+    entendió mejor que añadirlo junto al rango estándar). Sin objetivo,
+    devuelve la serie tal cual."""
+    if not target:
+        return series
+    from analitix.pdf_parser import compute_flag  # import local: charts no depende del parser
+
+    low, high = target.get("low"), target.get("high")
+    return [{**s, "ref_low": low, "ref_high": high, "flag_calc": compute_flag(s["value_num"], low, high),
+             "objetivo": True, "objetivo_nota": target.get("note")} for s in series]
+
 # Colores base de cada panel de la comparativa (paneles separados: solo
 # decorativos, pero sin coincidir con el azul de "bajo").
 COMPARISON_COLORS = [COLOR_NORMAL, "#CC79A7"]
@@ -46,6 +94,23 @@ MAX_COMPARISON_TESTS = 2
 # lineal no es fiable y no se dibuja.
 MIN_POINTS_FOR_TREND = 3
 TREND_PROJECTION_DAYS = 90
+# Para dar una tendencia por demostrada hacen falta, además de un IC que
+# excluya el 0 (`_fit_trend`), al menos 5 analíticas en al menos 2 años: con
+# menos, la pendiente de una serie corta e irregular es poco estable.
+# Elección prudente de interfaz, no un umbral clínico.
+MIN_POINTS_CONFIRM_TREND = 5
+MIN_DAYS_CONFIRM_TREND = 2 * 365
+SIN_TENDENCIA = "sin tendencia demostrable"
+POCOS_DATOS_TENDENCIA = "pocos datos para confirmarla"
+# Filtrado glomerular estimado: la guía KDIGO define "progresión rápida" de
+# la enfermedad renal crónica como un descenso sostenido de más de 5
+# mL/min/1,73 m² al año (KDIGO 2012 Clinical Practice Guideline for the
+# Evaluation and Management of CKD, cap. 1 "Definition and classification of
+# CKD", Kidney Int Suppl 2013;3(1):19-62, doi:10.1038/kisup.2012.64; lo
+# mantiene la actualización KDIGO 2024). Es el único umbral de velocidad de
+# cambio con respaldo de guía entre las pruebas de la app; las series que lo
+# usan llevan `kdigo_fg=True` (gui._evolution_figure).
+KDIGO_RAPID_DECLINE_PER_YEAR = 5.0
 
 # Analíticas recomendadas para que un gráfico de evolución sea
 # representativo (valor por defecto del ajuste "min_points_evolucion" de
@@ -58,6 +123,8 @@ DEFAULT_MIN_POINTS = 4
 # fijo en píxeles por encima/debajo del punto— no queden pegadas al borde
 # del área de datos ni se solapen con la leyenda.
 Y_MARGIN_RATIO = 0.15
+# Ancho máximo, en caracteres, de cada línea del recuadro bajo el gráfico.
+INFO_BOX_WIDTH = 100
 
 
 # Forma del punto por laboratorio (Evolución, Comparativa y los gráficos de
@@ -92,15 +159,38 @@ def _parse_fecha(fecha: str) -> dt.datetime:
         return dt.datetime.min
 
 
-def _fit_trend(fechas: list[dt.datetime], valores: list[float]) -> Optional[tuple[float, float, Any]]:
-    """Ajuste de regresión lineal simple (valor ~ fecha). `None` si hay menos
-    de `MIN_POINTS_FOR_TREND` puntos (con tan pocos, una regresión no es
-    fiable)."""
+def _fit_trend(fechas: list[dt.datetime], valores: list[float]) -> Optional[tuple[float, float, Any, float, float]]:
+    """Pendiente robusta de Theil-Sen (valor ~ fecha) con su intervalo de
+    confianza del 95 %: (pendiente, ordenada, x, IC inferior, IC superior),
+    pendientes por día. `None` con menos de `MIN_POINTS_FOR_TREND` puntos.
+
+    La pendiente es la mediana de las pendientes entre todos los pares de
+    puntos, y el IC sale de la distribución de la τ de Kendall (Sen PK,
+    "Estimates of the regression coefficient based on Kendall's tau", J Am
+    Stat Assoc 1968;63(324):1379-89, doi:10.1080/01621459.1968.10480934):
+    con varianza n(n-1)(2n+5)/18 (sin corrección por empates, algo más
+    conservador), se toman las pendientes ordenadas de posiciones
+    (N ∓ 1,96·σ)/2. Frente a la recta de mínimos cuadrados, un único valor
+    atípico apenas la mueve, y el IC dice si el cambio es demostrable (si
+    incluye 0, no lo es). Ordenada de Conover: mediana(y) − pendiente ·
+    mediana(x)."""
     if len(fechas) < MIN_POINTS_FOR_TREND:
         return None
-    x = mdates.date2num(fechas)
-    slope, intercept = np.polyfit(x, valores, 1)
-    return slope, intercept, x
+    x = np.asarray(mdates.date2num(fechas), dtype=float)
+    y = np.asarray(valores, dtype=float)
+    i, j = np.triu_indices(len(x), 1)
+    dx = x[j] - x[i]
+    validos = dx != 0  # dos analíticas el mismo día no dan pendiente
+    pendientes = np.sort((y[j] - y[i])[validos] / dx[validos])
+    if not len(pendientes):
+        return None
+    slope = float(np.median(pendientes))
+    intercept = float(np.median(y) - slope * np.median(x))
+    n, total = len(x), len(pendientes)
+    margen = 1.959964 * np.sqrt(n * (n - 1) * (2 * n + 5) / 18)
+    bajo = pendientes[max(int(round((total - margen) / 2)) - 1, 0)]
+    alto = pendientes[min(int(round((total + margen) / 2)), total - 1)]
+    return slope, intercept, x, float(bajo), float(alto)
 
 
 def _draw_trend_lines(ax, fit: Optional[tuple[float, float, Any]]) -> None:
@@ -108,7 +198,7 @@ def _draw_trend_lines(ax, fit: Optional[tuple[float, float, Any]]) -> None:
     a `TREND_PROJECTION_DAYS` días vista (sin texto, ver `_trend_text`)."""
     if fit is None:
         return
-    slope, intercept, x = fit
+    slope, intercept, x = fit[:3]
 
     x_fit = np.array([x[0], x[-1]])
     ax.plot(mdates.num2date(x_fit), slope * x_fit + intercept, linestyle=":", color=COLOR_TREND, linewidth=1.3, zorder=0)
@@ -132,16 +222,24 @@ def _trend_direction(
     el umbral de "estable" en dos sitios."""
     if fit is None:
         return None
-    slope, intercept, x = fit
+    slope, intercept, x, ic_bajo, ic_alto = fit
+    span = (ref_high - ref_low) if (ref_low is not None and ref_high is not None and ref_high > ref_low) else None
+    if span is None:
+        span = (max(valores) - min(valores)) or abs(valores[-1]) or 1.0
+    # Con pocas analíticas o poco tiempo, ni siquiera un IC que excluya el 0
+    # es fiable para hablar de tendencia (≥ 5 analíticas en ≥ 2 años).
+    if len(x) < MIN_POINTS_CONFIRM_TREND or x[-1] - x[0] < MIN_DAYS_CONFIRM_TREND:
+        return "→", POCOS_DATOS_TENDENCIA, slope, span
+    # Si el IC del 95 % de la pendiente de Theil-Sen incluye el 0, el cambio
+    # no es demostrable con estos datos (ver `_fit_trend`).
+    if ic_bajo <= 0 <= ic_alto:
+        return "→", SIN_TENDENCIA, slope, span
 
     # Umbral de "estable": un cambio, a lo largo de todo el periodo observado,
     # menor al 5% del rango de referencia (o del propio rango de valores si no
     # hay rango de referencia) no se considera una tendencia real. El mismo
     # `span` sirve de vara de medir para la magnitud (leve/brusca) de una
     # tendencia real: cuánto rango normal se recorre por año.
-    span = (ref_high - ref_low) if (ref_low is not None and ref_high is not None and ref_high > ref_low) else None
-    if span is None:
-        span = (max(valores) - min(valores)) or abs(valores[-1]) or 1.0
     change_over_period = slope * (x[-1] - x[0])
     if abs(change_over_period) < 0.05 * span:
         return "→", "estable", slope, span
@@ -163,11 +261,29 @@ def _trend_text(
     if direction is None:
         return None
     arrow, palabra, slope, _span = direction
-    _, intercept, x = fit
-    x_proj_end = x[-1] + TREND_PROJECTION_DAYS
-    rate_per_year = slope * 365.25
-    proyeccion = slope * x_proj_end + intercept
-    return f"{arrow} Tendencia: {palabra} (~{rate_per_year:+.2g}/año) · proy. 3 meses: {proyeccion:.3g}"
+    _, intercept, x, ic_bajo, ic_alto = fit
+    if palabra == POCOS_DATOS_TENDENCIA:
+        return (f"{arrow} Tendencia: {palabra} (hacen falta ≥ {MIN_POINTS_CONFIRM_TREND} analíticas "
+                f"en ≥ {MIN_DAYS_CONFIRM_TREND // 365} años)")
+    ritmo = f"~{slope * 365.25:+.2g}/año (IC 95 %: {ic_bajo * 365.25:+.2g} a {ic_alto * 365.25:+.2g})"
+    if palabra == SIN_TENDENCIA:
+        return f"{arrow} Tendencia: {palabra}, ritmo {ritmo}"
+    proyeccion = slope * (x[-1] + TREND_PROJECTION_DAYS) + intercept
+    return f"{arrow} Tendencia: {palabra} {ritmo} · proy. 3 meses: {proyeccion:.3g}"
+
+
+def _kdigo_note(series: list[dict[str, Any]], fit) -> Optional[str]:
+    """Nota de la guía KDIGO para el filtrado glomerular (`kdigo_fg`) cuando
+    el descenso es demostrable y supera `KDIGO_RAPID_DECLINE_PER_YEAR`."""
+    if not fit or not series or not series[0].get("kdigo_fg"):
+        return None
+    direccion = _trend_direction(fit, [s["value_num"] for s in series], None, None)
+    _slope, _intercept, _x, _ic_bajo, ic_alto = fit
+    if (direccion and direccion[1] == "bajando" and fit[0] * 365.25 < -KDIGO_RAPID_DECLINE_PER_YEAR
+            and ic_alto < 0):
+        return (f"La guía KDIGO llama «progresión rápida» a un descenso sostenido de más de "
+                f"{KDIGO_RAPID_DECLINE_PER_YEAR:g} al año: coméntalo con tu médico.")
+    return None
 
 
 def trend_arrow(series: list[dict[str, Any]], ref_low: Optional[float], ref_high: Optional[float]) -> Optional[str]:
@@ -186,7 +302,7 @@ def trend_arrow(series: list[dict[str, Any]], ref_low: Optional[float], ref_high
     fechas = [_parse_fecha(s["fecha"]) for s in series]
     valores = [s["value_num"] for s in series]
     direction = _trend_direction(_fit_trend(fechas, valores), valores, ref_low, ref_high)
-    if direction is None:
+    if direction is None or direction[1] == POCOS_DATOS_TENDENCIA:
         return None
     arrow, _palabra, slope, span = direction
     if arrow == "→":
@@ -214,6 +330,70 @@ def _pct_change_text(valores: list[float]) -> Optional[str]:
     return " · ".join(partes) if partes else None
 
 
+# Tiempo en rango por interpolación lineal (Rosendaal FR, Cannegieter SC,
+# van der Meer FJ, Briët E, "A method to determine the optimal intensity of
+# oral anticoagulant therapy", Thromb Haemost 1993;69(3):236-9, PMID 8470047):
+# entre dos analíticas consecutivas se supone que el valor cambia en línea
+# recta, y se cuenta la fracción de días dentro del rango. Es el método de
+# referencia del "tiempo en rango terapéutico" del INR, pensado justamente
+# para mediciones a intervalos irregulares; el mismo concepto que el "time
+# in range" de la glucosa continua (Battelino T et al., Diabetes Care
+# 2019;42(8):1593-1603, doi:10.2337/dci19-0028). No se interpola en huecos
+# de más de `TIR_MAX_GAP_DAYS` (no se sabe qué pasó en medio) y hace falta
+# cubrir al menos `TIR_MIN_DAYS` días. Elecciones de interfaz, no clínicas.
+TIR_MAX_GAP_DAYS = 365
+TIR_MIN_DAYS = 365
+_SIN_LIMITE = 1e12
+
+
+def _normalized_point(s: dict[str, Any]) -> Optional[tuple[str, float, float, float]]:
+    """(tipo de rango, valor normalizado, límite inferior, límite superior)
+    en la misma escala para los dos extremos de un tramo: con dos límites,
+    0 = inferior y 1 = superior; con uno solo, el valor dividido por él."""
+    low, high, v = s.get("ref_low"), s.get("ref_high"), s.get("value_num")
+    if v is None:
+        return None
+    if low is not None and high is not None and high > low:
+        return "ambos", (v - low) / (high - low), 0.0, 1.0
+    if high:
+        return "superior", v / high, -_SIN_LIMITE, 1.0
+    if low:
+        return "inferior", v / low, 1.0, _SIN_LIMITE
+    return None
+
+
+def _fraction_inside(p0: float, p1: float, a: float, b: float) -> float:
+    """Fracción de un tramo recto de p0 a p1 que cae dentro de [a, b]."""
+    if p0 == p1:
+        return 1.0 if a <= p0 <= b else 0.0
+    t_a, t_b = (a - p0) / (p1 - p0), (b - p0) / (p1 - p0)
+    return max(0.0, min(1.0, max(t_a, t_b)) - max(0.0, min(t_a, t_b)))
+
+
+def time_in_range(series: list[dict[str, Any]]) -> Optional[tuple[float, int]]:
+    """(% del tiempo dentro del rango, nº de huecos de más de
+    `TIR_MAX_GAP_DAYS` que no se han contado) de la serie, con el rango de
+    cada analítica (o el objetivo del médico, `apply_target`). `None` si los
+    tramos contados no llegan a `TIR_MIN_DAYS` días."""
+    dentro = total = 0.0
+    huecos = 0
+    for s0, s1 in zip(series, series[1:]):
+        dias = (_parse_fecha(s1["fecha"]) - _parse_fecha(s0["fecha"])).days
+        if dias <= 0:
+            continue
+        if dias > TIR_MAX_GAP_DAYS:
+            huecos += 1
+            continue
+        n0, n1 = _normalized_point(s0), _normalized_point(s1)
+        if not n0 or not n1 or n0[0] != n1[0]:
+            continue  # sin rango, o con rangos de distinto tipo: no comparables
+        dentro += dias * _fraction_inside(n0[1], n1[1], n0[2], n0[3])
+        total += dias
+    if total < TIR_MIN_DAYS:
+        return None
+    return dentro / total * 100, huecos
+
+
 def series_summary(series: list[dict[str, Any]]) -> Optional[str]:
     """Resumen en lenguaje llano de la serie, descriptivo y nunca causal:
     "Dentro del rango en 9 de 10 analíticas; la última (2026-01-01), un 8 %
@@ -228,7 +408,12 @@ def series_summary(series: list[dict[str, Any]]) -> Optional[str]:
     if not con_rango:
         return None
     dentro = sum(1 for s in con_rango if s.get("flag_calc") not in ("alto", "bajo"))
-    texto = f"Dentro del rango en {dentro} de {len(con_rango)} analíticas"
+    que = "del objetivo indicado por su médico" if series[0].get("objetivo") else "del rango"
+    texto = f"Dentro {que} en {dentro} de {len(con_rango)} analíticas"
+    tir = time_in_range(series)
+    if tir:
+        pct, huecos = tir
+        texto += f" (~{pct:.0f} % del tiempo{', sin contar huecos de más de un año' if huecos else ''})"
     ultima = series[-1]
     fecha = (ultima.get("fecha") or "")[:10]
     valor, flag = ultima["value_num"], ultima.get("flag_calc")
@@ -241,7 +426,20 @@ def series_summary(series: list[dict[str, Any]]) -> Optional[str]:
         texto += f"; la última ({fecha}), fuera del rango"
     elif ultima.get("ref_low") is not None or ultima.get("ref_high") is not None:
         texto += f"; la última ({fecha}), dentro"
-    return texto + "."
+    texto += "."
+    if series[0].get("objetivo"):
+        # Línea aparte con el objetivo y la nota que le haya puesto la
+        # persona (quién y cuándo se lo indicó), recortada para no ensanchar
+        # el recuadro.
+        lo, hi = ultima.get("ref_low"), ultima.get("ref_high")
+        objetivo = (f"entre {lo:g} y {hi:g}" if lo is not None and hi is not None
+                    else f"< {hi:g}" if hi is not None else f"> {lo:g}")
+        unidad = next((s.get("unit") for s in series if s.get("unit")), "")
+        nota = (series[0].get("objetivo_nota") or "").strip()
+        if len(nota) > 60:
+            nota = nota[:59] + "…"
+        texto += f"\n{ETIQUETA_OBJETIVO}: {objetivo} {unidad}".rstrip() + (f" · {nota}" if nota else "")
+    return texto
 
 
 def _draw_info_box(
@@ -251,6 +449,7 @@ def _draw_info_box(
     ref_low: Optional[float],
     ref_high: Optional[float],
     summary: Optional[str] = None,
+    extra: Optional[str] = None,
 ) -> None:
     """Recuadro de texto bajo el eje con el resumen en texto de la serie
     (`series_summary`), la tendencia (si hay suficientes puntos) y la
@@ -258,9 +457,14 @@ def _draw_info_box(
     `ax` (no a la figura), para que funcione igual en Evolución como en
     cada panel de la Comparativa; `annotation_clip=False` evita que se
     recorte al quedar fuera del área de datos."""
-    lineas = [t for t in (summary, _trend_text(fit, valores, ref_low, ref_high), _pct_change_text(valores)) if t]
+    lineas = [t for t in (summary, _trend_text(fit, valores, ref_low, ref_high), _pct_change_text(valores), extra)
+              if t]
     if not lineas:
         return
+    # Líneas largas partidas: si no, `tight_layout` estrecha todo el gráfico
+    # para hacer sitio al recuadro.
+    lineas = [textwrap.fill(parte, INFO_BOX_WIDTH) for linea in lineas for parte in linea.split("\n")]
+    ax.analitix_info_lines = sum(linea.count("\n") + 1 for linea in lineas)  # ver `evolution_figure`
     ax.annotate(
         "\n".join(lineas),
         xy=(0.5, 0), xycoords="axes fraction",
@@ -325,7 +529,7 @@ def _draw_few_points_warning(ax, n_points: int, min_points: int) -> None:
 
 def _plot_series_on_ax(
     ax, series: list[dict[str, Any]], label: str, base_color: str = COLOR_NORMAL,
-    min_points: int = DEFAULT_MIN_POINTS,
+    min_points: int = DEFAULT_MIN_POINTS, note: Optional[str] = None,
 ) -> list:
     """Dibuja una serie sobre `ax` (línea, banda/límites de referencia, puntos
     coloreados según estén dentro o fuera de rango). Devuelve los handles de
@@ -365,19 +569,33 @@ def _plot_series_on_ax(
         ax.fill_between(band_fechas, band_low, band_high, color=base_color, alpha=0.08)
         (h_low,) = ax.plot(band_fechas, band_low, linestyle="--", linewidth=1, color=base_color, alpha=0.6)
         (h_high,) = ax.plot(band_fechas, band_high, linestyle="--", linewidth=1, color=base_color, alpha=0.6)
-        h_low.set_label("Rango de referencia")
+        h_low.set_label(ETIQUETA_OBJETIVO if series[0].get("objetivo") else "Rango de referencia")
         handles.append(h_low)
         y_extent.extend(low_vals)
         y_extent.extend(high_vals)
+    elif ref_low or ref_high:
+        # Un solo límite ("< 130", "> 40"; típico del LDL o de un objetivo
+        # del médico): solo su línea, sin banda, porque el otro lado no tiene
+        # tope. Antes no se dibujaba nada.
+        key, limits = ("ref_high", ref_high) if ref_high else ("ref_low", ref_low)
+        limit_vals = [s[key] if s[key] is not None else limits[-1] for s in series]
+        limit_fechas = fechas
+        if fit is not None:
+            limit_fechas = fechas + [fechas[-1] + dt.timedelta(days=TREND_PROJECTION_DAYS)]
+            limit_vals = limit_vals + [limit_vals[-1]]
+        (h_limit,) = ax.plot(limit_fechas, limit_vals, linestyle="--", linewidth=1, color=base_color, alpha=0.8)
+        nombre = ETIQUETA_OBJETIVO if series[0].get("objetivo") else "Límite de referencia"
+        h_limit.set_label(f"{nombre} ({'<' if key == 'ref_high' else '>'} {limit_vals[-1]:g})")
+        handles.append(h_limit)
+        y_extent.extend(limit_vals)
 
     (h_line,) = ax.plot(fechas, valores, color=base_color, linewidth=1.5, zorder=1)
     h_line.set_label(label)
     handles.append(h_line)
 
-    colors = [
-        COLOR_ALTO if s["flag_calc"] == "alto" else COLOR_BAJO if s["flag_calc"] == "bajo" else base_color
-        for s in series
-    ]
+    estilos = [_point_style(s, base_color) for s in series]
+    colors = [relleno for relleno, _ in estilos]
+    edges = [contorno for _, contorno in estilos]
     # El color del punto ya dice su estado (alto/bajo/normal); el
     # laboratorio de origen va en la FORMA del punto, para no mezclar dos
     # significados en el color. Solo si la serie viene de más de un
@@ -390,7 +608,7 @@ def _plot_series_on_ax(
             idx = [i for i, s in enumerate(series) if (s.get("lab") or LAB_UNKNOWN) == lab]
             scatter = ax.scatter(
                 [fechas[i] for i in idx], [valores[i] for i in idx], c=[colors[i] for i in idx],
-                marker=marker, s=50, zorder=2, edgecolors="white", linewidths=1,
+                marker=marker, s=50, zorder=2, edgecolors=[edges[i] for i in idx], linewidths=1.2,
             )
             # Datos para el tooltip al pasar el cursor (ver gui._attach_hover).
             scatter.analitix_series = [series[i] for i in idx]
@@ -398,7 +616,7 @@ def _plot_series_on_ax(
             h_lab.set_label(lab)
             handles.append(h_lab)
     else:
-        scatter = ax.scatter(fechas, valores, c=colors, zorder=2, s=40)
+        scatter = ax.scatter(fechas, valores, c=colors, zorder=2, s=40, edgecolors=edges, linewidths=1.2)
         # Datos para el tooltip al pasar el cursor (ver gui._attach_hover).
         scatter.analitix_series = series
 
@@ -444,6 +662,7 @@ def _plot_series_on_ax(
     _draw_info_box(
         ax, fit, valores, ref_low[-1] if ref_low else None, ref_high[-1] if ref_high else None,
         summary=series_summary(series),
+        extra="\n".join(t for t in (_kdigo_note(series, fit), note) if t) or None,
     )
     _apply_y_margin(ax, y_extent)
 
@@ -494,9 +713,24 @@ def _draw_personal_band(ax, series: list[dict[str, Any]], pr: dict[str, Any]) ->
     ax.set_ylim(min(ymin, pr["bajo"]), max(ymax, pr["alto"]))
 
 
+def _legend_above(ax, handles: list, title: str) -> None:
+    """Título y leyenda fijos encima del área de datos, en columnas: nunca
+    tapan los puntos ni cambian de sitio de un gráfico a otro (con
+    `loc="best"` matplotlib la movía y a veces la ponía sobre los datos)."""
+    # Todos los elementos con nombre del eje (también las bandas del rango
+    # personal y del RCV, que se añaden después de `handles`).
+    handles = ax.get_legend_handles_labels()[0] if handles else []
+    filas = -(-len(handles) // 3)
+    ax.set_title(title, pad=6 + 11 * filas)
+    if handles:
+        ax.legend(handles=handles, fontsize=7, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=3,
+                  frameon=False, borderaxespad=0.2, handlelength=1.6, columnspacing=1.2)
+
+
 def evolution_figure(
     series: list[dict[str, Any]], title: str, min_points: int = DEFAULT_MIN_POINTS,
     rcv: Optional[dict[str, Any]] = None, personal: Optional[dict[str, Any]] = None,
+    note: Optional[str] = None,
 ) -> Figure:
     """Gráfico de evolución de una prueba en el tiempo, con las líneas de
     mínimo/máximo de referencia y los valores fuera de rango resaltados.
@@ -506,20 +740,22 @@ def evolution_figure(
     (`_draw_personal_band`)."""
     fig = Figure(figsize=(8, 4.5), dpi=100)
     ax = fig.add_subplot(111)
-    handles = _plot_series_on_ax(ax, series, title, min_points=min_points)
+    handles = _plot_series_on_ax(ax, series, title, min_points=min_points, note=note)
     if handles and personal:
         _draw_personal_band(ax, series, personal)
     if handles and rcv and len(series) >= 2:
         _draw_rcv_band(ax, series, rcv)
-    ax.set_title(title)
     ax.tick_params(axis="x", rotation=30)
-    if handles:
-        ax.legend(fontsize=7)
+    _legend_above(ax, handles, title)
     fig.tight_layout()
     # Deja sitio bajo el eje para el recuadro de tendencia/variación (hasta
     # dos líneas, ver `_draw_info_box`) además de las fechas rotadas; ambos
-    # se dibujan fuera del área de datos.
-    fig.subplots_adjust(bottom=0.34)
+    # se dibujan fuera del área de datos. Con objetivo del médico, tiempo en
+    # rango o notas (KDIGO, cambio lento) pueden ser bastantes líneas: la
+    # figura crece en altura en vez de aplastar el gráfico.
+    alto_texto = 0.95 + 0.16 * getattr(ax, "analitix_info_lines", 0)  # pulgadas: fechas + recuadro
+    fig.set_figheight(max(4.5, 3.0 + alto_texto))
+    fig.subplots_adjust(bottom=max(0.34, alto_texto / fig.get_figheight()))
     return fig
 
 
@@ -533,16 +769,14 @@ def comparison_figure(
     items = list(series_by_test.items())[:MAX_COMPARISON_TESTS]
     n = max(1, len(items))
 
-    fig = Figure(figsize=(8, 3.6 * n), dpi=100)
+    fig = Figure(figsize=(8, 4.4 * n), dpi=100)  # sitio para la leyenda encima de cada panel
     axes = fig.subplots(n, 1, sharex=True, squeeze=False)
 
     for i, (label, series) in enumerate(items):
         ax = axes[i][0]
         color = COMPARISON_COLORS[i % len(COMPARISON_COLORS)]
         handles = _plot_series_on_ax(ax, series, label, base_color=color, min_points=min_points)
-        ax.set_title(label)
-        if handles:
-            ax.legend(handles=handles, fontsize=7, loc="best")
+        _legend_above(ax, handles, label)
 
     for row in axes:
         row[0].label_outer()
@@ -554,7 +788,7 @@ def comparison_figure(
     # intermedios: 0.8 es lo justo para las tres líneas (resumen en texto,
     # tendencia y variación) más el título del panel siguiente sin dejar un
     # espacio en blanco excesivo entre paneles.
-    fig.subplots_adjust(bottom=0.34 / n, hspace=0.8)
+    fig.subplots_adjust(bottom=0.34 / n, hspace=1.25)
     return fig
 
 
@@ -835,4 +1069,209 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
     fig.analitix_tight_rect = (0, 0, 1, 1)  # ver heatmap_figure
     ax.analitix_changes = items
     ax.analitix_changes_unchanged = unchanged
+    return fig
+
+
+# -- Posición dentro del rango (gráfico de bala) ----------------------------
+# Una fila por parámetro del último informe: la franja es su rango de
+# referencia, el punto lleno el valor actual y el hueco el anterior, con una
+# etiqueta verbal ("ligeramente alto"). Recta numérica con etiqueta verbal,
+# sin marcar el centro del rango para no insinuar que es el valor óptimo
+# (Zikmund-Fisher et al., JAMIA 2017;24(3):520-528, doi:10.1093/jamia/ocw169;
+# barras horizontales más rápidas de leer que una tabla con muchos
+# resultados: Brewer et al., Med Decis Making 2012;32(4):545-553,
+# doi:10.1177/0272989X12441395).
+POSITION_X_MIN, POSITION_X_MAX = -0.8, 1.8  # en anchos de rango; fuera, el punto se queda en el borde
+
+
+def deviation_label(distance: float) -> str:
+    """Palabra para la distancia al rango (`range_distance`, en anchos)."""
+    if distance == 0:
+        return "dentro del rango"
+    lado = "alto" if distance > 0 else "bajo"
+    if abs(distance) < DESVIACION_LEVE:
+        return f"ligeramente {lado}"
+    return f"muy {lado}" if abs(distance) >= DESVIACION_GRANDE else lado
+
+
+def position_figure(rows: list[dict[str, Any]], title: str) -> Figure:
+    """Gráfico de posición dentro del rango. `rows`: dicts con `label`,
+    `value`, `previous` (o `None`), `unit`, `ref_low`, `ref_high`. Con solo
+    límite superior ("< 200"), la escala empieza en 0; con solo límite
+    inferior no hay escala y se omite (cuántos, en
+    `ax.analitix_position_skipped`). Ordenado del más alejado del rango al
+    más cercano."""
+    items, skipped = [], 0
+    for r in rows:
+        low, high = r.get("ref_low"), r.get("ref_high")
+        base = 0.0 if low is None else low
+        if r.get("value") is None or high is None or high <= base:
+            skipped += 1
+            continue
+        width = high - base
+        d = range_distance(r["value"], low, high)
+        items.append({**r, "distance": d, "pos": (r["value"] - base) / width,
+                      "prev_pos": None if r.get("previous") is None else (r["previous"] - base) / width})
+    items.sort(key=lambda r: (-abs(r["distance"]), r["label"]))
+
+    n = max(len(items), 1)
+    fig = Figure(figsize=(10, max(3.0, 0.34 * n + 1.6)), dpi=100)
+    ax = fig.add_subplot(111)
+    for i, r in enumerate(items):
+        y = n - 1 - i
+        ax.barh(y, 1, left=0, height=0.4, color=_tint(COLOR_NORMAL, 0.75), zorder=1)
+        if r["prev_pos"] is not None:
+            ax.plot(min(max(r["prev_pos"], POSITION_X_MIN), POSITION_X_MAX), y, marker="o", mfc="white",
+                    mec=COLOR_INK_SECONDARY, ms=6, zorder=2, linestyle="none")
+        flag = "alto" if r["distance"] > 0 else "bajo" if r["distance"] < 0 else None
+        relleno, contorno = _point_style(
+            {"flag_calc": flag, "value_num": r["value"], "ref_low": r["ref_low"], "ref_high": r["ref_high"]},
+            COLOR_NORMAL,
+        )
+        x = min(max(r["pos"], POSITION_X_MIN), POSITION_X_MAX)
+        marker = ">" if r["pos"] > POSITION_X_MAX else "<" if r["pos"] < POSITION_X_MIN else "o"
+        ax.scatter([x], [y], s=70, c=[relleno], edgecolors=[contorno], linewidths=1.4, marker=marker, zorder=3)
+        simbolo = SIMBOLO_ESTADO.get(flag, "")
+        texto = f"{simbolo + ' ' if simbolo else ''}{deviation_label(r['distance'])} · {r['value']:g} {r.get('unit') or ''}"
+        ax.text(POSITION_X_MAX + 0.08, y, texto.rstrip(), va="center", fontsize=8,
+                color=contorno if flag else COLOR_INK_SECONDARY)
+    ax.set_yticks(range(n))
+    ax.set_yticklabels([r["label"] if len(r["label"]) <= 40 else r["label"][:39] + "…" for r in reversed(items)],
+                       fontsize=8)
+    ax.set_ylim(-0.6, n - 0.4)
+    ax.set_xlim(POSITION_X_MIN, POSITION_X_MAX + 1.6)
+    ax.set_xticks([0, 1], ["límite inferior", "límite superior"], fontsize=7, color=COLOR_INK_SECONDARY)
+    ax.tick_params(axis="both", length=0)
+    for side in ("top", "right", "left", "bottom"):
+        ax.spines[side].set_visible(False)
+    ax.set_title(title, fontsize=11, loc="left", pad=30)
+    legend = [
+        Patch(facecolor=_tint(COLOR_NORMAL, 0.75), label="Rango de referencia del laboratorio"),
+        Line2D([], [], marker="o", linestyle="none", mfc=COLOR_ALTO, mec=COLOR_ALTO, label="Último valor"),
+        Line2D([], [], marker="o", linestyle="none", mfc=_tint(COLOR_ALTO), mec=COLOR_ALTO,
+               label="Más claro = desviación leve"),
+        Line2D([], [], marker="o", linestyle="none", mfc="white", mec=COLOR_INK_SECONDARY, label="Valor anterior"),
+    ]
+    ax.legend(handles=legend, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=4, fontsize=7, frameon=False,
+              borderaxespad=0.2)
+    fig.tight_layout()
+    fig.analitix_tight_rect = (0, 0, 1, 1)  # ver heatmap_figure
+    ax.analitix_positions = items
+    ax.analitix_position_skipped = skipped
+    return fig
+
+
+# -- Tensión arterial ------------------------------------------------------
+# Agrupado del gráfico de tensión según la duración del periodo mostrado:
+# hasta un mes, cada medición (con una línea del mínimo al máximo del día si
+# hay varias); hasta 6 meses, por semanas; más, por meses (línea mínimo-máximo
+# de cada parámetro y punto en la media). Elección de interfaz para que un
+# periodo largo no quede saturado, no un criterio clínico.
+BP_DAY_MAX_DAYS = 31
+BP_WEEK_MAX_DAYS = 183
+
+
+def _bp_bucket(fecha: dt.datetime, modo: str) -> dt.datetime:
+    """Centro del periodo de `fecha`: el día, la semana (lunes a domingo,
+    centrada en el jueves) o el mes (día 15)."""
+    if modo == "semana":
+        lunes = fecha.date() - dt.timedelta(days=fecha.weekday())
+        return dt.datetime.combine(lunes + dt.timedelta(days=3), dt.time(12))
+    if modo == "mes":
+        return dt.datetime(fecha.year, fecha.month, 15, 12)
+    return dt.datetime.combine(fecha.date(), dt.time(12))
+
+
+def _bp_groups(fechas: list[dt.datetime], valores: list[Optional[float]], modo: str):
+    """(centros, mínimos, máximos, medias, nº) de los valores por periodo."""
+    grupos: dict[dt.datetime, list[float]] = {}
+    for f, v in zip(fechas, valores):
+        if v is not None:
+            grupos.setdefault(_bp_bucket(f, modo), []).append(v)
+    xs = sorted(grupos)
+    return (xs, [min(grupos[x]) for x in xs], [max(grupos[x]) for x in xs],
+            [sum(grupos[x]) / len(grupos[x]) for x in xs], [len(grupos[x]) for x in xs])
+
+
+def bp_figure(readings: list[dict[str, Any]], title: str, dias: Optional[int] = None,
+              desde: Optional[dt.date] = None) -> Figure:
+    """Evolución de la tensión arterial (`bp_readings`): arriba, sistólica y
+    diastólica; abajo, el pulso. `dias` (duración del periodo mostrado; si
+    falta, la de los datos) decide el agrupado (`BP_DAY_MAX_DAYS`,
+    `BP_WEEK_MAX_DAYS`); con `desde`, el eje va de esa fecha a hoy aunque
+    haya pocos datos. Solo las tomas en casa se agrupan; las de la consulta
+    van aparte (■). Las líneas horizontales son los umbrales de la guía ESC
+    2024 para medidas en casa (`blood_pressure.BP_THRESHOLDS`): orientan,
+    pero solo clasifican una media de automedida, no una lectura suelta."""
+    from analitix.blood_pressure import BP_THRESHOLDS  # sin dependencia al importar charts
+
+    fig = Figure(figsize=(8, 6.2), dpi=100)
+    ax, ax_pulso = fig.subplots(2, 1, sharex=True, gridspec_kw={"height_ratios": [3, 1.3]})
+    fechas = [dt.datetime.strptime(r["measured_at"], "%Y-%m-%d %H:%M") for r in readings]
+    if dias is None:
+        dias = (max(fechas) - min(fechas)).days + 1 if fechas else 0
+    modo = "dia" if dias <= BP_DAY_MAX_DAYS else "semana" if dias <= BP_WEEK_MAX_DAYS else "mes"
+    descripcion = {"dia": "cada medición (línea: mínimo-máximo del día)",
+                   "semana": "por semanas: línea mínimo-máximo, ○ media",
+                   "mes": "por meses: línea mínimo-máximo, ○ media"}[modo]
+    casa = [i for i, r in enumerate(readings) if r.get("place", "casa") == "casa"]
+    consulta = [i for i, r in enumerate(readings) if r.get("place") == "consulta"]
+    umbrales = BP_THRESHOLDS["casa"]
+    grosor = {"dia": 1.2, "semana": 2.4, "mes": 3.4}[modo]
+
+    def _dibujar(eje, clave, color, nombre):
+        xs, mins, maxs, medias, cuantos = _bp_groups([fechas[i] for i in casa],
+                                                     [readings[i].get(clave) for i in casa], modo)
+        if not xs:
+            return
+        if modo == "dia":
+            eje.scatter([fechas[i] for i in casa if readings[i].get(clave)],
+                        [readings[i][clave] for i in casa if readings[i].get(clave)], s=16,
+                        color=_tint(color, 0.35), edgecolors=color, linewidths=0.6, zorder=3)
+            varios = [k for k, n in enumerate(cuantos) if n > 1]
+            eje.vlines([xs[k] for k in varios], [mins[k] for k in varios], [maxs[k] for k in varios],
+                       color=color, linewidth=grosor, alpha=0.7, zorder=2)
+            ultimo, etiqueta = readings[casa[-1]].get(clave), "Última"
+            x_ultimo = fechas[casa[-1]]
+        else:
+            eje.vlines(xs, mins, maxs, color=color, linewidth=grosor, alpha=0.75, zorder=2)
+            eje.scatter(xs, medias, s=16, color="white", edgecolors=color, linewidths=1.2, zorder=3)
+            ultimo, x_ultimo = medias[-1], xs[-1]
+            etiqueta = "Media última semana" if modo == "semana" else "Media último mes"
+        eje.plot([], [], color=color, linewidth=2, label=nombre)
+        if ultimo is not None:
+            eje.scatter([x_ultimo], [ultimo], s=150, facecolors="none", edgecolors=color, linewidths=1.6, zorder=4)
+            eje.annotate(f"{etiqueta}: {ultimo:.0f}", (x_ultimo, ultimo), textcoords="offset points",
+                         xytext=(10, 0), ha="left", va="center", fontsize=8, fontweight="bold", color=color)
+
+    for clave, color, nombre, umbral, elevada in (
+        ("systolic", COLOR_ALTO, "Sistólica en casa", umbrales["hipertension"][0], umbrales["elevada"][0]),
+        ("diastolic", COLOR_BAJO, "Diastólica en casa", umbrales["hipertension"][1], umbrales["elevada"][1]),
+    ):
+        ax.axhline(umbral, color=color, linestyle="--", linewidth=1, alpha=0.8)
+        ax.axhline(elevada, color=color, linestyle=":", linewidth=1, alpha=0.6)
+        _dibujar(ax, clave, color, nombre)
+        if consulta:
+            ax.scatter([fechas[i] for i in consulta], [readings[i][clave] for i in consulta], s=40, marker="s",
+                       color=_tint(color, 0.45), edgecolors=color, linewidths=0.6, zorder=3)
+    ax.plot([], [], color=COLOR_INK_SECONDARY, linestyle="--",
+            label=f"Hipertensión en casa (ESC 2024): ≥ {umbrales['hipertension'][0]}/{umbrales['hipertension'][1]}")
+    ax.plot([], [], color=COLOR_INK_SECONDARY, linestyle=":",
+            label=f"PA elevada desde {umbrales['elevada'][0]}/{umbrales['elevada'][1]}")
+    if consulta:
+        ax.scatter([], [], marker="s", color=COLOR_INK_SECONDARY, label="Toma en la consulta")
+    ax.set_ylabel("mmHg")
+    ax.grid(axis="y", color="#e1e0d9", linewidth=0.8)
+    _dibujar(ax_pulso, "pulse", COLOR_NORMAL, "Pulso")
+    ax_pulso.set_ylabel("Pulso (lpm)")
+    ax_pulso.grid(axis="y", color="#e1e0d9", linewidth=0.8)
+    ax_pulso.tick_params(axis="x", rotation=30)
+    if desde is not None:
+        ax.set_xlim(dt.datetime.combine(desde, dt.time(0)),
+                    dt.datetime.combine(dt.date.today() + dt.timedelta(days=1), dt.time(0)))
+    if not readings:
+        ax.text(0.5, 0.5, "Sin mediciones en este periodo", transform=ax.transAxes, ha="center", va="center",
+                color=COLOR_INK_SECONDARY)
+    _legend_above(ax, [True], f"{title} · {descripcion}")
+    fig.tight_layout()
     return fig

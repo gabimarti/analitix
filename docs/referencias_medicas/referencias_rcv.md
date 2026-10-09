@@ -192,6 +192,45 @@ desactivado por defecto.
   - El límite inferior nunca baja de 0 (la fórmula simétrica podría darlo
     con CVI muy altos).
 
+## 6b. Deriva lenta (CUSUM) — implementado 2026-10-07
+
+**Qué responde.** El RCV compara solo las dos últimas analíticas: no ve una
+subida (o bajada) pequeña pero sostenida durante varias analíticas, ninguna de
+ellas suficiente por sí sola. El CUSUM acumula esas pequeñas desviaciones y
+avisa cuando suman demasiado.
+
+**Cómo se calcula** (`rcv.cusum_drift`). Solo el tramo final de un mismo
+laboratorio (un cambio de método se confundiría con una deriva). Punto de
+equilibrio = media de las **4 primeras analíticas dentro de rango** de ese
+tramo; para cada analítica posterior, z = (ln x − ln punto) / σ, con
+σ = √(ln(CVA²+1) + ln(CVI²+1)) (la misma variación esperable que el RCV), y
+dos sumas acumuladas: S⁺ = máx(0, S⁺ + z − k) y S⁻ = máx(0, S⁻ − z − k), con
+**k = 0,5** y umbral **h = 5**. Hace falta que alguna supere h **en la última
+analítica** (la deriva sigue) y al menos 3 analíticas vigiladas.
+
+**Fuentes.**
+
+- Page ES. Continuous inspection schemes. *Biometrika* 1954;41(1-2):100-115.
+  doi:10.1093/biomet/41.1-2.100 (el método CUSUM).
+- k = 0,5 y h = 5 son los valores habituales del CUSUM tabular (Montgomery
+  DC, *Introduction to Statistical Quality Control*, Wiley): falsa alarma
+  media cada ~465 puntos sin cambio real y un desplazamiento de 1 σ detectado
+  en ~10.
+- Uso clínico: CUSUM de creatinina en trasplante renal (Piccoli A et al.,
+  *Nephron* 1987;47(2):87-94, doi:10.1159/000184467; sensibilidad 85 %,
+  especificidad 94 %) y revisión sistemática de gráficos de control en
+  pacientes individuales (Tennant R et al., *Int J Qual Health Care*
+  2007;19(4):187-94, doi:10.1093/intqhc/mzm015).
+
+**Cómo se muestra.** Solo si hay deriva, como **patrón** en el texto de debajo
+del gráfico de Evolución y de los paneles ("Cambio lento: desde …"),
+nunca como alerta ni diagnóstico.
+
+**Limitaciones.** Cuenta analíticas, no tiempo (un hueco de un año pesa igual
+que uno de un mes). Con pocas analíticas vigiladas solo detecta desviaciones
+grandes. Aplicado a muchas pruebas a la vez, alguna falsa alarma es esperable.
+Un cambio de tratamiento a mitad de la serie es, precisamente, una deriva real.
+
 ## 7. Limitaciones y cómo corregir valores
 
 - **Población de los estudios.** Los CVI proceden de adultos sanos en

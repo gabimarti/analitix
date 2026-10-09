@@ -33,6 +33,7 @@ aquí.
 | `LIST_COLUMN_CHARS = 38` | Ancho de la lista de la columna izquierda; fija el ancho de toda la columna. |
 | `self._new_dialog(título)` | Crea cualquier cuadro de diálogo (§7). |
 | `self._center_dialog(dialog)` | Centra el diálogo sobre la ventana principal. |
+| `with self._progress(título, parent) as paso:` | Ventana de progreso modal (barra, texto y cursor de espera) para cualquier proceso de varios segundos; `paso(texto, valor, total)` la actualiza. |
 | `self._same_width(b1, b2, ...)` | Mismo ancho para un grupo de botones (§6). |
 | `self._list_column(left, texto, height=...)` | Etiqueta + lista de la columna izquierda (§4). |
 | `self._fixed_column(left)` | Columna izquierda sin lista, con el mismo ancho (§4). |
@@ -123,6 +124,12 @@ Reglas:
 - Nada de parejas verde/rojo o rojo/naranja como única diferencia. Un
   color nuevo se toma de Okabe-Ito o de las paletas de Paul Tol, y si va
   como texto sobre blanco, con contraste ≥ 4.5:1.
+- **Intensidad, no tono, para la gravedad**: una desviación leve usa el
+  mismo color aclarado (`charts._tint`) con contorno del color pleno; el
+  color pleno queda para las grandes. El texto (etiquetas, ▲/▼) va siempre
+  en color pleno, por contraste.
+- Un objetivo del médico, si existe, **sustituye** al rango en el gráfico y
+  se rotula siempre «Objetivo indicado por su médico».
 
 ## 6. Botones
 
