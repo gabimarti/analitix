@@ -63,5 +63,5 @@ def test_validate_new_rejects(carpeta, nombre, fichero, error):
 
 
 def test_validate_new_accepts_and_suggests(carpeta):
-    assert databases.validate_new("Àngels Puig", "Àngels Puig 12345678Z") is None
+    assert databases.validate_new("Àngels Puig", "Àngels Puig 0001") is None
     assert databases.suggest_filename("Ana/María: 1234*") == "Ana_María_ 1234_"
