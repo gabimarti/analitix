@@ -10,6 +10,8 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ## [Sin publicar]
 
+## [0.12.0] - 2026-10-09
+
 ### Añadido
 
 - Registro de tensión arterial (menú Entrada manual → Tensión arterial...): sistólica, diastólica, pulso, fecha y hora, lugar (casa o consulta) y nota, para el paciente activo, con importación de CSV (plantilla propia y exportaciones de Omron Connect y Withings) que informa de cada línea con error y no duplica mediciones.
