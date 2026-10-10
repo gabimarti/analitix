@@ -20,6 +20,10 @@ guarda sus resultados en una base de datos SQLite cifrada en tu propio
 ordenador (SQLCipher, sin ningún servidor) y te permite ver
 cómo evolucionan tus valores en el tiempo frente a sus rangos de referencia.
 
+> **⬇️ [Descargar Analitix para Windows](https://github.com/gabimarti/analitix/releases)**
+> — la versión más reciente es la primera de la lista. Pasos para
+> instalarla en [«Instalar en Windows paso a paso»](#instalar-en-windows-paso-a-paso).
+
 ¿Por qué existe? Te lo cuento en [**Por qué nació Analitix**](docs/HISTORIA.md).
 Novedades de cada versión en el [registro de cambios](CHANGELOG.md).
 
@@ -85,16 +89,40 @@ Novedades de cada versión en el [registro de cambios](CHANGELOG.md).
   científicas (artículos, guías clínicas) que respaldan los cálculos e
   índices clínicos de la app, y de las ideas todavía no implementadas.
 
-## Inicio rápido
+## Instalar en Windows paso a paso
 
-**Sin conocimientos técnicos (Windows):** instala Analitix con
-`Analitix-Setup-<versión>.exe`, que no necesita Python. El asistente pregunta
-dónde guardar tus datos y crea ahí una carpeta `Analitix` con
-`informes_analiticas` (tus PDF) y `data` (la base de datos cifrada).
-Detalles, aviso de Windows SmartScreen, actualización y desinstalación en el
-[manual de usuario](docs/MANUAL_USUARIO.md) §1.1.
+No necesitas conocimientos técnicos ni instalar nada más (tampoco Python).
 
-**Desde el código fuente:** antes de ejecutar nada, coloca todos tus informes de laboratorio en PDF
+1. **Descarga el instalador.** Entra en la
+   [página de versiones](https://github.com/gabimarti/analitix/releases).
+   La primera de la lista es la más reciente (que ponga «Pre-release» es
+   normal). En su apartado **Assets**, haz clic en
+   `Analitix-Setup-<versión>.exe` (por ejemplo `Analitix-Setup-0.12.0.exe`)
+   y se guardará en tu carpeta **Descargas**. No descargues los ficheros
+   «Source code»: son el código fuente, no el programa.
+2. **Ábrelo con doble clic.** No hace falta ser administrador. Si Windows
+   muestra **«Windows protegió su PC»**, pulsa **Más información** y luego
+   **Ejecutar de todas formas** (aparece porque el instalador no tiene firma
+   digital de pago, no porque sea peligroso).
+3. **Sigue el asistente.** Te preguntará dónde guardar tus datos (por
+   defecto, Documentos) y creará ahí una carpeta `Analitix` con dos
+   subcarpetas: `informes_analiticas` (para tus PDF) y `data` (tu base de
+   datos cifrada).
+4. **Abre Analitix** desde el menú Inicio. Acepta el aviso de uso y **crea
+   tu contraseña**: guárdala bien, porque si la olvidas no hay forma de
+   recuperar los datos.
+5. **Importa tus analíticas.** Copia los PDF de tus informes en la carpeta
+   `informes_analiticas` y, en Analitix, usa **Archivo → Importar**.
+
+Y ya está: a partir de aquí, el [manual de usuario](docs/MANUAL_USUARIO.md)
+explica cada pantalla (empieza por §1.3 «Primer arranque y uso diario» y
+§2.1 «Importar»), cómo **actualizar** a una versión nueva (descargar el
+instalador nuevo y ejecutarlo encima, sin perder tus datos) y cómo hacer
+copias de seguridad.
+
+## Inicio rápido desde el código fuente
+
+Para usuarios técnicos: antes de ejecutar nada, coloca todos tus informes de laboratorio en PDF
 dentro de la carpeta `informes_analiticas/` — preferiblemente en una
 subcarpeta propia dentro de ella (p. ej. `informes_analiticas/tu_nombre/`),
 sobre todo si vas a guardar ahí los informes de más de una persona.
