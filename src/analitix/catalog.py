@@ -15,16 +15,16 @@ en la inmensa mayoría de los casos observados. El fichero CSV de alias solo
 hace falta para fusionar manualmente dos nombres distintos que en realidad
 son la misma prueba (por ejemplo si el laboratorio la renombra en el futuro).
 """
+
 from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Optional
 
 from analitix.config import BUNDLED_CATALOG_PATH, CATALOG_PATH, DESCRIPTIONS_DIR
 from analitix.textutils import normalize_test_name
 
-_overrides: Optional[dict[str, str]] = None
+_overrides: dict[str, str] | None = None
 
 
 def _read_aliases(path: Path) -> dict[str, str]:
@@ -32,7 +32,11 @@ def _read_aliases(path: Path) -> dict[str, str]:
         return {}
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        return {row["alias_normalizado"]: row["canonical_id"] for row in reader if row.get("alias_normalizado")}
+        return {
+            row["alias_normalizado"]: row["canonical_id"]
+            for row in reader
+            if row.get("alias_normalizado")
+        }
 
 
 def _load_overrides() -> dict[str, str]:
@@ -67,7 +71,7 @@ def reload_overrides() -> None:
     _overrides = _load_overrides()
 
 
-def get_description(canonical_id: str) -> Optional[str]:
+def get_description(canonical_id: str) -> str | None:
     """Descripción en lenguaje llano de una prueba, para quien no esté
     familiarizado con los términos médicos (pestañas Evolución/Comparativa).
     Lee `data/descripciones/<canonical_id>.txt`; `None` si todavía no existe

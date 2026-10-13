@@ -44,6 +44,7 @@ def test_percent_and_absolute_get_separate_ids(tmp_path: Path, monkeypatch: pyte
 
 def test_unit_equivalences():
     from analitix.textutils import is_count_1e9_l, is_count_1e12_l, unit_key
+
     for unit in ("x10^3/ul", "x10^3_u/mcL", "x10³/mm³", "x10^9/L", "·10³/µl"):
         assert is_count_1e9_l(unit), unit
     for unit in ("x10^6/ul", "x106/mm³", "x10^12/L"):
@@ -55,7 +56,9 @@ def test_unit_equivalences():
 def test_user_aliases_layer_over_bundled_ones(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Ejecutable instalado: alias de la app (solo lectura) + los del usuario.
     bundled, user = tmp_path / "bundled.csv", tmp_path / "user.csv"
-    bundled.write_text("alias_normalizado,canonical_id\nhierro,ferro_serum\nurea,urea_app\n", encoding="utf-8")
+    bundled.write_text(
+        "alias_normalizado,canonical_id\nhierro,ferro_serum\nurea,urea_app\n", encoding="utf-8"
+    )
     user.write_text("alias_normalizado,canonical_id\nurea,urea_usuario\n", encoding="utf-8")
     monkeypatch.setattr(catalog, "BUNDLED_CATALOG_PATH", bundled)
     monkeypatch.setattr(catalog, "CATALOG_PATH", user)

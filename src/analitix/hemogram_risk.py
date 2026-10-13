@@ -23,9 +23,10 @@ otras neoplasias hematológicas — investigado en
 no existe un score o índice combinado validado en la literatura para eso,
 a diferencia de los índices de este módulo.
 """
+
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from analitix.pdf_parser import compute_flag
 from analitix.repository import get_merged_series
@@ -97,7 +98,7 @@ VCM_MACROCITIC_LOW = 100.0
 LYMPHOCYTOSIS_HIGH = 5.0
 
 
-def _x10e3_ul(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _x10e3_ul(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de un recuento (neutrófilos/linfocitos/monocitos/
     plaquetas) si su unidad empieza por x10³ (numéricamente igual a
     10⁹/L). Mismo criterio que `hepatic_risk._plaquetes_1e9_l`: se acepta
@@ -108,7 +109,7 @@ def _x10e3_ul(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _x10e6_ul(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _x10e6_ul(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de los hematíes si su unidad empieza por x10⁶ (millones
     por µL, la unidad del índice de Mentzer)."""
     if row is None or not is_count_1e12_l(row.get("unit")):
@@ -116,7 +117,7 @@ def _x10e6_ul(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _fl(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _fl(row: dict[str, Any] | None) -> float | None:
     """Valor numérico del VCM/VPM si su unidad es fL."""
     if row is None:
         return None
@@ -126,7 +127,7 @@ def _fl(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _percent(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _percent(row: dict[str, Any] | None) -> float | None:
     """Valor numérico del RDW si su unidad es %."""
     if row is None:
         return None
@@ -136,28 +137,28 @@ def _percent(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def nlr(neutrofils: Optional[float], limfocits: Optional[float]) -> Optional[float]:
+def nlr(neutrofils: float | None, limfocits: float | None) -> float | None:
     """NLR: neutrófilos absolutos ÷ linfocitos absolutos."""
     if neutrofils is None or limfocits is None or limfocits == 0:
         return None
     return neutrofils / limfocits
 
 
-def plr(plaquetes: Optional[float], limfocits: Optional[float]) -> Optional[float]:
+def plr(plaquetes: float | None, limfocits: float | None) -> float | None:
     """PLR: plaquetas ÷ linfocitos absolutos."""
     if plaquetes is None or limfocits is None or limfocits == 0:
         return None
     return plaquetes / limfocits
 
 
-def lmr(limfocits: Optional[float], monocits: Optional[float]) -> Optional[float]:
+def lmr(limfocits: float | None, monocits: float | None) -> float | None:
     """LMR: linfocitos absolutos ÷ monocitos absolutos."""
     if limfocits is None or monocits is None or monocits == 0:
         return None
     return limfocits / monocits
 
 
-def mentzer_index(vcm: Optional[float], hematies: Optional[float]) -> Optional[float]:
+def mentzer_index(vcm: float | None, hematies: float | None) -> float | None:
     """Índice de Mentzer: VCM (fL) ÷ hematíes (millones/µL). Cálculo puro,
     sin comprobar si el VCM es microcítico — esa comprobación (el índice
     solo tiene sentido clínico en ese contexto) la hacen
@@ -167,7 +168,7 @@ def mentzer_index(vcm: Optional[float], hematies: Optional[float]) -> Optional[f
     return vcm / hematies
 
 
-def vcm_category(vcm: Optional[float]) -> Optional[str]:
+def vcm_category(vcm: float | None) -> str | None:
     """Categoría de VCM: "microcitica"/"normocitica"/"macrocitica"."""
     if vcm is None:
         return None
@@ -179,7 +180,7 @@ def vcm_category(vcm: Optional[float]) -> Optional[str]:
 
 
 def _index_point(
-    fecha: str, value: float, ref_low: Optional[float], ref_high: Optional[float], raw_name: str
+    fecha: str, value: float, ref_low: float | None, ref_high: float | None, raw_name: str
 ) -> dict[str, Any]:
     """Fila con la misma forma que `repository.get_series`, para reutilizar
     `charts.evolution_figure`/`comparison_figure` sin cambios."""
@@ -208,11 +209,18 @@ def get_hemogram_index_series(con, patient_id: int) -> dict[str, list[dict[str, 
     hem_by_date = get_merged_series(con, HEMATIES_IDS, patient_id)
 
     series: dict[str, list[dict[str, Any]]] = {
-        "idx_nlr": [], "idx_plr": [], "idx_lmr": [], "idx_mentzer": [],
+        "idx_nlr": [],
+        "idx_plr": [],
+        "idx_lmr": [],
+        "idx_mentzer": [],
     }
     fechas = sorted(
-        set(neu_by_date) | set(lim_by_date) | set(mon_by_date)
-        | set(plq_by_date) | set(vcm_by_date) | set(hem_by_date)
+        set(neu_by_date)
+        | set(lim_by_date)
+        | set(mon_by_date)
+        | set(plq_by_date)
+        | set(vcm_by_date)
+        | set(hem_by_date)
     )
     for fecha in fechas:
         neutrofils = _x10e3_ul(neu_by_date.get(fecha))
@@ -224,13 +232,19 @@ def get_hemogram_index_series(con, patient_id: int) -> dict[str, list[dict[str, 
 
         n = nlr(neutrofils, limfocits)
         if n is not None:
-            series["idx_nlr"].append(_index_point(fecha, n, None, NLR_HIGH, "NLR (neutrófilos/linfocitos)"))
+            series["idx_nlr"].append(
+                _index_point(fecha, n, None, NLR_HIGH, "NLR (neutrófilos/linfocitos)")
+            )
         p = plr(plaquetes, limfocits)
         if p is not None:
-            series["idx_plr"].append(_index_point(fecha, p, None, PLR_HIGH, "PLR (plaquetas/linfocitos)"))
+            series["idx_plr"].append(
+                _index_point(fecha, p, None, PLR_HIGH, "PLR (plaquetas/linfocitos)")
+            )
         m = lmr(limfocits, monocits)
         if m is not None:
-            series["idx_lmr"].append(_index_point(fecha, m, None, None, "LMR (linfocitos/monocitos)"))
+            series["idx_lmr"].append(
+                _index_point(fecha, m, None, None, "LMR (linfocitos/monocitos)")
+            )
         if vcm is not None and vcm < VCM_MICROCITIC_HIGH:
             mz = mentzer_index(vcm, hematies)
             if mz is not None:
@@ -254,7 +268,7 @@ INDEX_LABELS = {
 }
 
 
-def get_latest_hemogram_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
+def get_latest_hemogram_summary(con, patient_id: int) -> dict[str, Any] | None:
     """Último informe con hemograma disponible (al menos VCM), con los
     índices calculables ese mismo día y la categoría de VCM/RDW para la
     orientación de anemia en texto. `None` si el paciente no tiene ningún
@@ -280,7 +294,9 @@ def get_latest_hemogram_summary(con, patient_id: int) -> Optional[dict[str, Any]
     hematies = _x10e6_ul(hem_by_date.get(fecha))
     rdw = _percent(rdw_by_date.get(fecha))
     vcm_cat = vcm_category(vcm)
-    mentzer = mentzer_index(vcm, hematies) if vcm is not None and vcm < VCM_MICROCITIC_HIGH else None
+    mentzer = (
+        mentzer_index(vcm, hematies) if vcm is not None and vcm < VCM_MICROCITIC_HIGH else None
+    )
 
     return {
         "fecha": fecha,
@@ -295,14 +311,15 @@ def get_latest_hemogram_summary(con, patient_id: int) -> Optional[dict[str, Any]
     }
 
 
-def get_sustained_lymphocytosis_alert(con, patient_id: int) -> Optional[dict[str, Any]]:
+def get_sustained_lymphocytosis_alert(con, patient_id: int) -> dict[str, Any] | None:
     """Fechas con linfocitos > `LYMPHOCYTOSIS_HIGH` (x10³/µL, equivalente a
     x10⁹/L), si hay al menos dos — "sostenido" en el sentido de las guías
     citadas junto a `LYMPHOCYTOSIS_HIGH`, no un valor aislado. `None` si no
     hay ninguna o solo una."""
     lim_by_date = get_merged_series(con, LIMFOCITS_IDS, patient_id)
     fechas_altas = sorted(
-        fecha for fecha, row in lim_by_date.items()
+        fecha
+        for fecha, row in lim_by_date.items()
         if (valor := _x10e3_ul(row)) is not None and valor > LYMPHOCYTOSIS_HIGH
     )
     if len(fechas_altas) < 2:

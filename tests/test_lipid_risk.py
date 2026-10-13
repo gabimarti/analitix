@@ -40,10 +40,22 @@ def test_lipid_series_uses_measured_or_friedewald_ldl(db):
         insert_result(
             db,
             report_id,
-            dict(section=None, test_group=None, loinc_code=None, raw_name=raw_name,
-                 canonical_id=canonical_id, value_raw=str(value), value_num=value,
-                 unit="mg/dL", ref_low=None, ref_high=None, ref_text=None,
-                 flag_pdf=None, flag_calc=None, sample_date=None),
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name=raw_name,
+                canonical_id=canonical_id,
+                value_raw=str(value),
+                value_num=value,
+                unit="mg/dL",
+                ref_low=None,
+                ref_high=None,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=None,
+                sample_date=None,
+            ),
         )
     db.commit()
     series = get_lipid_index_series(db, patient_id)

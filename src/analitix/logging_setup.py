@@ -12,6 +12,7 @@ resultados: solo nombres de fichero PDF, mensajes de estado y trazas de
 error, pensado para poder diagnosticar problemas a posteriori sin exponer
 información médica.
 """
+
 from __future__ import annotations
 
 import logging

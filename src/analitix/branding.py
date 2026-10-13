@@ -6,6 +6,7 @@
 # Última actualización: 2026-09-09
 # ---------------------------------------------------------------------------
 """Icono de la aplicación y pantalla de bienvenida (splash screen)."""
+
 from __future__ import annotations
 
 import tkinter as tk
@@ -35,7 +36,7 @@ DISCLAIMER_TEXT = (
     "o al centro/hospital que te atiende, nunca a esta herramienta.\n\n"
     "El autor no se hace responsable del uso indebido de esta aplicación "
     "ni de las decisiones tomadas a partir de la información que muestra.\n\n"
-    "Al pulsar \"Aceptar\" confirmas que has leído y entendido este aviso."
+    'Al pulsar "Aceptar" confirmas que has leído y entendido este aviso.'
 )
 
 
@@ -95,15 +96,28 @@ def show_splash(root: tk.Tk) -> bool:
     logo_label.pack(pady=(24, 12))
 
     disclaimer_label = tk.Label(
-        splash, text=DISCLAIMER_TEXT, bg="white", fg="#222222",
-        font=("Segoe UI", 10), justify="center", wraplength=SPLASH_WIDTH - 60,
+        splash,
+        text=DISCLAIMER_TEXT,
+        bg="white",
+        fg="#222222",
+        font=("Segoe UI", 10),
+        justify="center",
+        wraplength=SPLASH_WIDTH - 60,
     )
     disclaimer_label.pack(padx=30, pady=(0, 20))
 
     tk.Button(
-        splash, text="Aceptar", command=_accept, width=14,
-        bg="#2c3e50", fg="white", activebackground="#34495e", activeforeground="white",
-        relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2",
+        splash,
+        text="Aceptar",
+        command=_accept,
+        width=14,
+        bg="#2c3e50",
+        fg="white",
+        activebackground="#34495e",
+        activeforeground="white",
+        relief="flat",
+        font=("Segoe UI", 10, "bold"),
+        cursor="hand2",
     ).pack(pady=(0, 24))
 
     splash.update_idletasks()

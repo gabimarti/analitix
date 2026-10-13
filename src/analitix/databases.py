@@ -15,6 +15,7 @@ antes de pedir ninguna contraseña. La configuración de la aplicación
 (`config.APP_CONFIG_PATH`, también JSON) guarda la última base de datos
 usada, para abrirla directamente en el siguiente arranque.
 """
+
 from __future__ import annotations
 
 import json
@@ -31,7 +32,14 @@ FILENAME_MAX = 60
 # o punto (Windows no los admite al final).
 _FILENAME_RE = re.compile(r"[\w][\w .-]*[\w-]|[\w]")
 # Nombres reservados de Windows: no pueden ser nombre de fichero.
-_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
+_RESERVED = {
+    "con",
+    "prn",
+    "aux",
+    "nul",
+    *(f"com{i}" for i in range(1, 10)),
+    *(f"lpt{i}" for i in range(1, 10)),
+}
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -82,13 +90,18 @@ def validate_new(nombre: str, fichero: str) -> str | None:
     if not fichero:
         return "Escribe un nombre para la base de datos."
     if len(fichero) > FILENAME_MAX or not _FILENAME_RE.fullmatch(fichero):
-        return ("El nombre de la base de datos solo puede llevar letras, números, espacios, guiones, "
-                f"guiones bajos y puntos (máximo {FILENAME_MAX}), sin empezar ni acabar en espacio o punto.")
+        return (
+            "El nombre de la base de datos solo puede llevar letras, números, espacios, guiones, "
+            f"guiones bajos y puntos (máximo {FILENAME_MAX}), sin empezar ni acabar en espacio o punto."
+        )
     if fichero.split(".")[0].casefold() in _RESERVED:
         return f"«{fichero}» es un nombre reservado de Windows; elige otro."
     existentes = list_databases()
     # Windows no distingue mayúsculas en los nombres de fichero.
-    if any(d["fichero"].casefold() == fichero.casefold() for d in existentes) or db_path(fichero).exists():
+    if (
+        any(d["fichero"].casefold() == fichero.casefold() for d in existentes)
+        or db_path(fichero).exists()
+    ):
         return f"Ya existe una base de datos «{fichero}»."
     if any(d["nombre"].casefold() == nombre.casefold() for d in existentes):
         return f"Ya hay un paciente «{nombre}» en la lista."

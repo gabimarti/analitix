@@ -1,5 +1,3 @@
-import pytest
-
 from analitix.inflammation_risk import (
     _mg_dl,
     _mm_h,
@@ -18,9 +16,16 @@ def test_unit_guards():
 
 
 def _insert_report(
-    con, patient_id, report_number, fecha,
-    pcr=None, pcr_cid="proteina_c_reactiva_serum", pcr_ref=(None, None),
-    vsg=None, vsg_cid="vsg_velocitat_de_sedimentacio_globular", vsg_ref=(None, None),
+    con,
+    patient_id,
+    report_number,
+    fecha,
+    pcr=None,
+    pcr_cid="proteina_c_reactiva_serum",
+    pcr_ref=(None, None),
+    vsg=None,
+    vsg_cid="vsg_velocitat_de_sedimentacio_globular",
+    vsg_ref=(None, None),
 ):
     report_id = upsert_report(con, patient_id, report_number, fecha, None, "synthetic.pdf")
     values = []
@@ -37,11 +42,24 @@ def _insert_report(
         elif ref_low is not None or ref_high is not None:
             flag = "normal"
         insert_result(
-            con, report_id,
-            dict(section=None, test_group=None, loinc_code=None, raw_name=raw_name,
-                 canonical_id=cid, value_raw=str(value), value_num=value, unit=unit,
-                 ref_low=ref_low, ref_high=ref_high, ref_text=None, flag_pdf=None, flag_calc=flag,
-                 sample_date=None),
+            con,
+            report_id,
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name=raw_name,
+                canonical_id=cid,
+                value_raw=str(value),
+                value_num=value,
+                unit=unit,
+                ref_low=ref_low,
+                ref_high=ref_high,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=flag,
+                sample_date=None,
+            ),
         )
     con.commit()
 
@@ -49,7 +67,14 @@ def _insert_report(
 def test_pcr_vsg_spelling_variants_are_merged(db):
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
     _insert_report(db, patient_id, "R1", "2023-01-01", pcr=0.5, pcr_cid="proteina_c_reactiva")
-    _insert_report(db, patient_id, "R2", "2024-01-01", vsg=10, vsg_cid="vsg_velocitat_de_sedimentacio_globular_sang")
+    _insert_report(
+        db,
+        patient_id,
+        "R2",
+        "2024-01-01",
+        vsg=10,
+        vsg_cid="vsg_velocitat_de_sedimentacio_globular_sang",
+    )
     series = get_inflammation_series(db, patient_id)
     assert len(series["pcr"]) == 1
     assert len(series["vsg"]) == 1
@@ -57,7 +82,9 @@ def test_pcr_vsg_spelling_variants_are_merged(db):
 
 def test_latest_summary_no_discordance(db):
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
-    _insert_report(db, patient_id, "R1", "2024-01-01", pcr=0.3, pcr_ref=(0, 0.5), vsg=10, vsg_ref=(0, 20))
+    _insert_report(
+        db, patient_id, "R1", "2024-01-01", pcr=0.3, pcr_ref=(0, 0.5), vsg=10, vsg_ref=(0, 20)
+    )
     summary = get_latest_inflammation_summary(db, patient_id)
     assert summary["pcr"]["value_num"] == 0.3
     assert summary["vsg"]["value_num"] == 10
@@ -66,7 +93,9 @@ def test_latest_summary_no_discordance(db):
 
 def test_latest_summary_detects_discordance(db):
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
-    _insert_report(db, patient_id, "R1", "2024-01-01", pcr=5.0, pcr_ref=(0, 0.5), vsg=10, vsg_ref=(0, 20))
+    _insert_report(
+        db, patient_id, "R1", "2024-01-01", pcr=5.0, pcr_ref=(0, 0.5), vsg=10, vsg_ref=(0, 20)
+    )
     summary = get_latest_inflammation_summary(db, patient_id)
     assert summary["discordancia"] is not None
     assert "PCR fuera de rango" in summary["discordancia"]
@@ -91,9 +120,12 @@ def test_pcr_in_mg_l_is_converted_to_mg_dl():
 
     row = {"value_num": 12.0, "unit": "mg/L", "ref_low": None, "ref_high": 5.0, "flag_calc": "alto"}
     converted = _as_mg_dl(row)
-    assert (converted["value_num"], converted["ref_high"], converted["unit"], converted["flag_calc"]) == (
-        1.2, 0.5, "mg/dL", "alto"
-    )
+    assert (
+        converted["value_num"],
+        converted["ref_high"],
+        converted["unit"],
+        converted["flag_calc"],
+    ) == (1.2, 0.5, "mg/dL", "alto")
     assert row["value_num"] == 12.0  # no modifica la fila original
     assert _as_mg_dl({"value_num": 0.3, "unit": "mg/dL"})["value_num"] == 0.3
     assert _as_mg_dl({"value_num": 1.0, "unit": "mmol/L"}) is None

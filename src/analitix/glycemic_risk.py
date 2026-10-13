@@ -33,9 +33,10 @@ Glucosa + eAG de la idea §6 punto 2 ("Gráficos combinados de dos
 parámetros, sin cálculo nuevo"), mismo patrón que
 `inflammation_risk.get_inflammation_series`.
 """
+
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from analitix.pdf_parser import compute_flag
 from analitix.repository import get_merged_series
@@ -63,7 +64,7 @@ ADA_NORMAL_HIGH = 5.7
 ADA_DIABETES_LOW = 6.5
 
 
-def _pct(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _pct(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de la HbA1c si su unidad es % (mismo criterio que
     `hemogram_risk._percent`)."""
     if row is None:
@@ -74,7 +75,7 @@ def _pct(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _mg_dl(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de la glucosa si su unidad es mg/dL (mismo criterio
     que `lipid_risk._mg_dl`)."""
     if row is None:
@@ -85,14 +86,14 @@ def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def eag(hba1c: Optional[float]) -> Optional[float]:
+def eag(hba1c: float | None) -> float | None:
     """Glucosa media estimada (mg/dL), fórmula ADAG."""
     if hba1c is None:
         return None
     return EAG_SLOPE * hba1c + EAG_INTERCEPT
 
 
-def hba1c_category(hba1c: Optional[float]) -> Optional[str]:
+def hba1c_category(hba1c: float | None) -> str | None:
     """Categoría diagnóstica ADA: "normal"/"prediabetes"/"diabetes"."""
     if hba1c is None:
         return None
@@ -143,10 +144,12 @@ def get_glucose_series(con, patient_id: int) -> list[dict[str, Any]]:
     Glucosa + eAG (idea §6, "Gráficos combinados de dos parámetros"),
     mismo patrón que `inflammation_risk.get_inflammation_series`."""
     by_date = get_merged_series(con, GLUCOSA_IDS, patient_id)
-    return sorted((row for row in by_date.values() if _mg_dl(row) is not None), key=lambda r: r["fecha"])
+    return sorted(
+        (row for row in by_date.values() if _mg_dl(row) is not None), key=lambda r: r["fecha"]
+    )
 
 
-def get_latest_glycemic_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
+def get_latest_glycemic_summary(con, patient_id: int) -> dict[str, Any] | None:
     """Última HbA1c disponible, con su categoría ADA y la eAG derivada.
     `None` si el paciente no tiene ninguna HbA1c en % guardada."""
     by_date = get_merged_series(con, HBA1C_IDS, patient_id)

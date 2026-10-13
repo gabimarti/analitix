@@ -23,15 +23,38 @@ from analitix.repository import (
 )
 
 
-def _insert_report_row(con, patient_id, report_number, fecha, raw_name, canonical_id, value_num, unit,
-                        ref_low=None, ref_high=None):
+def _insert_report_row(
+    con,
+    patient_id,
+    report_number,
+    fecha,
+    raw_name,
+    canonical_id,
+    value_num,
+    unit,
+    ref_low=None,
+    ref_high=None,
+):
     report_id = upsert_report(con, patient_id, report_number, fecha, fecha, "synthetic.pdf")
     insert_result(
-        con, report_id,
-        dict(section=None, test_group=None, loinc_code=None, raw_name=raw_name,
-             canonical_id=canonical_id, value_raw=str(value_num), value_num=value_num, unit=unit,
-             ref_low=ref_low, ref_high=ref_high, ref_text=None, flag_pdf=None,
-             flag_calc=compute_flag(value_num, ref_low, ref_high), sample_date=None),
+        con,
+        report_id,
+        dict(
+            section=None,
+            test_group=None,
+            loinc_code=None,
+            raw_name=raw_name,
+            canonical_id=canonical_id,
+            value_raw=str(value_num),
+            value_num=value_num,
+            unit=unit,
+            ref_low=ref_low,
+            ref_high=ref_high,
+            ref_text=None,
+            flag_pdf=None,
+            flag_calc=compute_flag(value_num, ref_low, ref_high),
+            sample_date=None,
+        ),
     )
     con.commit()
     return report_id
@@ -70,21 +93,27 @@ def test_connect_rejects_sqlcipher_raw_key_literal_shape(tmp_path: Path):
 
 
 def test_patient_report_result_and_processed_file_lifecycle(db):
-    patient_id, matched = get_or_create_patient(
-        db, "Lovelace, Ada", "1815-12-10", "DNI1", "NHC1"
-    )
+    patient_id, matched = get_or_create_patient(db, "Lovelace, Ada", "1815-12-10", "DNI1", "NHC1")
     assert matched == "new"
-    same_id, matched = get_or_create_patient(
-        db, "Ada Lovelace", "1815-12-10", "DNI1", "NHC2"
-    )
+    same_id, matched = get_or_create_patient(db, "Ada Lovelace", "1815-12-10", "DNI1", "NHC2")
     assert (same_id, matched) == (patient_id, "name")
     assert list_patients(db)[0]["nhc_alt"] == "NHC1"
 
     report_id = upsert_report(db, patient_id, "R-1", "2024-01-01", None, "old.pdf")
     assert upsert_report(db, patient_id, "R-1", None, None, "renamed.pdf") == report_id
     report_id = create_manual_report(
-        db, patient_id, "2024-02-01", [{"raw_name": "Glucosa", "value_num": 110,
-                                        "unit": "mg/dL", "ref_low": 70, "ref_high": 100}]
+        db,
+        patient_id,
+        "2024-02-01",
+        [
+            {
+                "raw_name": "Glucosa",
+                "value_num": 110,
+                "unit": "mg/dL",
+                "ref_low": 70,
+                "ref_high": 100,
+            }
+        ],
     )
     assert get_series(db, "glucosa", patient_id)[0]["value_num"] == 110
     assert get_all_results(db, patient_id)[0]["paciente"] == "Ada Lovelace"
@@ -107,36 +136,65 @@ def test_report_notes_saved_and_kept_on_reimport(db):
     # probar `upsert_report` de forma determinista.
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
 
-    report_id = upsert_report(db, patient_id, "R-NOTES-1", "2024-03-01", "2024-03-01", "(entrada manual)", notes="Control post-vacaciones")
+    report_id = upsert_report(
+        db,
+        patient_id,
+        "R-NOTES-1",
+        "2024-03-01",
+        "2024-03-01",
+        "(entrada manual)",
+        notes="Control post-vacaciones",
+    )
     assert db.execute("SELECT notes FROM reports WHERE id = ?", (report_id,)).fetchone()[0] == (
         "Control post-vacaciones"
     )
 
     # Sin notas -> queda NULL, no cadena vacía.
-    report_id_2 = upsert_report(db, patient_id, "R-NOTES-2", "2024-04-01", "2024-04-01", "(entrada manual)")
-    assert db.execute("SELECT notes FROM reports WHERE id = ?", (report_id_2,)).fetchone()[0] is None
+    report_id_2 = upsert_report(
+        db, patient_id, "R-NOTES-2", "2024-04-01", "2024-04-01", "(entrada manual)"
+    )
+    assert (
+        db.execute("SELECT notes FROM reports WHERE id = ?", (report_id_2,)).fetchone()[0] is None
+    )
 
     # Reimportar (upsert_report sin pasar `notes`, como hace ingest.py) no borra la nota existente.
-    assert upsert_report(db, patient_id, "R-NOTES-1", "2024-03-01", "2024-03-01", "otro.pdf") == report_id
+    assert (
+        upsert_report(db, patient_id, "R-NOTES-1", "2024-03-01", "2024-03-01", "otro.pdf")
+        == report_id
+    )
     assert db.execute("SELECT notes FROM reports WHERE id = ?", (report_id,)).fetchone()[0] == (
         "Control post-vacaciones"
     )
 
     # `create_manual_report` pasa `notes` hasta `reports.notes` igual que `upsert_report` directo.
     manual_report_id = create_manual_report(
-        db, patient_id, "2024-05-01",
-        [{"raw_name": "Glucosa", "value_num": 100, "unit": "mg/dL", "ref_low": 70, "ref_high": 100}],
+        db,
+        patient_id,
+        "2024-05-01",
+        [
+            {
+                "raw_name": "Glucosa",
+                "value_num": 100,
+                "unit": "mg/dL",
+                "ref_low": 70,
+                "ref_high": 100,
+            }
+        ],
         notes="Analítica hecha en otro laboratorio",
     )
-    assert db.execute("SELECT notes FROM reports WHERE id = ?", (manual_report_id,)).fetchone()[0] == (
-        "Analítica hecha en otro laboratorio"
-    )
+    assert db.execute("SELECT notes FROM reports WHERE id = ?", (manual_report_id,)).fetchone()[
+        0
+    ] == ("Analítica hecha en otro laboratorio")
 
 
 def test_get_latest_report_summary(db):
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
-    _insert_report_row(db, patient_id, "R1", "2024-01-01", "Glucosa", "glucosa", 90, "mg/dL", 70, 100)
-    _insert_report_row(db, patient_id, "R2", "2024-06-01", "Glucosa", "glucosa", 150, "mg/dL", 70, 100)
+    _insert_report_row(
+        db, patient_id, "R1", "2024-01-01", "Glucosa", "glucosa", 90, "mg/dL", 70, 100
+    )
+    _insert_report_row(
+        db, patient_id, "R2", "2024-06-01", "Glucosa", "glucosa", 150, "mg/dL", 70, 100
+    )
     _insert_report_row(db, patient_id, "R2", "2024-06-01", "Sodi", "sodi", 140, "mEq/L", 135, 145)
 
     summary = get_latest_report_summary(db, patient_id)
@@ -160,8 +218,16 @@ def test_patient_sex_and_report_file_md5_and_assistance_number(db):
     get_or_create_patient(db, "Test Patient", None, None, None)
     assert list_patients(db)[0]["sex"] == "Mujer"
 
-    report_id = upsert_report(db, patient_id, "R-1", "2024-01-01", None, "a.pdf",
-                              file_md5="0" * 32, assistance_number="99E000001")
+    report_id = upsert_report(
+        db,
+        patient_id,
+        "R-1",
+        "2024-01-01",
+        None,
+        "a.pdf",
+        file_md5="0" * 32,
+        assistance_number="99E000001",
+    )
     # Reimportar con otro nombre de fichero actualiza el nombre y conserva la firma.
     upsert_report(db, patient_id, "R-1", None, None, "b.pdf")
     row = db.execute(
@@ -176,17 +242,33 @@ def test_effective_date_prefers_request_over_validation(db):
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
     report_id = upsert_report(db, patient_id, "R-1", "2025-10-09", "2025-10-17", "a.pdf")
     insert_result(
-        db, report_id,
-        dict(section=None, test_group=None, loinc_code=None, raw_name="Glucosa", canonical_id="glucosa",
-             value_raw="90", value_num=90.0, unit="mg/dL", ref_low=None, ref_high=None, ref_text=None,
-             flag_pdf=None, flag_calc=None, sample_date=None),
+        db,
+        report_id,
+        dict(
+            section=None,
+            test_group=None,
+            loinc_code=None,
+            raw_name="Glucosa",
+            canonical_id="glucosa",
+            value_raw="90",
+            value_num=90.0,
+            unit="mg/dL",
+            ref_low=None,
+            ref_high=None,
+            ref_text=None,
+            flag_pdf=None,
+            flag_calc=None,
+            sample_date=None,
+        ),
     )
     assert get_series(db, "glucosa", patient_id)[0]["fecha"] == "2025-10-09"
 
 
 def test_patient_matched_by_cip_when_name_differs(db):
     # Mismo CIP, nombre escrito distinto (p. ej. con segundo nombre): mismo paciente.
-    patient_id, _ = get_or_create_patient(db, "Lopez, Ana", "1980-01-01", None, None, cip="XXXX0000000000")
+    patient_id, _ = get_or_create_patient(
+        db, "Lopez, Ana", "1980-01-01", None, None, cip="XXXX0000000000"
+    )
     same_id, matched = get_or_create_patient(
         db, "Lopez, Ana Maria", "1980-01-01", None, None, cip="XXXX0000000000"
     )
@@ -200,13 +282,28 @@ def test_update_patient_completes_fields_and_validates(db):
     from analitix.repository import merge_patients, update_patient
 
     patient_id, _ = get_or_create_patient(db, "Lopez, Ana", None, None, None)
-    update_patient(db, patient_id, {
-        "birth_date": "1980-01-01", "sex": "Mujer", "dni": " 00000000A ", "cip": "XXXX0000000000",
-        "smoker_current": 0, "smoker_former": 1, "smoker_former_from": "1998", "smoker_former_to": "2010",
-        "smoker_former_period": "",
-    })
+    update_patient(
+        db,
+        patient_id,
+        {
+            "birth_date": "1980-01-01",
+            "sex": "Mujer",
+            "dni": " 00000000A ",
+            "cip": "XXXX0000000000",
+            "smoker_current": 0,
+            "smoker_former": 1,
+            "smoker_former_from": "1998",
+            "smoker_former_to": "2010",
+            "smoker_former_period": "",
+        },
+    )
     p = list_patients(db)[0]
-    assert (p["birth_date"], p["sex"], p["dni"], p["cip"]) == ("1980-01-01", "Mujer", "00000000A", "XXXX0000000000")
+    assert (p["birth_date"], p["sex"], p["dni"], p["cip"]) == (
+        "1980-01-01",
+        "Mujer",
+        "00000000A",
+        "XXXX0000000000",
+    )
     assert (p["smoker_former"], p["smoker_former_from"], p["smoker_former_to"]) == (1, 1998, 2010)
     assert p["smoker_former_period"] is None
 
@@ -218,9 +315,14 @@ def test_update_patient_completes_fields_and_validates(db):
     update_patient(db, patient_id, {"smoker_former": 0})
     assert list_patients(db)[0]["smoker_former_from"] is None
 
-    for bad in ({"birth_date": "01/01/1980"}, {"sex": "X"}, {"full_name": " "},
-                {"smoker_former": 1, "smoker_former_from": "2010", "smoker_former_to": "1998"},
-                {"smoker_former_from": "19"}, {"name_key": "x"}):
+    for bad in (
+        {"birth_date": "01/01/1980"},
+        {"sex": "X"},
+        {"full_name": " "},
+        {"smoker_former": 1, "smoker_former_from": "2010", "smoker_former_to": "1998"},
+        {"smoker_former_from": "19"},
+        {"name_key": "x"},
+    ):
         with pytest.raises(ValueError):
             update_patient(db, patient_id, bad)
 
@@ -270,14 +372,31 @@ def test_list_patient_reports(db):
     from analitix.repository import list_patient_reports
 
     patient_id, _ = get_or_create_patient(db, "Lopez, Ana", "1980-01-01", None, None)
-    old_id = upsert_report(db, patient_id, "R-1", "2024-01-05", "2024-01-09", "a.pdf", file_md5="a" * 32)
+    old_id = upsert_report(
+        db, patient_id, "R-1", "2024-01-05", "2024-01-09", "a.pdf", file_md5="a" * 32
+    )
     new_id = upsert_report(db, patient_id, "R-2", None, "2025-03-10", "b.pdf", file_md5="b" * 32)
     for report_id, name in ((old_id, "Glucosa"), (old_id, "Urea"), (new_id, "Glucosa")):
-        insert_result(db, report_id, dict(
-            section=None, test_group=None, loinc_code=None, raw_name=name, canonical_id=name.lower(),
-            value_raw="1", value_num=1.0, unit=None, ref_low=None, ref_high=None, ref_text=None,
-            flag_pdf=None, flag_calc=None, sample_date="2024-01-04 08:00:00" if report_id == old_id else None,
-        ))
+        insert_result(
+            db,
+            report_id,
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name=name,
+                canonical_id=name.lower(),
+                value_raw="1",
+                value_num=1.0,
+                unit=None,
+                ref_low=None,
+                ref_high=None,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=None,
+                sample_date="2024-01-04 08:00:00" if report_id == old_id else None,
+            ),
+        )
     rows = list_patient_reports(db, patient_id)
     # Más reciente primero; fecha = recepción de la muestra si la hay, si no petición/validación.
     assert [(r["source_file"], r["fecha"][:10], r["num_results"], r["file_md5"]) for r in rows] == [
@@ -289,58 +408,114 @@ def test_list_patient_reports(db):
 def test_lab_is_stored_and_reaches_series(db):
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
     report_id = upsert_report(db, patient_id, "R-1", "2024-01-01", None, "a.pdf", lab="HUGTIP")
-    insert_result(db, report_id, dict(
-        section=None, test_group=None, loinc_code=None, raw_name="Glucosa", canonical_id="glucosa",
-        value_raw="90", value_num=90.0, unit="mg/dL", ref_low=None, ref_high=None, ref_text=None,
-        flag_pdf=None, flag_calc=None, sample_date=None,
-    ))
-    create_manual_report(db, patient_id, "2024-02-01", [{"raw_name": "Glucosa", "value_num": 95, "unit": "mg/dL"}])
+    insert_result(
+        db,
+        report_id,
+        dict(
+            section=None,
+            test_group=None,
+            loinc_code=None,
+            raw_name="Glucosa",
+            canonical_id="glucosa",
+            value_raw="90",
+            value_num=90.0,
+            unit="mg/dL",
+            ref_low=None,
+            ref_high=None,
+            ref_text=None,
+            flag_pdf=None,
+            flag_calc=None,
+            sample_date=None,
+        ),
+    )
+    create_manual_report(
+        db, patient_id, "2024-02-01", [{"raw_name": "Glucosa", "value_num": 95, "unit": "mg/dL"}]
+    )
     assert [s["lab"] for s in get_series(db, "glucosa", patient_id)] == ["HUGTIP", "Entrada manual"]
 
 
 def _add_rows(con, patient_id, report_number, lab, rows):
     """Informe sintético con varias filas `(raw_name, canonical_id, loinc, unit)`."""
-    report_id = upsert_report(con, patient_id, report_number, "2024-01-01", "2024-01-01", "synthetic.pdf", lab=lab)
+    report_id = upsert_report(
+        con, patient_id, report_number, "2024-01-01", "2024-01-01", "synthetic.pdf", lab=lab
+    )
     for raw_name, canonical_id, loinc, unit in rows:
         insert_result(
-            con, report_id,
-            dict(section=None, test_group=None, loinc_code=loinc, raw_name=raw_name, canonical_id=canonical_id,
-                 value_raw="1", value_num=1.0, unit=unit, ref_low=None, ref_high=None, ref_text=None,
-                 flag_pdf=None, flag_calc=None, sample_date=None),
+            con,
+            report_id,
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=loinc,
+                raw_name=raw_name,
+                canonical_id=canonical_id,
+                value_raw="1",
+                value_num=1.0,
+                unit=unit,
+                ref_low=None,
+                ref_high=None,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=None,
+                sample_date=None,
+            ),
         )
     con.commit()
 
 
 def test_merge_check_blocks_tests_measured_in_the_same_report(db):
-    pid, _ = get_or_create_patient(db, full_name="PACIENTE FICTICIO", birth_date="1980-01-01", dni=None, nhc=None)
-    _add_rows(db, pid, "1", "Lab A", [
-        ("Glucosa sèrum", "glucosa_serum", "2345-7", "mg/dL"),
-        ("Glucosa", "glucosa_orina", "50555-2", None),
-    ])
+    pid, _ = get_or_create_patient(
+        db, full_name="PACIENTE FICTICIO", birth_date="1980-01-01", dni=None, nhc=None
+    )
+    _add_rows(
+        db,
+        pid,
+        "1",
+        "Lab A",
+        [
+            ("Glucosa sèrum", "glucosa_serum", "2345-7", "mg/dL"),
+            ("Glucosa", "glucosa_orina", "50555-2", None),
+        ],
+    )
     blocked, _ = merge_check(db, ["glucosa_serum", "glucosa_orina"])
     assert len(blocked) == 1 and "1 informe" in blocked[0]
     with pytest.raises(MergeBlockedError):
         merge_canonical_ids(db, ["glucosa_orina"], "glucosa_serum")
-    assert db.execute("SELECT COUNT(*) FROM results WHERE canonical_id = 'glucosa_serum'").fetchone()[0] == 1
+    assert (
+        db.execute("SELECT COUNT(*) FROM results WHERE canonical_id = 'glucosa_serum'").fetchone()[
+            0
+        ]
+        == 1
+    )
 
 
 def test_merge_check_allows_same_lab_renames_and_duplicated_rows(db):
-    pid, _ = get_or_create_patient(db, full_name="PACIENTE FICTICIO", birth_date="1980-01-01", dni=None, nhc=None)
+    pid, _ = get_or_create_patient(
+        db, full_name="PACIENTE FICTICIO", birth_date="1980-01-01", dni=None, nhc=None
+    )
     # Mismo laboratorio, nombre cambiado entre plantillas, nunca juntos.
     _add_rows(db, pid, "1", "Lab A", [("Ferritina", "ferritina", None, "ng/ml")])
     _add_rows(db, pid, "2", "Lab A", [("Ferritina sèrum", "ferritina_serum", None, "ng/mL")])
     # Mismo dato repetido en un informe con el mismo LOINC.
-    _add_rows(db, pid, "3", "Lab A", [
-        ("Colesterol HDL", "colesterol_hdl_a", "2085-9", "mg/dL"),
-        ("Colesterol HDL sèrum", "colesterol_hdl_b", "2085-9", "mg/dL"),
-    ])
+    _add_rows(
+        db,
+        pid,
+        "3",
+        "Lab A",
+        [
+            ("Colesterol HDL", "colesterol_hdl_a", "2085-9", "mg/dL"),
+            ("Colesterol HDL sèrum", "colesterol_hdl_b", "2085-9", "mg/dL"),
+        ],
+    )
     assert merge_check(db, ["ferritina", "ferritina_serum"]) == ([], [])
     assert merge_check(db, ["colesterol_hdl_a", "colesterol_hdl_b"]) == ([], [])
     assert merge_canonical_ids(db, ["ferritina"], "ferritina_serum") == 1
 
 
 def test_merge_check_warns_on_different_loinc_or_units(db):
-    pid, _ = get_or_create_patient(db, full_name="PACIENTE FICTICIO", birth_date="1980-01-01", dni=None, nhc=None)
+    pid, _ = get_or_create_patient(
+        db, full_name="PACIENTE FICTICIO", birth_date="1980-01-01", dni=None, nhc=None
+    )
     _add_rows(db, pid, "1", "Lab A", [("Hematies", "hematies_a", "789-8", "x10^6/ul")])
     _add_rows(db, pid, "2", "Lab B", [("Hematíes", "hematies_b", "32776-7", "x10^6/ul")])
     _add_rows(db, pid, "3", "Lab A", [("Albúmina", "albumina_a", None, "g/dL")])
@@ -352,7 +527,9 @@ def test_merge_check_warns_on_different_loinc_or_units(db):
 
 
 def test_list_canonical_groups_reports_labs(db):
-    pid, _ = get_or_create_patient(db, full_name="PACIENTE FICTICIO", birth_date="1980-01-01", dni=None, nhc=None)
+    pid, _ = get_or_create_patient(
+        db, full_name="PACIENTE FICTICIO", birth_date="1980-01-01", dni=None, nhc=None
+    )
     _add_rows(db, pid, "1", "Lab A", [("Urea", "urea", None, "mg/dL")])
     _add_rows(db, pid, "2", "Lab B", [("Urea sèrum", "urea", None, "mg/dL")])
     (group,) = list_canonical_groups(db)
@@ -361,18 +538,48 @@ def test_list_canonical_groups_reports_labs(db):
 
 
 def test_lab_filter_applies_to_series_summary_and_test_list(db):
-    from analitix.repository import get_excluded_labs, list_canonical_tests, list_labs, set_excluded_labs
+    from analitix.repository import (
+        get_excluded_labs,
+        list_canonical_tests,
+        list_labs,
+        set_excluded_labs,
+    )
 
-    pid, _ = get_or_create_patient(db, full_name="PACIENTE FICTICIO", birth_date="1980-01-01", dni=None, nhc=None)
-    for numero, fecha, lab, valor in (("1", "2024-01-01", "Lab A", 90.0), ("2", "2024-06-01", "Lab B", 95.0),
-                                      ("3", "2025-01-01", None, 99.0)):
+    pid, _ = get_or_create_patient(
+        db, full_name="PACIENTE FICTICIO", birth_date="1980-01-01", dni=None, nhc=None
+    )
+    for numero, fecha, lab, valor in (
+        ("1", "2024-01-01", "Lab A", 90.0),
+        ("2", "2024-06-01", "Lab B", 95.0),
+        ("3", "2025-01-01", None, 99.0),
+    ):
         report_id = upsert_report(db, pid, numero, fecha, fecha, "synthetic.pdf", lab=lab)
-        insert_result(db, report_id, dict(
-            section=None, test_group=None, loinc_code=None, raw_name="Glucosa", canonical_id="glucosa",
-            value_raw=str(valor), value_num=valor, unit="mg/dL", ref_low=70.0, ref_high=110.0, ref_text=None,
-            flag_pdf=None, flag_calc="normal", sample_date=None))
+        insert_result(
+            db,
+            report_id,
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name="Glucosa",
+                canonical_id="glucosa",
+                value_raw=str(valor),
+                value_num=valor,
+                unit="mg/dL",
+                ref_low=70.0,
+                ref_high=110.0,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc="normal",
+                sample_date=None,
+            ),
+        )
     db.commit()
-    assert [l["lab"] for l in list_labs(db)] == ["", "Lab A", "Lab B"]  # "" = laboratorio desconocido
+    assert [l["lab"] for l in list_labs(db)] == [
+        "",
+        "Lab A",
+        "Lab B",
+    ]  # "" = laboratorio desconocido
 
     assert len(get_series(db, "glucosa", pid)) == 3  # sin filtro: todo
     set_excluded_labs(db, ["Lab A", ""])
@@ -391,7 +598,12 @@ def test_lab_filter_applies_to_series_summary_and_test_list(db):
 
 def test_doctor_targets_follow_patient_and_test_merges(db):
     from analitix.repository import (
-        delete_patient, delete_target, get_or_create_patient, get_target, merge_canonical_ids, merge_patients,
+        delete_patient,
+        delete_target,
+        get_or_create_patient,
+        get_target,
+        merge_canonical_ids,
+        merge_patients,
         set_target,
     )
 

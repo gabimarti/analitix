@@ -34,11 +34,18 @@ def test_unit_guards():
 
 
 def _insert_iron_report(
-    con, patient_id, report_number, fecha,
-    ferro=None, ferro_cid="ferro_serum",
-    ferritina=None, ferritina_cid="ferritina_serum",
-    transferrina=None, transferrina_cid="transferrina_serum",
-    tsat=None, tsat_cid="saturacio_transferrina_serum",
+    con,
+    patient_id,
+    report_number,
+    fecha,
+    ferro=None,
+    ferro_cid="ferro_serum",
+    ferritina=None,
+    ferritina_cid="ferritina_serum",
+    transferrina=None,
+    transferrina_cid="transferrina_serum",
+    tsat=None,
+    tsat_cid="saturacio_transferrina_serum",
 ):
     report_id = upsert_report(con, patient_id, report_number, fecha, None, "synthetic.pdf")
     values = []
@@ -52,10 +59,24 @@ def _insert_iron_report(
         values.append(("Saturacio transferrina", tsat_cid, tsat, "%"))
     for raw_name, cid, value, unit in values:
         insert_result(
-            con, report_id,
-            dict(section=None, test_group=None, loinc_code=None, raw_name=raw_name,
-                 canonical_id=cid, value_raw=str(value), value_num=value, unit=unit,
-                 ref_low=None, ref_high=None, ref_text=None, flag_pdf=None, flag_calc=None, sample_date=None),
+            con,
+            report_id,
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name=raw_name,
+                canonical_id=cid,
+                value_raw=str(value),
+                value_num=value,
+                unit=unit,
+                ref_low=None,
+                ref_high=None,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=None,
+                sample_date=None,
+            ),
         )
     con.commit()
 
@@ -63,14 +84,29 @@ def _insert_iron_report(
 def test_ferro_ferritina_transferrina_spelling_variants_are_merged(db):
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
     _insert_iron_report(
-        db, patient_id, "R1", "2014-01-01",
-        ferro=31.3, ferro_cid="ferro", ferritina=8.2, ferritina_cid="ferritina",
-        transferrina=427.0, transferrina_cid="transferrina",
+        db,
+        patient_id,
+        "R1",
+        "2014-01-01",
+        ferro=31.3,
+        ferro_cid="ferro",
+        ferritina=8.2,
+        ferritina_cid="ferritina",
+        transferrina=427.0,
+        transferrina_cid="transferrina",
     )
     _insert_iron_report(
-        db, patient_id, "R2", "2024-01-01",
-        ferro=80.0, ferro_cid="ferro_serum", ferritina=34.0, ferritina_cid="ferritina_serum",
-        transferrina=250.0, transferrina_cid="transferrina_serum", tsat=25.0,
+        db,
+        patient_id,
+        "R2",
+        "2024-01-01",
+        ferro=80.0,
+        ferro_cid="ferro_serum",
+        ferritina=34.0,
+        ferritina_cid="ferritina_serum",
+        transferrina=250.0,
+        transferrina_cid="transferrina_serum",
+        tsat=25.0,
     )
     series = get_iron_index_series(db, patient_id)
     assert len(series["idx_ferritina"]) == 2
@@ -87,8 +123,14 @@ def test_ferro_ferritina_transferrina_spelling_variants_are_merged(db):
 def test_latest_iron_summary_flags(db):
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
     _insert_iron_report(
-        db, patient_id, "R1", "2024-01-01",
-        ferro=31.3, ferritina=8.0, transferrina=427.0, tsat=15.0,
+        db,
+        patient_id,
+        "R1",
+        "2024-01-01",
+        ferro=31.3,
+        ferritina=8.0,
+        transferrina=427.0,
+        tsat=15.0,
     )
     summary = get_latest_iron_summary(db, patient_id)
     assert summary["fecha"] == "2024-01-01"

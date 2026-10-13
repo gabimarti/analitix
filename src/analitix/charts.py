@@ -6,11 +6,12 @@
 # Última actualización: 2026-10-06
 # ---------------------------------------------------------------------------
 """Construcción de gráficos de evolución, comparativas y mapa de calor con matplotlib."""
+
 from __future__ import annotations
 
 import datetime as dt
 import textwrap
-from typing import Any, Optional
+from typing import Any
 
 import matplotlib.dates as mdates
 import numpy as np
@@ -25,8 +26,8 @@ from matplotlib.patches import Patch
 # rojo/naranja: alto = bermellón, bajo = azul (misma polaridad que el mapa
 # de calor). El color nunca va solo: alto/bajo llevan también ▲/▼ y texto.
 COLOR_NORMAL = "#009E73"  # verde azulado
-COLOR_ALTO = "#D55E00"    # bermellón
-COLOR_BAJO = "#0072B2"    # azul
+COLOR_ALTO = "#D55E00"  # bermellón
+COLOR_BAJO = "#0072B2"  # azul
 COLOR_TREND = "#555555"
 # Cambio brusco dentro de rango (pestaña Resumen y exportación a PDF,
 # `gui.CAMBIO_BRUSCO_PCT`) — no es un color de estado clínico como los de
@@ -69,7 +70,9 @@ def _point_style(s: dict[str, Any], base_color: str) -> tuple:
     return color, color
 
 
-def apply_target(series: list[dict[str, Any]], target: Optional[dict[str, Any]]) -> list[dict[str, Any]]:
+def apply_target(
+    series: list[dict[str, Any]], target: dict[str, Any] | None
+) -> list[dict[str, Any]]:
     """La serie medida contra el objetivo indicado por el médico (`targets`,
     `repository.get_target`) en vez de contra el rango de cada informe: el
     objetivo sustituye al rango, no se añade (Scherer et al., J Med Internet
@@ -81,8 +84,18 @@ def apply_target(series: list[dict[str, Any]], target: Optional[dict[str, Any]])
     from analitix.pdf_parser import compute_flag  # import local: charts no depende del parser
 
     low, high = target.get("low"), target.get("high")
-    return [{**s, "ref_low": low, "ref_high": high, "flag_calc": compute_flag(s["value_num"], low, high),
-             "objetivo": True, "objetivo_nota": target.get("note")} for s in series]
+    return [
+        {
+            **s,
+            "ref_low": low,
+            "ref_high": high,
+            "flag_calc": compute_flag(s["value_num"], low, high),
+            "objetivo": True,
+            "objetivo_nota": target.get("note"),
+        }
+        for s in series
+    ]
+
 
 # Colores base de cada panel de la comparativa (paneles separados: solo
 # decorativos, pero sin coincidir con el azul de "bajo").
@@ -159,7 +172,9 @@ def _parse_fecha(fecha: str) -> dt.datetime:
         return dt.datetime.min
 
 
-def _fit_trend(fechas: list[dt.datetime], valores: list[float]) -> Optional[tuple[float, float, Any, float, float]]:
+def _fit_trend(
+    fechas: list[dt.datetime], valores: list[float]
+) -> tuple[float, float, Any, float, float] | None:
     """Pendiente robusta de Theil-Sen (valor ~ fecha) con su intervalo de
     confianza del 95 %: (pendiente, ordenada, x, IC inferior, IC superior),
     pendientes por día. `None` con menos de `MIN_POINTS_FOR_TREND` puntos.
@@ -193,7 +208,7 @@ def _fit_trend(fechas: list[dt.datetime], valores: list[float]) -> Optional[tupl
     return slope, intercept, x, float(bajo), float(alto)
 
 
-def _draw_trend_lines(ax, fit: Optional[tuple[float, float, Any]]) -> None:
+def _draw_trend_lines(ax, fit: tuple[float, float, Any] | None) -> None:
     """Dibuja la recta de tendencia ajustada por `_fit_trend` y su proyección
     a `TREND_PROJECTION_DAYS` días vista (sin texto, ver `_trend_text`)."""
     if fit is None:
@@ -201,19 +216,34 @@ def _draw_trend_lines(ax, fit: Optional[tuple[float, float, Any]]) -> None:
     slope, intercept, x = fit[:3]
 
     x_fit = np.array([x[0], x[-1]])
-    ax.plot(mdates.num2date(x_fit), slope * x_fit + intercept, linestyle=":", color=COLOR_TREND, linewidth=1.3, zorder=0)
+    ax.plot(
+        mdates.num2date(x_fit),
+        slope * x_fit + intercept,
+        linestyle=":",
+        color=COLOR_TREND,
+        linewidth=1.3,
+        zorder=0,
+    )
 
     x_proj = np.array([x[-1], x[-1] + TREND_PROJECTION_DAYS])
     y_proj = slope * x_proj + intercept
-    ax.plot(mdates.num2date(x_proj), y_proj, linestyle=":", color=COLOR_TREND, linewidth=1.3, alpha=0.5, zorder=0)
+    ax.plot(
+        mdates.num2date(x_proj),
+        y_proj,
+        linestyle=":",
+        color=COLOR_TREND,
+        linewidth=1.3,
+        alpha=0.5,
+        zorder=0,
+    )
 
 
 def _trend_direction(
-    fit: Optional[tuple[float, float, Any]],
+    fit: tuple[float, float, Any] | None,
     valores: list[float],
-    ref_low: Optional[float],
-    ref_high: Optional[float],
-) -> Optional[tuple[str, str, float, float]]:
+    ref_low: float | None,
+    ref_high: float | None,
+) -> tuple[str, str, float, float] | None:
     """Flecha + palabra + pendiente + `span` (rango usado como referencia
     de magnitud, ver abajo) a partir del ajuste de `_fit_trend`, o `None`
     si no hay suficientes puntos (ver `MIN_POINTS_FOR_TREND`). Compartido
@@ -223,7 +253,11 @@ def _trend_direction(
     if fit is None:
         return None
     slope, intercept, x, ic_bajo, ic_alto = fit
-    span = (ref_high - ref_low) if (ref_low is not None and ref_high is not None and ref_high > ref_low) else None
+    span = (
+        (ref_high - ref_low)
+        if (ref_low is not None and ref_high is not None and ref_high > ref_low)
+        else None
+    )
     if span is None:
         span = (max(valores) - min(valores)) or abs(valores[-1]) or 1.0
     # Con pocas analíticas o poco tiempo, ni siquiera un IC que excluya el 0
@@ -249,11 +283,11 @@ def _trend_direction(
 
 
 def _trend_text(
-    fit: Optional[tuple[float, float, Any]],
+    fit: tuple[float, float, Any] | None,
     valores: list[float],
-    ref_low: Optional[float],
-    ref_high: Optional[float],
-) -> Optional[str]:
+    ref_low: float | None,
+    ref_high: float | None,
+) -> str | None:
     """Texto "↑ Tendencia: subiendo (...)" a partir del ajuste de
     `_fit_trend`, o `None` si no hay suficientes puntos para uno (ver
     `MIN_POINTS_FOR_TREND`)."""
@@ -263,30 +297,42 @@ def _trend_text(
     arrow, palabra, slope, _span = direction
     _, intercept, x, ic_bajo, ic_alto = fit
     if palabra == POCOS_DATOS_TENDENCIA:
-        return (f"{arrow} Tendencia: {palabra} (hacen falta ≥ {MIN_POINTS_CONFIRM_TREND} analíticas "
-                f"en ≥ {MIN_DAYS_CONFIRM_TREND // 365} años)")
-    ritmo = f"~{slope * 365.25:+.2g}/año (IC 95 %: {ic_bajo * 365.25:+.2g} a {ic_alto * 365.25:+.2g})"
+        return (
+            f"{arrow} Tendencia: {palabra} (hacen falta ≥ {MIN_POINTS_CONFIRM_TREND} analíticas "
+            f"en ≥ {MIN_DAYS_CONFIRM_TREND // 365} años)"
+        )
+    ritmo = (
+        f"~{slope * 365.25:+.2g}/año (IC 95 %: {ic_bajo * 365.25:+.2g} a {ic_alto * 365.25:+.2g})"
+    )
     if palabra == SIN_TENDENCIA:
         return f"{arrow} Tendencia: {palabra}, ritmo {ritmo}"
     proyeccion = slope * (x[-1] + TREND_PROJECTION_DAYS) + intercept
     return f"{arrow} Tendencia: {palabra} {ritmo} · proy. 3 meses: {proyeccion:.3g}"
 
 
-def _kdigo_note(series: list[dict[str, Any]], fit) -> Optional[str]:
+def _kdigo_note(series: list[dict[str, Any]], fit) -> str | None:
     """Nota de la guía KDIGO para el filtrado glomerular (`kdigo_fg`) cuando
     el descenso es demostrable y supera `KDIGO_RAPID_DECLINE_PER_YEAR`."""
     if not fit or not series or not series[0].get("kdigo_fg"):
         return None
     direccion = _trend_direction(fit, [s["value_num"] for s in series], None, None)
     _slope, _intercept, _x, _ic_bajo, ic_alto = fit
-    if (direccion and direccion[1] == "bajando" and fit[0] * 365.25 < -KDIGO_RAPID_DECLINE_PER_YEAR
-            and ic_alto < 0):
-        return (f"La guía KDIGO llama «progresión rápida» a un descenso sostenido de más de "
-                f"{KDIGO_RAPID_DECLINE_PER_YEAR:g} al año: coméntalo con tu médico.")
+    if (
+        direccion
+        and direccion[1] == "bajando"
+        and fit[0] * 365.25 < -KDIGO_RAPID_DECLINE_PER_YEAR
+        and ic_alto < 0
+    ):
+        return (
+            f"La guía KDIGO llama «progresión rápida» a un descenso sostenido de más de "
+            f"{KDIGO_RAPID_DECLINE_PER_YEAR:g} al año: coméntalo con tu médico."
+        )
     return None
 
 
-def trend_arrow(series: list[dict[str, Any]], ref_low: Optional[float], ref_high: Optional[float]) -> Optional[str]:
+def trend_arrow(
+    series: list[dict[str, Any]], ref_low: float | None, ref_high: float | None
+) -> str | None:
     """Flecha (↑/→/↓) de la tendencia de toda la serie, con la magnitud
     anual en subida/bajada (p. ej. "↑ +38%/año") — para columnas de tabla
     (pestaña Resumen, gui.py) en vez del gráfico completo. La magnitud es
@@ -311,7 +357,7 @@ def trend_arrow(series: list[dict[str, Any]], ref_low: Optional[float], ref_high
     return f"{arrow} {magnitud_pct_anual:+.0f}%/año"
 
 
-def _pct_change_text(valores: list[float]) -> Optional[str]:
+def _pct_change_text(valores: list[float]) -> str | None:
     """Variación porcentual del último valor respecto al anterior y respecto
     al primero de la serie — la tendencia ya dice hacia dónde va el valor a
     largo plazo, pero no si el último salto en concreto es grande o
@@ -346,7 +392,7 @@ TIR_MIN_DAYS = 365
 _SIN_LIMITE = 1e12
 
 
-def _normalized_point(s: dict[str, Any]) -> Optional[tuple[str, float, float, float]]:
+def _normalized_point(s: dict[str, Any]) -> tuple[str, float, float, float] | None:
     """(tipo de rango, valor normalizado, límite inferior, límite superior)
     en la misma escala para los dos extremos de un tramo: con dos límites,
     0 = inferior y 1 = superior; con uno solo, el valor dividido por él."""
@@ -370,7 +416,7 @@ def _fraction_inside(p0: float, p1: float, a: float, b: float) -> float:
     return max(0.0, min(1.0, max(t_a, t_b)) - max(0.0, min(t_a, t_b)))
 
 
-def time_in_range(series: list[dict[str, Any]]) -> Optional[tuple[float, int]]:
+def time_in_range(series: list[dict[str, Any]]) -> tuple[float, int] | None:
     """(% del tiempo dentro del rango, nº de huecos de más de
     `TIR_MAX_GAP_DAYS` que no se han contado) de la serie, con el rango de
     cada analítica (o el objetivo del médico, `apply_target`). `None` si los
@@ -394,7 +440,7 @@ def time_in_range(series: list[dict[str, Any]]) -> Optional[tuple[float, int]]:
     return dentro / total * 100, huecos
 
 
-def series_summary(series: list[dict[str, Any]]) -> Optional[str]:
+def series_summary(series: list[dict[str, Any]]) -> str | None:
     """Resumen en lenguaje llano de la serie, descriptivo y nunca causal:
     "Dentro del rango en 9 de 10 analíticas; la última (2026-01-01), un 8 %
     por encima del límite superior." Los estudios con pacientes encuentran
@@ -413,14 +459,24 @@ def series_summary(series: list[dict[str, Any]]) -> Optional[str]:
     tir = time_in_range(series)
     if tir:
         pct, huecos = tir
-        texto += f" (~{pct:.0f} % del tiempo{', sin contar huecos de más de un año' if huecos else ''})"
+        texto += (
+            f" (~{pct:.0f} % del tiempo{', sin contar huecos de más de un año' if huecos else ''})"
+        )
     ultima = series[-1]
     fecha = (ultima.get("fecha") or "")[:10]
     valor, flag = ultima["value_num"], ultima.get("flag_calc")
-    limite = ultima.get("ref_high") if flag == "alto" else ultima.get("ref_low") if flag == "bajo" else None
+    limite = (
+        ultima.get("ref_high")
+        if flag == "alto"
+        else ultima.get("ref_low")
+        if flag == "bajo"
+        else None
+    )
     if limite:
         pct = abs(valor - limite) / abs(limite) * 100
-        lado = "por encima del límite superior" if flag == "alto" else "por debajo del límite inferior"
+        lado = (
+            "por encima del límite superior" if flag == "alto" else "por debajo del límite inferior"
+        )
         texto += f"; la última ({fecha}), un {pct:.0f} % {lado} ({limite:g})"
     elif flag in ("alto", "bajo"):
         texto += f"; la última ({fecha}), fuera del rango"
@@ -432,24 +488,31 @@ def series_summary(series: list[dict[str, Any]]) -> Optional[str]:
         # persona (quién y cuándo se lo indicó), recortada para no ensanchar
         # el recuadro.
         lo, hi = ultima.get("ref_low"), ultima.get("ref_high")
-        objetivo = (f"entre {lo:g} y {hi:g}" if lo is not None and hi is not None
-                    else f"< {hi:g}" if hi is not None else f"> {lo:g}")
+        objetivo = (
+            f"entre {lo:g} y {hi:g}"
+            if lo is not None and hi is not None
+            else f"< {hi:g}"
+            if hi is not None
+            else f"> {lo:g}"
+        )
         unidad = next((s.get("unit") for s in series if s.get("unit")), "")
         nota = (series[0].get("objetivo_nota") or "").strip()
         if len(nota) > 60:
             nota = nota[:59] + "…"
-        texto += f"\n{ETIQUETA_OBJETIVO}: {objetivo} {unidad}".rstrip() + (f" · {nota}" if nota else "")
+        texto += f"\n{ETIQUETA_OBJETIVO}: {objetivo} {unidad}".rstrip() + (
+            f" · {nota}" if nota else ""
+        )
     return texto
 
 
 def _draw_info_box(
     ax,
-    fit: Optional[tuple[float, float, Any]],
+    fit: tuple[float, float, Any] | None,
     valores: list[float],
-    ref_low: Optional[float],
-    ref_high: Optional[float],
-    summary: Optional[str] = None,
-    extra: Optional[str] = None,
+    ref_low: float | None,
+    ref_high: float | None,
+    summary: str | None = None,
+    extra: str | None = None,
 ) -> None:
     """Recuadro de texto bajo el eje con el resumen en texto de la serie
     (`series_summary`), la tendencia (si hay suficientes puntos) y la
@@ -457,19 +520,36 @@ def _draw_info_box(
     `ax` (no a la figura), para que funcione igual en Evolución como en
     cada panel de la Comparativa; `annotation_clip=False` evita que se
     recorte al quedar fuera del área de datos."""
-    lineas = [t for t in (summary, _trend_text(fit, valores, ref_low, ref_high), _pct_change_text(valores), extra)
-              if t]
+    lineas = [
+        t
+        for t in (
+            summary,
+            _trend_text(fit, valores, ref_low, ref_high),
+            _pct_change_text(valores),
+            extra,
+        )
+        if t
+    ]
     if not lineas:
         return
     # Líneas largas partidas: si no, `tight_layout` estrecha todo el gráfico
     # para hacer sitio al recuadro.
-    lineas = [textwrap.fill(parte, INFO_BOX_WIDTH) for linea in lineas for parte in linea.split("\n")]
-    ax.analitix_info_lines = sum(linea.count("\n") + 1 for linea in lineas)  # ver `evolution_figure`
+    lineas = [
+        textwrap.fill(parte, INFO_BOX_WIDTH) for linea in lineas for parte in linea.split("\n")
+    ]
+    ax.analitix_info_lines = sum(
+        linea.count("\n") + 1 for linea in lineas
+    )  # ver `evolution_figure`
     ax.annotate(
         "\n".join(lineas),
-        xy=(0.5, 0), xycoords="axes fraction",
-        xytext=(0, -48), textcoords="offset points",
-        ha="center", va="top", fontsize=8, color="#333333",
+        xy=(0.5, 0),
+        xycoords="axes fraction",
+        xytext=(0, -48),
+        textcoords="offset points",
+        ha="center",
+        va="top",
+        fontsize=8,
+        color="#333333",
         bbox=dict(boxstyle="round", fc="white", ec="#cccccc", alpha=0.9),
         annotation_clip=False,
     )
@@ -508,11 +588,17 @@ def _draw_single_point(ax, s: dict[str, Any]) -> None:
     if s.get("ref_low") is not None and s.get("ref_high") is not None:
         rango = f"\nRango de referencia: {s['ref_low']:g} – {s['ref_high']:g}"
     ax.text(
-        0.5, 0.5,
+        0.5,
+        0.5,
         f"Solo hay 1 analítica con este parámetro ({(s.get('fecha') or '')[:10]}):\n"
-        f"{s['value_num']:g} {s.get('unit') or ''}".rstrip() + rango
+        f"{s['value_num']:g} {s.get('unit') or ''}".rstrip()
+        + rango
         + "\n\nHacen falta al menos 2 para ver una evolución.",
-        transform=ax.transAxes, ha="center", va="center", fontsize=10, color=COLOR_INK_SECONDARY,
+        transform=ax.transAxes,
+        ha="center",
+        va="center",
+        fontsize=10,
+        color=COLOR_INK_SECONDARY,
     )
     ax.set_xticks([])
     ax.set_yticks([])
@@ -520,16 +606,26 @@ def _draw_single_point(ax, s: dict[str, Any]) -> None:
 
 def _draw_few_points_warning(ax, n_points: int, min_points: int) -> None:
     ax.text(
-        0.01, 0.98,
+        0.01,
+        0.98,
         f"⚠ Solo {n_points} analíticas (mínimo recomendado: {min_points}): evolución poco representativa",
-        transform=ax.transAxes, ha="left", va="top", fontsize=8, color=COLOR_BRUSCO,
-        bbox=dict(boxstyle="round", fc="white", ec="#e1e0d9", alpha=0.9), zorder=5,
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+        fontsize=8,
+        color=COLOR_BRUSCO,
+        bbox=dict(boxstyle="round", fc="white", ec="#e1e0d9", alpha=0.9),
+        zorder=5,
     )
 
 
 def _plot_series_on_ax(
-    ax, series: list[dict[str, Any]], label: str, base_color: str = COLOR_NORMAL,
-    min_points: int = DEFAULT_MIN_POINTS, note: Optional[str] = None,
+    ax,
+    series: list[dict[str, Any]],
+    label: str,
+    base_color: str = COLOR_NORMAL,
+    min_points: int = DEFAULT_MIN_POINTS,
+    note: str | None = None,
 ) -> list:
     """Dibuja una serie sobre `ax` (línea, banda/límites de referencia, puntos
     coloreados según estén dentro o fuera de rango). Devuelve los handles de
@@ -567,8 +663,12 @@ def _plot_series_on_ax(
             band_low = low_vals + [low_vals[-1]]
             band_high = high_vals + [high_vals[-1]]
         ax.fill_between(band_fechas, band_low, band_high, color=base_color, alpha=0.08)
-        (h_low,) = ax.plot(band_fechas, band_low, linestyle="--", linewidth=1, color=base_color, alpha=0.6)
-        (h_high,) = ax.plot(band_fechas, band_high, linestyle="--", linewidth=1, color=base_color, alpha=0.6)
+        (h_low,) = ax.plot(
+            band_fechas, band_low, linestyle="--", linewidth=1, color=base_color, alpha=0.6
+        )
+        (h_high,) = ax.plot(
+            band_fechas, band_high, linestyle="--", linewidth=1, color=base_color, alpha=0.6
+        )
         h_low.set_label(ETIQUETA_OBJETIVO if series[0].get("objetivo") else "Rango de referencia")
         handles.append(h_low)
         y_extent.extend(low_vals)
@@ -583,7 +683,9 @@ def _plot_series_on_ax(
         if fit is not None:
             limit_fechas = fechas + [fechas[-1] + dt.timedelta(days=TREND_PROJECTION_DAYS)]
             limit_vals = limit_vals + [limit_vals[-1]]
-        (h_limit,) = ax.plot(limit_fechas, limit_vals, linestyle="--", linewidth=1, color=base_color, alpha=0.8)
+        (h_limit,) = ax.plot(
+            limit_fechas, limit_vals, linestyle="--", linewidth=1, color=base_color, alpha=0.8
+        )
         nombre = ETIQUETA_OBJETIVO if series[0].get("objetivo") else "Límite de referencia"
         h_limit.set_label(f"{nombre} ({'<' if key == 'ref_high' else '>'} {limit_vals[-1]:g})")
         handles.append(h_limit)
@@ -607,16 +709,26 @@ def _plot_series_on_ax(
         for lab, marker in zip(labs, _markers_for(labs)):
             idx = [i for i, s in enumerate(series) if (s.get("lab") or LAB_UNKNOWN) == lab]
             scatter = ax.scatter(
-                [fechas[i] for i in idx], [valores[i] for i in idx], c=[colors[i] for i in idx],
-                marker=marker, s=50, zorder=2, edgecolors=[edges[i] for i in idx], linewidths=1.2,
+                [fechas[i] for i in idx],
+                [valores[i] for i in idx],
+                c=[colors[i] for i in idx],
+                marker=marker,
+                s=50,
+                zorder=2,
+                edgecolors=[edges[i] for i in idx],
+                linewidths=1.2,
             )
             # Datos para el tooltip al pasar el cursor (ver gui._attach_hover).
             scatter.analitix_series = [series[i] for i in idx]
-            (h_lab,) = ax.plot([], [], linestyle="none", marker=marker, markersize=7, color=COLOR_INK_SECONDARY)
+            (h_lab,) = ax.plot(
+                [], [], linestyle="none", marker=marker, markersize=7, color=COLOR_INK_SECONDARY
+            )
             h_lab.set_label(lab)
             handles.append(h_lab)
     else:
-        scatter = ax.scatter(fechas, valores, c=colors, zorder=2, s=40, edgecolors=edges, linewidths=1.2)
+        scatter = ax.scatter(
+            fechas, valores, c=colors, zorder=2, s=40, edgecolors=edges, linewidths=1.2
+        )
         # Datos para el tooltip al pasar el cursor (ver gui._attach_hover).
         scatter.analitix_series = series
 
@@ -625,22 +737,42 @@ def _plot_series_on_ax(
     # (recomendación de Zikmund-Fisher, AHRQ 2017, no revisada por pares:
     # elección de interfaz, no un criterio clínico).
     ultimo = series[-1]
-    color_ultimo = {"alto": COLOR_ALTO, "bajo": COLOR_BAJO}.get(ultimo["flag_calc"], COLOR_INK_SECONDARY)
-    ax.scatter([fechas[-1]], [valores[-1]], s=170, facecolors="none", edgecolors=color_ultimo,
-               linewidths=1.6, zorder=3)
+    color_ultimo = {"alto": COLOR_ALTO, "bajo": COLOR_BAJO}.get(
+        ultimo["flag_calc"], COLOR_INK_SECONDARY
+    )
+    ax.scatter(
+        [fechas[-1]],
+        [valores[-1]],
+        s=170,
+        facecolors="none",
+        edgecolors=color_ultimo,
+        linewidths=1.6,
+        zorder=3,
+    )
     simbolo = SIMBOLO_ESTADO.get(ultimo["flag_calc"])
     # Al lado contrario de las etiquetas de los anteriores fuera de rango
     # (encima si alto, debajo si bajo), para no solaparse con ellas.
-    xytext, ha, va = {"alto": ((0, -12), "center", "top"),
-                      "bajo": ((0, 12), "center", "bottom")}.get(ultimo["flag_calc"], ((-10, 10), "right", "bottom"))
+    xytext, ha, va = {
+        "alto": ((0, -12), "center", "top"),
+        "bajo": ((0, 12), "center", "bottom"),
+    }.get(ultimo["flag_calc"], ((-10, 10), "right", "bottom"))
     ax.annotate(
         f"Último: {simbolo + ' ' if simbolo else ''}{valores[-1]:g}",
-        (fechas[-1], valores[-1]), textcoords="offset points", xytext=xytext, ha=ha, va=va,
-        fontsize=8, fontweight="bold", color=color_ultimo, zorder=4,
+        (fechas[-1], valores[-1]),
+        textcoords="offset points",
+        xytext=xytext,
+        ha=ha,
+        va=va,
+        fontsize=8,
+        fontweight="bold",
+        color=color_ultimo,
+        zorder=4,
         bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8),
     )
 
-    for fecha, valor, s in zip(fechas[:-1], valores[:-1], series[:-1]):  # el último ya lleva etiqueta
+    for fecha, valor, s in zip(
+        fechas[:-1], valores[:-1], series[:-1]
+    ):  # el último ya lleva etiqueta
         if s["flag_calc"] not in ("alto", "bajo"):
             continue
         alto = s["flag_calc"] == "alto"
@@ -660,7 +792,11 @@ def _plot_series_on_ax(
 
     _draw_trend_lines(ax, fit)
     _draw_info_box(
-        ax, fit, valores, ref_low[-1] if ref_low else None, ref_high[-1] if ref_high else None,
+        ax,
+        fit,
+        valores,
+        ref_low[-1] if ref_low else None,
+        ref_high[-1] if ref_high else None,
         summary=series_summary(series),
         extra="\n".join(t for t in (_kdigo_note(series, fit), note) if t) or None,
     )
@@ -686,8 +822,15 @@ def _draw_rcv_band(ax, series: list[dict[str, Any]], rcv: dict[str, Any]) -> Non
     alto = anterior * (1 + rcv["rcv_subida"] / 100)
     x = _parse_fecha(series[-1]["fecha"])
     ax.errorbar(
-        [x], [anterior], yerr=[[anterior - bajo], [alto - anterior]], fmt="none", ecolor=COLOR_INK_SECONDARY,
-        elinewidth=6, capsize=0, alpha=0.25, zorder=1,
+        [x],
+        [anterior],
+        yerr=[[anterior - bajo], [alto - anterior]],
+        fmt="none",
+        ecolor=COLOR_INK_SECONDARY,
+        elinewidth=6,
+        capsize=0,
+        alpha=0.25,
+        zorder=1,
         label=f"Variación esperable desde el anterior (RCV {rcv['rcv_bajada']:+.0f}% / {rcv['rcv_subida']:+.0f}%)",
     )
     ymin, ymax = ax.get_ylim()
@@ -705,8 +848,15 @@ def _draw_personal_band(ax, series: list[dict[str, Any]], pr: dict[str, Any]) ->
     fechas = [_parse_fecha(series[0]["fecha"]), _parse_fecha(series[-1]["fecha"])]
     varios = " · mezcla laboratorios" if pr["labs"] > 1 else ""
     ax.fill_between(
-        fechas, [pr["bajo"]] * 2, [pr["alto"]] * 2, facecolor="none", edgecolor=COLOR_PERSONAL,
-        hatch="///", linewidth=0.8, alpha=0.45, zorder=0,
+        fechas,
+        [pr["bajo"]] * 2,
+        [pr["alto"]] * 2,
+        facecolor="none",
+        edgecolor=COLOR_PERSONAL,
+        hatch="///",
+        linewidth=0.8,
+        alpha=0.45,
+        zorder=0,
         label=f"Tu rango personal {pr['bajo']:.3g}–{pr['alto']:.3g} (n={pr['n']}){varios}",
     )
     ymin, ymax = ax.get_ylim()
@@ -723,14 +873,26 @@ def _legend_above(ax, handles: list, title: str) -> None:
     filas = -(-len(handles) // 3)
     ax.set_title(title, pad=6 + 11 * filas)
     if handles:
-        ax.legend(handles=handles, fontsize=7, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=3,
-                  frameon=False, borderaxespad=0.2, handlelength=1.6, columnspacing=1.2)
+        ax.legend(
+            handles=handles,
+            fontsize=7,
+            loc="lower left",
+            bbox_to_anchor=(0, 1.0),
+            ncol=3,
+            frameon=False,
+            borderaxespad=0.2,
+            handlelength=1.6,
+            columnspacing=1.2,
+        )
 
 
 def evolution_figure(
-    series: list[dict[str, Any]], title: str, min_points: int = DEFAULT_MIN_POINTS,
-    rcv: Optional[dict[str, Any]] = None, personal: Optional[dict[str, Any]] = None,
-    note: Optional[str] = None,
+    series: list[dict[str, Any]],
+    title: str,
+    min_points: int = DEFAULT_MIN_POINTS,
+    rcv: dict[str, Any] | None = None,
+    personal: dict[str, Any] | None = None,
+    note: str | None = None,
 ) -> Figure:
     """Gráfico de evolución de una prueba en el tiempo, con las líneas de
     mínimo/máximo de referencia y los valores fuera de rango resaltados.
@@ -802,8 +964,8 @@ HEATMAP_CMAP = LinearSegmentedColormap.from_list(
     "analitix_rango",
     [(0.0, "#184f95"), (0.35, "#9ec5f4"), (0.5, "#f0efec"), (0.65, "#f4b4b3"), (1.0, "#a3282a")],
 )
-HEATMAP_SURFACE = "#fcfcfb"      # casilla sin analítica ese día
-HEATMAP_NO_RANGE = "#d9d8d2"     # valor medido pero sin rango de referencia
+HEATMAP_SURFACE = "#fcfcfb"  # casilla sin analítica ese día
+HEATMAP_NO_RANGE = "#d9d8d2"  # valor medido pero sin rango de referencia
 HEATMAP_INK = "#0b0b0b"
 # Distancia fuera del rango, en fracciones del ancho del rango, a partir de
 # la cual la casilla ya tiene el color más intenso; cualquier valor fuera de
@@ -816,7 +978,9 @@ HEATMAP_MIN_INTENSITY = 0.3
 HEATMAP_MAX_LABELED_COLUMNS = 24
 
 
-def range_position(value: Optional[float], ref_low: Optional[float], ref_high: Optional[float]) -> Optional[float]:
+def range_position(
+    value: float | None, ref_low: float | None, ref_high: float | None
+) -> float | None:
     """Posición de `value` respecto a su rango de referencia, en [-1, 1]: 0
     dentro del rango; negativo por debajo y positivo por encima, con
     magnitud `HEATMAP_MIN_INTENSITY`..1 según lo lejos que quede (1 = a
@@ -829,11 +993,13 @@ def range_position(value: Optional[float], ref_low: Optional[float], ref_high: O
         return None
     if distance == 0:
         return 0.0
-    intensity = HEATMAP_MIN_INTENSITY + (1 - HEATMAP_MIN_INTENSITY) * min(abs(distance) / HEATMAP_FULL_AT, 1.0)
+    intensity = HEATMAP_MIN_INTENSITY + (1 - HEATMAP_MIN_INTENSITY) * min(
+        abs(distance) / HEATMAP_FULL_AT, 1.0
+    )
     return -intensity if distance < 0 else intensity
 
 
-def range_width(ref_low: Optional[float], ref_high: Optional[float]) -> Optional[float]:
+def range_width(ref_low: float | None, ref_high: float | None) -> float | None:
     """Vara de medir de un rango: su ancho si tiene los dos límites; con un
     único límite ("< 200", "> 40"), el valor de ese límite. `None` si no hay
     ningún límite."""
@@ -843,7 +1009,9 @@ def range_width(ref_low: Optional[float], ref_high: Optional[float]) -> Optional
     return None if bound is None else (abs(bound) or 1.0)
 
 
-def range_distance(value: Optional[float], ref_low: Optional[float], ref_high: Optional[float]) -> Optional[float]:
+def range_distance(
+    value: float | None, ref_low: float | None, ref_high: float | None
+) -> float | None:
     """Distancia de `value` a su rango, en anchos de rango (`range_width`):
     0 dentro, negativa por debajo, positiva por encima. `None` sin valor o
     sin ningún límite. Compartida por el mapa de calor (`range_position`) y
@@ -861,8 +1029,10 @@ def range_distance(value: Optional[float], ref_low: Optional[float], ref_high: O
 def _ink_for(rgba) -> str:
     """Color de texto que contrasta con el de la casilla: blanco sobre
     colores oscuros, casi negro sobre claros (luminancia relativa WCAG)."""
+
     def canal(c: float) -> float:
         return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
     r, g, b = (canal(float(c)) for c in rgba[:3])
     return "white" if 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.35 else HEATMAP_INK
 
@@ -882,7 +1052,7 @@ def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> 
     rgba = np.empty((n_rows, n_cols, 4))
     rgba[:, :] = to_rgba(HEATMAP_SURFACE)
     cells: dict[tuple[int, int], dict[str, Any]] = {}
-    positions: dict[tuple[int, int], Optional[float]] = {}
+    positions: dict[tuple[int, int], float | None] = {}
     for i, (_label, series) in enumerate(rows):
         for s in series:
             j = col_of[s["fecha"][:10]]
@@ -906,10 +1076,14 @@ def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> 
         spine.set_visible(False)
 
     ax.set_yticks(range(len(rows)))
-    ax.set_yticklabels([label if len(label) <= 40 else label[:39] + "…" for label, _ in rows], fontsize=8)
+    ax.set_yticklabels(
+        [label if len(label) <= 40 else label[:39] + "…" for label, _ in rows], fontsize=8
+    )
     step = max(1, int(np.ceil(n_cols / 40)))
     ax.set_xticks(range(0, len(dates), step))
-    ax.set_xticklabels([f"{d[8:10]}/{d[5:7]}/{d[2:4]}" for d in dates[::step]], rotation=90, fontsize=7)
+    ax.set_xticklabels(
+        [f"{d[8:10]}/{d[5:7]}/{d[2:4]}" for d in dates[::step]], rotation=90, fontsize=7
+    )
     ax.tick_params(axis="both", length=0, colors="#52514e")
 
     # Etiquetas selectivas: el valor de las casillas fuera de rango. Con
@@ -921,7 +1095,9 @@ def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> 
     else:
         etiquetadas = []
         for i in range(len(rows)):
-            fuera = [(k, cells[k]["value_num"]) for k, pos in positions.items() if k[0] == i and pos]
+            fuera = [
+                (k, cells[k]["value_num"]) for k, pos in positions.items() if k[0] == i and pos
+            ]
             altos = [kv for kv in fuera if positions[kv[0]] > 0]
             bajos = [kv for kv in fuera if positions[kv[0]] < 0]
             if altos:
@@ -929,8 +1105,16 @@ def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> 
             if bajos:
                 etiquetadas.append(min(bajos, key=lambda kv: kv[1])[0])
     for i, j in etiquetadas:
-        ax.text(j, i, f"{cells[(i, j)]['value_num']:g}", ha="center", va="center", fontsize=6.5,
-                color=_ink_for(rgba[i, j]), weight="bold")
+        ax.text(
+            j,
+            i,
+            f"{cells[(i, j)]['value_num']:g}",
+            ha="center",
+            va="center",
+            fontsize=6.5,
+            color=_ink_for(rgba[i, j]),
+            weight="bold",
+        )
     for (i, j), pos in positions.items():
         if pos is None:
             ax.plot(j, i, marker="o", markersize=2.5, color="#898781", linestyle="none")
@@ -960,9 +1144,9 @@ def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> 
 # Misma paleta apta para daltonismo que los puntos de Evolución. "✗" y no
 # "▲" para empeora: ▲ ya significa "alto", y alejarse del rango también
 # puede ser bajar.
-CHANGE_WORSE = COLOR_ALTO     # se aleja del rango o sale de él
+CHANGE_WORSE = COLOR_ALTO  # se aleja del rango o sale de él
 CHANGE_BETTER = COLOR_NORMAL  # se acerca al rango o vuelve a él
-CHANGE_NEUTRAL = "#b9b8b0"    # dentro del rango antes y ahora
+CHANGE_NEUTRAL = "#b9b8b0"  # dentro del rango antes y ahora
 CHANGE_SYMBOL = {"empeora": "✗", "mejora": "✓", "igual": ""}
 # Opacidad de las barras cuyo cambio cabe en la variación esperable (RCV,
 # `rcv.py`): se ven, pero dejan destacar los cambios probablemente reales.
@@ -972,8 +1156,9 @@ RCV_ESPERABLE_ALPHA = 0.35
 CHANGE_EPSILON = 0.01
 
 
-def change_status(previous: float, value: float, ref_low: Optional[float],
-                  ref_high: Optional[float]) -> Optional[tuple[float, str]]:
+def change_status(
+    previous: float, value: float, ref_low: float | None, ref_high: float | None
+) -> tuple[float, str] | None:
     """(cambio en anchos de rango, estado) entre el valor anterior y el
     actual, ambos medidos contra el rango del informe actual. Estado:
     "empeora" (se aleja del rango o sale de él), "mejora" (se acerca o
@@ -1026,12 +1211,20 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
     y = np.arange(len(items))
     esperable = [(r.get("rcv") or {}).get("estado") == "esperable" for r in items]
     ax.barh(
-        y, [r["delta"] for r in items], height=0.62, zorder=2,
-        color=[to_rgba(colors[r["estado"]], RCV_ESPERABLE_ALPHA if e else 1.0) for r, e in zip(items, esperable)],
+        y,
+        [r["delta"] for r in items],
+        height=0.62,
+        zorder=2,
+        color=[
+            to_rgba(colors[r["estado"]], RCV_ESPERABLE_ALPHA if e else 1.0)
+            for r, e in zip(items, esperable)
+        ],
     )
     ax.axvline(0, color="#c3c2b7", linewidth=1, zorder=1)
     ax.set_yticks(y)
-    ax.set_yticklabels([r["label"] if len(r["label"]) <= 40 else r["label"][:39] + "…" for r in items], fontsize=8)
+    ax.set_yticklabels(
+        [r["label"] if len(r["label"]) <= 40 else r["label"][:39] + "…" for r in items], fontsize=8
+    )
     ax.set_ylim(-0.6, n - 0.4)
 
     # Margen a los dos lados para las etiquetas "anterior → actual".
@@ -1042,29 +1235,52 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
             continue
         texto = f"{CHANGE_SYMBOL[r['estado']]} {r['previous']:g} → {r['value']:g}"
         right = r["delta"] >= 0
-        ax.annotate(texto, (r["delta"], yi), xytext=(4 if right else -4, 0), textcoords="offset points",
-                    ha="left" if right else "right", va="center", fontsize=7, color="#0b0b0b")
+        ax.annotate(
+            texto,
+            (r["delta"], yi),
+            xytext=(4 if right else -4, 0),
+            textcoords="offset points",
+            ha="left" if right else "right",
+            va="center",
+            fontsize=7,
+            color="#0b0b0b",
+        )
 
     ax.grid(axis="x", color="#e1e0d9", linewidth=0.8, zorder=0)
     for side in ("top", "right", "left"):
         ax.spines[side].set_visible(False)
     ax.tick_params(axis="both", colors="#52514e", length=0)
-    ax.set_xlabel("Cambio respecto al informe anterior (1 = el ancho del rango de referencia)", fontsize=8,
-                  color="#52514e")
-    ax.set_title(title, fontsize=11, loc="left", pad=34)  # leyenda en 2 filas: cabe también en un A4 vertical
+    ax.set_xlabel(
+        "Cambio respecto al informe anterior (1 = el ancho del rango de referencia)",
+        fontsize=8,
+        color="#52514e",
+    )
+    ax.set_title(
+        title, fontsize=11, loc="left", pad=34
+    )  # leyenda en 2 filas: cabe también en un A4 vertical
     legend = [
         Patch(facecolor=CHANGE_WORSE, label="✗ Se aleja del rango o sale de él"),
         Patch(facecolor=CHANGE_BETTER, label="✓ Se acerca al rango o vuelve a él"),
         Patch(facecolor=CHANGE_NEUTRAL, label="Dentro del rango antes y ahora"),
     ]
     if any(esperable):
-        legend.append(Patch(facecolor=to_rgba(CHANGE_NEUTRAL, RCV_ESPERABLE_ALPHA),
-                            label="Atenuada = dentro de la variación esperable (RCV)"))
+        legend.append(
+            Patch(
+                facecolor=to_rgba(CHANGE_NEUTRAL, RCV_ESPERABLE_ALPHA),
+                label="Atenuada = dentro de la variación esperable (RCV)",
+            )
+        )
     # Leyenda arriba, junto al título: con muchas filas la figura es alta y
     # abajo quedaría lejos de lo que explica.
-    ax.legend(handles=legend, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2,
-              fontsize=7, frameon=False,
-              borderaxespad=0.2)
+    ax.legend(
+        handles=legend,
+        loc="lower left",
+        bbox_to_anchor=(0, 1.0),
+        ncol=2,
+        fontsize=7,
+        frameon=False,
+        borderaxespad=0.2,
+    )
     fig.tight_layout()
     fig.analitix_tight_rect = (0, 0, 1, 1)  # ver heatmap_figure
     ax.analitix_changes = items
@@ -1081,7 +1297,10 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
 # barras horizontales más rápidas de leer que una tabla con muchos
 # resultados: Brewer et al., Med Decis Making 2012;32(4):545-553,
 # doi:10.1177/0272989X12441395).
-POSITION_X_MIN, POSITION_X_MAX = -0.8, 1.8  # en anchos de rango; fuera, el punto se queda en el borde
+POSITION_X_MIN, POSITION_X_MAX = (
+    -0.8,
+    1.8,
+)  # en anchos de rango; fuera, el punto se queda en el borde
 
 
 def deviation_label(distance: float) -> str:
@@ -1110,8 +1329,14 @@ def position_figure(rows: list[dict[str, Any]], title: str) -> Figure:
             continue
         width = high - base
         d = range_distance(r["value"], low, high)
-        items.append({**r, "distance": d, "pos": (r["value"] - base) / width,
-                      "prev_pos": None if r.get("previous") is None else (r["previous"] - base) / width})
+        items.append(
+            {
+                **r,
+                "distance": d,
+                "pos": (r["value"] - base) / width,
+                "prev_pos": None if r.get("previous") is None else (r["previous"] - base) / width,
+            }
+        )
     items.sort(key=lambda r: (-abs(r["distance"]), r["label"]))
 
     n = max(len(items), 1)
@@ -1121,39 +1346,101 @@ def position_figure(rows: list[dict[str, Any]], title: str) -> Figure:
         y = n - 1 - i
         ax.barh(y, 1, left=0, height=0.4, color=_tint(COLOR_NORMAL, 0.75), zorder=1)
         if r["prev_pos"] is not None:
-            ax.plot(min(max(r["prev_pos"], POSITION_X_MIN), POSITION_X_MAX), y, marker="o", mfc="white",
-                    mec=COLOR_INK_SECONDARY, ms=6, zorder=2, linestyle="none")
+            ax.plot(
+                min(max(r["prev_pos"], POSITION_X_MIN), POSITION_X_MAX),
+                y,
+                marker="o",
+                mfc="white",
+                mec=COLOR_INK_SECONDARY,
+                ms=6,
+                zorder=2,
+                linestyle="none",
+            )
         flag = "alto" if r["distance"] > 0 else "bajo" if r["distance"] < 0 else None
         relleno, contorno = _point_style(
-            {"flag_calc": flag, "value_num": r["value"], "ref_low": r["ref_low"], "ref_high": r["ref_high"]},
+            {
+                "flag_calc": flag,
+                "value_num": r["value"],
+                "ref_low": r["ref_low"],
+                "ref_high": r["ref_high"],
+            },
             COLOR_NORMAL,
         )
         x = min(max(r["pos"], POSITION_X_MIN), POSITION_X_MAX)
         marker = ">" if r["pos"] > POSITION_X_MAX else "<" if r["pos"] < POSITION_X_MIN else "o"
-        ax.scatter([x], [y], s=70, c=[relleno], edgecolors=[contorno], linewidths=1.4, marker=marker, zorder=3)
+        ax.scatter(
+            [x],
+            [y],
+            s=70,
+            c=[relleno],
+            edgecolors=[contorno],
+            linewidths=1.4,
+            marker=marker,
+            zorder=3,
+        )
         simbolo = SIMBOLO_ESTADO.get(flag, "")
         texto = f"{simbolo + ' ' if simbolo else ''}{deviation_label(r['distance'])} · {r['value']:g} {r.get('unit') or ''}"
-        ax.text(POSITION_X_MAX + 0.08, y, texto.rstrip(), va="center", fontsize=8,
-                color=contorno if flag else COLOR_INK_SECONDARY)
+        ax.text(
+            POSITION_X_MAX + 0.08,
+            y,
+            texto.rstrip(),
+            va="center",
+            fontsize=8,
+            color=contorno if flag else COLOR_INK_SECONDARY,
+        )
     ax.set_yticks(range(n))
-    ax.set_yticklabels([r["label"] if len(r["label"]) <= 40 else r["label"][:39] + "…" for r in reversed(items)],
-                       fontsize=8)
+    ax.set_yticklabels(
+        [r["label"] if len(r["label"]) <= 40 else r["label"][:39] + "…" for r in reversed(items)],
+        fontsize=8,
+    )
     ax.set_ylim(-0.6, n - 0.4)
     ax.set_xlim(POSITION_X_MIN, POSITION_X_MAX + 1.6)
-    ax.set_xticks([0, 1], ["límite inferior", "límite superior"], fontsize=7, color=COLOR_INK_SECONDARY)
+    ax.set_xticks(
+        [0, 1], ["límite inferior", "límite superior"], fontsize=7, color=COLOR_INK_SECONDARY
+    )
     ax.tick_params(axis="both", length=0)
     for side in ("top", "right", "left", "bottom"):
         ax.spines[side].set_visible(False)
     ax.set_title(title, fontsize=11, loc="left", pad=30)
     legend = [
         Patch(facecolor=_tint(COLOR_NORMAL, 0.75), label="Rango de referencia del laboratorio"),
-        Line2D([], [], marker="o", linestyle="none", mfc=COLOR_ALTO, mec=COLOR_ALTO, label="Último valor"),
-        Line2D([], [], marker="o", linestyle="none", mfc=_tint(COLOR_ALTO), mec=COLOR_ALTO,
-               label="Más claro = desviación leve"),
-        Line2D([], [], marker="o", linestyle="none", mfc="white", mec=COLOR_INK_SECONDARY, label="Valor anterior"),
+        Line2D(
+            [],
+            [],
+            marker="o",
+            linestyle="none",
+            mfc=COLOR_ALTO,
+            mec=COLOR_ALTO,
+            label="Último valor",
+        ),
+        Line2D(
+            [],
+            [],
+            marker="o",
+            linestyle="none",
+            mfc=_tint(COLOR_ALTO),
+            mec=COLOR_ALTO,
+            label="Más claro = desviación leve",
+        ),
+        Line2D(
+            [],
+            [],
+            marker="o",
+            linestyle="none",
+            mfc="white",
+            mec=COLOR_INK_SECONDARY,
+            label="Valor anterior",
+        ),
     ]
-    ax.legend(handles=legend, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=4, fontsize=7, frameon=False,
-              borderaxespad=0.2)
+    ax.legend(
+        handles=legend,
+        loc="lower left",
+        bbox_to_anchor=(0, 1.0),
+        ncol=4,
+        fontsize=7,
+        frameon=False,
+        borderaxespad=0.2,
+    )
     fig.tight_layout()
     fig.analitix_tight_rect = (0, 0, 1, 1)  # ver heatmap_figure
     ax.analitix_positions = items
@@ -1182,19 +1469,28 @@ def _bp_bucket(fecha: dt.datetime, modo: str) -> dt.datetime:
     return dt.datetime.combine(fecha.date(), dt.time(12))
 
 
-def _bp_groups(fechas: list[dt.datetime], valores: list[Optional[float]], modo: str):
+def _bp_groups(fechas: list[dt.datetime], valores: list[float | None], modo: str):
     """(centros, mínimos, máximos, medias, nº) de los valores por periodo."""
     grupos: dict[dt.datetime, list[float]] = {}
     for f, v in zip(fechas, valores):
         if v is not None:
             grupos.setdefault(_bp_bucket(f, modo), []).append(v)
     xs = sorted(grupos)
-    return (xs, [min(grupos[x]) for x in xs], [max(grupos[x]) for x in xs],
-            [sum(grupos[x]) / len(grupos[x]) for x in xs], [len(grupos[x]) for x in xs])
+    return (
+        xs,
+        [min(grupos[x]) for x in xs],
+        [max(grupos[x]) for x in xs],
+        [sum(grupos[x]) / len(grupos[x]) for x in xs],
+        [len(grupos[x]) for x in xs],
+    )
 
 
-def bp_figure(readings: list[dict[str, Any]], title: str, dias: Optional[int] = None,
-              desde: Optional[dt.date] = None) -> Figure:
+def bp_figure(
+    readings: list[dict[str, Any]],
+    title: str,
+    dias: int | None = None,
+    desde: dt.date | None = None,
+) -> Figure:
     """Evolución de la tensión arterial (`bp_readings`): arriba, sistólica y
     diastólica; abajo, el pulso. `dias` (duración del periodo mostrado; si
     falta, la de los datos) decide el agrupado (`BP_DAY_MAX_DAYS`,
@@ -1211,26 +1507,42 @@ def bp_figure(readings: list[dict[str, Any]], title: str, dias: Optional[int] = 
     if dias is None:
         dias = (max(fechas) - min(fechas)).days + 1 if fechas else 0
     modo = "dia" if dias <= BP_DAY_MAX_DAYS else "semana" if dias <= BP_WEEK_MAX_DAYS else "mes"
-    descripcion = {"dia": "cada medición (línea: mínimo-máximo del día)",
-                   "semana": "por semanas: línea mínimo-máximo, ○ media",
-                   "mes": "por meses: línea mínimo-máximo, ○ media"}[modo]
+    descripcion = {
+        "dia": "cada medición (línea: mínimo-máximo del día)",
+        "semana": "por semanas: línea mínimo-máximo, ○ media",
+        "mes": "por meses: línea mínimo-máximo, ○ media",
+    }[modo]
     casa = [i for i, r in enumerate(readings) if r.get("place", "casa") == "casa"]
     consulta = [i for i, r in enumerate(readings) if r.get("place") == "consulta"]
     umbrales = BP_THRESHOLDS["casa"]
     grosor = {"dia": 1.2, "semana": 2.4, "mes": 3.4}[modo]
 
     def _dibujar(eje, clave, color, nombre):
-        xs, mins, maxs, medias, cuantos = _bp_groups([fechas[i] for i in casa],
-                                                     [readings[i].get(clave) for i in casa], modo)
+        xs, mins, maxs, medias, cuantos = _bp_groups(
+            [fechas[i] for i in casa], [readings[i].get(clave) for i in casa], modo
+        )
         if not xs:
             return
         if modo == "dia":
-            eje.scatter([fechas[i] for i in casa if readings[i].get(clave)],
-                        [readings[i][clave] for i in casa if readings[i].get(clave)], s=16,
-                        color=_tint(color, 0.35), edgecolors=color, linewidths=0.6, zorder=3)
+            eje.scatter(
+                [fechas[i] for i in casa if readings[i].get(clave)],
+                [readings[i][clave] for i in casa if readings[i].get(clave)],
+                s=16,
+                color=_tint(color, 0.35),
+                edgecolors=color,
+                linewidths=0.6,
+                zorder=3,
+            )
             varios = [k for k, n in enumerate(cuantos) if n > 1]
-            eje.vlines([xs[k] for k in varios], [mins[k] for k in varios], [maxs[k] for k in varios],
-                       color=color, linewidth=grosor, alpha=0.7, zorder=2)
+            eje.vlines(
+                [xs[k] for k in varios],
+                [mins[k] for k in varios],
+                [maxs[k] for k in varios],
+                color=color,
+                linewidth=grosor,
+                alpha=0.7,
+                zorder=2,
+            )
             ultimo, etiqueta = readings[casa[-1]].get(clave), "Última"
             x_ultimo = fechas[casa[-1]]
         else:
@@ -1240,24 +1552,71 @@ def bp_figure(readings: list[dict[str, Any]], title: str, dias: Optional[int] = 
             etiqueta = "Media última semana" if modo == "semana" else "Media último mes"
         eje.plot([], [], color=color, linewidth=2, label=nombre)
         if ultimo is not None:
-            eje.scatter([x_ultimo], [ultimo], s=150, facecolors="none", edgecolors=color, linewidths=1.6, zorder=4)
-            eje.annotate(f"{etiqueta}: {ultimo:.0f}", (x_ultimo, ultimo), textcoords="offset points",
-                         xytext=(10, 0), ha="left", va="center", fontsize=8, fontweight="bold", color=color)
+            eje.scatter(
+                [x_ultimo],
+                [ultimo],
+                s=150,
+                facecolors="none",
+                edgecolors=color,
+                linewidths=1.6,
+                zorder=4,
+            )
+            eje.annotate(
+                f"{etiqueta}: {ultimo:.0f}",
+                (x_ultimo, ultimo),
+                textcoords="offset points",
+                xytext=(10, 0),
+                ha="left",
+                va="center",
+                fontsize=8,
+                fontweight="bold",
+                color=color,
+            )
 
     for clave, color, nombre, umbral, elevada in (
-        ("systolic", COLOR_ALTO, "Sistólica en casa", umbrales["hipertension"][0], umbrales["elevada"][0]),
-        ("diastolic", COLOR_BAJO, "Diastólica en casa", umbrales["hipertension"][1], umbrales["elevada"][1]),
+        (
+            "systolic",
+            COLOR_ALTO,
+            "Sistólica en casa",
+            umbrales["hipertension"][0],
+            umbrales["elevada"][0],
+        ),
+        (
+            "diastolic",
+            COLOR_BAJO,
+            "Diastólica en casa",
+            umbrales["hipertension"][1],
+            umbrales["elevada"][1],
+        ),
     ):
         ax.axhline(umbral, color=color, linestyle="--", linewidth=1, alpha=0.8)
         ax.axhline(elevada, color=color, linestyle=":", linewidth=1, alpha=0.6)
         _dibujar(ax, clave, color, nombre)
         if consulta:
-            ax.scatter([fechas[i] for i in consulta], [readings[i][clave] for i in consulta], s=40, marker="s",
-                       color=_tint(color, 0.45), edgecolors=color, linewidths=0.6, zorder=3)
-    ax.plot([], [], color=COLOR_INK_SECONDARY, linestyle="--",
-            label=f"Hipertensión en casa (ESC 2024): ≥ {umbrales['hipertension'][0]}/{umbrales['hipertension'][1]}")
-    ax.plot([], [], color=COLOR_INK_SECONDARY, linestyle=":",
-            label=f"PA elevada desde {umbrales['elevada'][0]}/{umbrales['elevada'][1]}")
+            ax.scatter(
+                [fechas[i] for i in consulta],
+                [readings[i][clave] for i in consulta],
+                s=40,
+                marker="s",
+                color=_tint(color, 0.45),
+                edgecolors=color,
+                linewidths=0.6,
+                zorder=3,
+            )
+    ax.plot(
+        [],
+        [],
+        color=COLOR_INK_SECONDARY,
+        linestyle="--",
+        label=f"Hipertensión en casa (ESC 2024): ≥ {umbrales['hipertension'][0]}/{umbrales['hipertension'][1]}",
+    )
+    ax.plot(
+        [],
+        [],
+        color=COLOR_INK_SECONDARY,
+        linestyle=":",
+        label=f"PA elevada desde {umbrales['elevada'][0]}/{umbrales['elevada'][1]}",
+    )
     if consulta:
         ax.scatter([], [], marker="s", color=COLOR_INK_SECONDARY, label="Toma en la consulta")
     ax.set_ylabel("mmHg")
@@ -1267,11 +1626,20 @@ def bp_figure(readings: list[dict[str, Any]], title: str, dias: Optional[int] = 
     ax_pulso.grid(axis="y", color="#e1e0d9", linewidth=0.8)
     ax_pulso.tick_params(axis="x", rotation=30)
     if desde is not None:
-        ax.set_xlim(dt.datetime.combine(desde, dt.time(0)),
-                    dt.datetime.combine(dt.date.today() + dt.timedelta(days=1), dt.time(0)))
+        ax.set_xlim(
+            dt.datetime.combine(desde, dt.time(0)),
+            dt.datetime.combine(dt.date.today() + dt.timedelta(days=1), dt.time(0)),
+        )
     if not readings:
-        ax.text(0.5, 0.5, "Sin mediciones en este periodo", transform=ax.transAxes, ha="center", va="center",
-                color=COLOR_INK_SECONDARY)
+        ax.text(
+            0.5,
+            0.5,
+            "Sin mediciones en este periodo",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            color=COLOR_INK_SECONDARY,
+        )
     _legend_above(ax, [True], f"{title} · {descripcion}")
     fig.tight_layout()
     return fig

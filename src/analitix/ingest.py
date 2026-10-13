@@ -11,13 +11,14 @@ En cada ejecución se comparan todos los PDF de `informes_analiticas` (sin
 importar su fecha) contra la tabla `processed_files`; solo se parsean los
 ficheros nuevos o cuyo contenido haya cambiado desde la última vez.
 """
+
 from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
 
 from analitix.catalog import canonical_id_for
 from analitix.config import REPORTS_DIR
@@ -61,7 +62,9 @@ def known_pdf_filenames(reports_dir: Path) -> set[str]:
     importado desde otra subcarpeta parecería "sin PDF" en cuanto se cambia
     de carpeta, aunque su PDF siga ahí.
     """
-    return {p.name for p in reports_dir.rglob("*.pdf")} | {p.name for p in REPORTS_DIR.rglob("*.pdf")}
+    return {p.name for p in reports_dir.rglob("*.pdf")} | {
+        p.name for p in REPORTS_DIR.rglob("*.pdf")
+    }
 
 
 @dataclass
@@ -79,7 +82,7 @@ def ingest_folder(
     con,
     reports_dir: Path = REPORTS_DIR,
     force: bool = False,
-    on_progress: Optional[Callable[[int, int, str], None]] = None,
+    on_progress: Callable[[int, int, str], None] | None = None,
     recursive: bool = False,
 ) -> IngestResult:
     """Escanea `reports_dir` e ingiere los PDF nuevos o pendientes.
@@ -132,12 +135,17 @@ def ingest_folder(
         except Exception as exc:  # noqa: BLE001 - se registra y se continúa con el resto
             logger.exception("Error importando PDF md5=%s", digest[:12])
             con.rollback()
-            record_processed_file(con, pdf_path.name, digest, status="error", error_message=str(exc))
+            record_processed_file(
+                con, pdf_path.name, digest, status="error", error_message=str(exc)
+            )
             con.commit()
             result.errors.append((pdf_path.name, str(exc)))
     logger.info(
         "Importación terminada: %d procesados, %d omitidos, %d para revisar, %d con error",
-        len(result.processed), len(result.skipped), len(result.review), len(result.errors),
+        len(result.processed),
+        len(result.skipped),
+        len(result.review),
+        len(result.errors),
     )
     return result
 
@@ -166,7 +174,9 @@ def _ingest_one(con, pdf_path: Path, digest: str) -> tuple[str, str]:
             f"formato de informe no reconocido ({parsed['format_name']}); "
             f"parser no implementado, revisar manualmente"
         )
-        record_processed_file(con, pdf_path.name, digest, status="review", error_message=reason_text)
+        record_processed_file(
+            con, pdf_path.name, digest, status="review", error_message=reason_text
+        )
         con.commit()
         return reason_text, parsed["format_name"]
 
@@ -229,7 +239,9 @@ def _ingest_one(con, pdf_path: Path, digest: str) -> tuple[str, str]:
     clear_report_results(con, report_id)
     # Rangos por edad que el PDF no pudo resolver por no traer fecha de
     # nacimiento: se usa la del paciente ya emparejado.
-    apply_age_bands(parsed["results"], get_patient_birth_date(con, patient_id), header.get("request_date"))
+    apply_age_bands(
+        parsed["results"], get_patient_birth_date(con, patient_id), header.get("request_date")
+    )
     for res in parsed["results"]:
         res.pop("age_bands", None)
         canonical_id = canonical_id_for(res["raw_name"])
@@ -237,6 +249,13 @@ def _ingest_one(con, pdf_path: Path, digest: str) -> tuple[str, str]:
         insert_result(con, report_id, {**res, "canonical_id": canonical_id, "flag_calc": flag_calc})
 
     status = "review" if reason_text else "ok"
-    record_processed_file(con, pdf_path.name, digest, status=status, report_id=report_id, error_message=reason_text or None)
+    record_processed_file(
+        con,
+        pdf_path.name,
+        digest,
+        status=status,
+        report_id=report_id,
+        error_message=reason_text or None,
+    )
     con.commit()
     return reason_text, parsed["format_name"]

@@ -6,11 +6,12 @@
 # Última actualización: 2026-09-29
 # ---------------------------------------------------------------------------
 """Operaciones CRUD sobre la base de datos."""
+
 from __future__ import annotations
 
 import datetime as dt
 import re
-from typing import Any, Optional
+from typing import Any
 
 from sqlcipher3 import dbapi2 as sqlcipher
 
@@ -39,7 +40,9 @@ _LAB_FILTER_SQL = "COALESCE(rep.lab, '') NOT IN (SELECT lab FROM temp.excluded_l
 def list_labs(con) -> list[dict[str, Any]]:
     """Laboratorios con informes (`lab`, "" si no consta) y cuántos informes
     tiene cada uno, para el diálogo de laboratorios incluidos."""
-    cur = con.execute("SELECT COALESCE(lab, '') AS lab, COUNT(*) AS n FROM reports GROUP BY 1 ORDER BY 1")
+    cur = con.execute(
+        "SELECT COALESCE(lab, '') AS lab, COUNT(*) AS n FROM reports GROUP BY 1 ORDER BY 1"
+    )
     return [{"lab": lab, "n": n} for lab, n in cur.fetchall()]
 
 
@@ -53,11 +56,13 @@ def set_excluded_labs(con, labs) -> None:
     operación (p. ej. un PDF con error al importar) no debe deshacer el
     filtro en silencio."""
     con.execute("DELETE FROM temp.excluded_labs")
-    con.executemany("INSERT OR IGNORE INTO temp.excluded_labs (lab) VALUES (?)", [(lab or "",) for lab in labs])
+    con.executemany(
+        "INSERT OR IGNORE INTO temp.excluded_labs (lab) VALUES (?)", [(lab or "",) for lab in labs]
+    )
     con.commit()
 
 
-def _add_alt_value(alt_str: Optional[str], value: Optional[str]) -> Optional[str]:
+def _add_alt_value(alt_str: str | None, value: str | None) -> str | None:
     """Añade `value` a una lista de valores alternativos guardada como texto
     separado por comas (p. ej. `nhc_alt`), sin duplicarlo si ya está. Usado
     para no perder un NHC antiguo cuando aparece uno nuevo distinto — el
@@ -72,7 +77,7 @@ def _add_alt_value(alt_str: Optional[str], value: Optional[str]) -> Optional[str
     return ", ".join(values)
 
 
-def _remove_alt_value(alt_str: Optional[str], value: Optional[str]) -> Optional[str]:
+def _remove_alt_value(alt_str: str | None, value: str | None) -> str | None:
     """Quita `value` de una lista separada por comas como `nhc_alt`."""
     if not alt_str or not value:
         return alt_str
@@ -82,14 +87,14 @@ def _remove_alt_value(alt_str: Optional[str], value: Optional[str]) -> Optional[
 
 def get_or_create_patient(
     con,
-    full_name: Optional[str],
-    birth_date: Optional[str],
-    dni: Optional[str],
-    nhc: Optional[str],
-    fallback_name: Optional[str] = None,
-    sex: Optional[str] = None,
-    cip: Optional[str] = None,
-    previous_patient_id: Optional[int] = None,
+    full_name: str | None,
+    birth_date: str | None,
+    dni: str | None,
+    nhc: str | None,
+    fallback_name: str | None = None,
+    sex: str | None = None,
+    cip: str | None = None,
+    previous_patient_id: int | None = None,
 ) -> tuple[int, str]:
     """Empareja pacientes por nombre normalizado + fecha de nacimiento; si el
     PDF no trae un nombre reconocible (plantilla no soportada) pero sí un
@@ -113,7 +118,7 @@ def get_or_create_patient(
     cur = con.cursor()
     key = normalize_name(full_name) if full_name else None
     row = None
-    matched_by: Optional[str] = None
+    matched_by: str | None = None
     if key:
         row = cur.execute(
             "SELECT id FROM patients WHERE name_key = ? AND IFNULL(birth_date,'') = IFNULL(?, '')",
@@ -155,7 +160,9 @@ def get_or_create_patient(
         # el usuario eligió al fusionar), en vez del de cada PDF reimportado.
         if matched_by != "name":
             full_name = None
-        current_nhc = cur.execute("SELECT nhc, nhc_alt FROM patients WHERE id = ?", (patient_id,)).fetchone()
+        current_nhc = cur.execute(
+            "SELECT nhc, nhc_alt FROM patients WHERE id = ?", (patient_id,)
+        ).fetchone()
         current_nhc_value, current_nhc_alt = current_nhc
         if nhc and current_nhc_value and nhc != current_nhc_value:
             new_nhc_alt = _add_alt_value(current_nhc_alt, current_nhc_value)
@@ -182,14 +189,14 @@ def get_or_create_patient(
 def upsert_report(
     con,
     patient_id: int,
-    report_number: Optional[str],
-    request_date: Optional[str],
-    validation_date: Optional[str],
+    report_number: str | None,
+    request_date: str | None,
+    validation_date: str | None,
     source_file: str,
-    notes: Optional[str] = None,
-    file_md5: Optional[str] = None,
-    assistance_number: Optional[str] = None,
-    lab: Optional[str] = None,
+    notes: str | None = None,
+    file_md5: str | None = None,
+    assistance_number: str | None = None,
+    lab: str | None = None,
 ) -> int:
     """`source_file` es solo el nombre del PDF (nunca la ruta); `file_md5`
     identifica su contenido aunque se renombre. `report_number` es el
@@ -221,8 +228,17 @@ def upsert_report(
     cur.execute(
         "INSERT INTO reports (patient_id, report_number, request_date, validation_date, source_file, notes, "
         "file_md5, assistance_number, lab) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (patient_id, report_number, request_date, validation_date, source_file, notes, file_md5, assistance_number,
-         lab),
+        (
+            patient_id,
+            report_number,
+            request_date,
+            validation_date,
+            source_file,
+            notes,
+            file_md5,
+            assistance_number,
+            lab,
+        ),
     )
     return cur.lastrowid
 
@@ -265,7 +281,7 @@ def insert_result(con, report_id: int, result: dict[str, Any]) -> None:
 
 
 def create_manual_report(
-    con, patient_id: int, fecha: str, entries: list[dict[str, Any]], notes: Optional[str] = None
+    con, patient_id: int, fecha: str, entries: list[dict[str, Any]], notes: str | None = None
 ) -> int:
     """Crea un informe "de entrada manual" (sin PDF de origen), para cuando
     un PDF no se puede parsear y hay que registrar la analítica de todos
@@ -334,7 +350,7 @@ def already_processed(con, filename: str, file_hash: str) -> bool:
     return row is not None and row[0] == file_hash and row[1] == "ok"
 
 
-def clear_previous_import(con, filename: str) -> Optional[int]:
+def clear_previous_import(con, filename: str) -> int | None:
     """Borra el informe y los resultados de una importación anterior de este
     fichero (si los hay), para poder reimportarlo desde cero sin duplicar
     filas ni dejar datos huérfanos de un intento previo fallido.
@@ -347,7 +363,9 @@ def clear_previous_import(con, filename: str) -> Optional[int]:
     ).fetchone()
     if row and row[0] is not None:
         report_id = row[0]
-        patient_row = con.execute("SELECT patient_id FROM reports WHERE id = ?", (report_id,)).fetchone()
+        patient_row = con.execute(
+            "SELECT patient_id FROM reports WHERE id = ?", (report_id,)
+        ).fetchone()
         con.execute("DELETE FROM results WHERE report_id = ?", (report_id,))
         con.execute("DELETE FROM reports WHERE id = ?", (report_id,))
         if patient_row:
@@ -370,8 +388,8 @@ def record_processed_file(
     filename: str,
     file_hash: str,
     status: str,
-    report_id: Optional[int] = None,
-    error_message: Optional[str] = None,
+    report_id: int | None = None,
+    error_message: str | None = None,
 ) -> None:
     con.execute(
         "INSERT INTO processed_files (filename, file_hash, processed_at, status, report_id, error_message) "
@@ -416,8 +434,17 @@ def list_patients(con) -> list[dict[str, Any]]:
 # Campos editables a mano desde la ficha del paciente (gui.py). Lista
 # blanca: son los únicos nombres de columna que `update_patient` interpola.
 EDITABLE_PATIENT_FIELDS = (
-    "full_name", "birth_date", "sex", "dni", "cip", "nhc", "nhc_alt",
-    "smoker_current", "smoker_former", "smoker_former_from", "smoker_former_to",
+    "full_name",
+    "birth_date",
+    "sex",
+    "dni",
+    "cip",
+    "nhc",
+    "nhc_alt",
+    "smoker_current",
+    "smoker_former",
+    "smoker_former_from",
+    "smoker_former_to",
     "smoker_former_period",
 )
 SEX_OPTIONS = ("Hombre", "Mujer")
@@ -455,8 +482,10 @@ def update_patient(con, patient_id: int, fields: dict[str, Any]) -> None:
         if not re.fullmatch(r"\d{4}", str(value)) or not 1900 <= int(value) <= this_year:
             raise ValueError(f"Año no válido: {value} (1900-{this_year}).")
         clean[key] = int(value)
-    if clean.get("smoker_former_from") and clean.get("smoker_former_to") and (
-        clean["smoker_former_from"] > clean["smoker_former_to"]
+    if (
+        clean.get("smoker_former_from")
+        and clean.get("smoker_former_to")
+        and (clean["smoker_former_from"] > clean["smoker_former_to"])
     ):
         raise ValueError("El año «desde» no puede ser posterior al año «hasta».")
     if clean.get("smoker_former") != 1 and "smoker_former" in clean:
@@ -483,7 +512,7 @@ def update_patient(con, patient_id: int, fields: dict[str, Any]) -> None:
     con.commit()
 
 
-def get_patient_birth_date(con, patient_id: int) -> Optional[str]:
+def get_patient_birth_date(con, patient_id: int) -> str | None:
     """Fecha de nacimiento de un paciente (`AAAA-MM-DD`), o `None` si no se
     conoce — usada por `hepatic_risk.py` para calcular la edad del paciente
     en la fecha de cada informe (FIB-4)."""
@@ -491,7 +520,7 @@ def get_patient_birth_date(con, patient_id: int) -> Optional[str]:
     return row[0] if row else None
 
 
-def get_patient_sex(con, patient_id: int) -> Optional[str]:
+def get_patient_sex(con, patient_id: int) -> str | None:
     """Sexo del paciente (uno de `SEX_OPTIONS`), o `None` si no se conoce —
     usado por `rcv.py` para los parámetros con variación biológica distinta
     por sexo."""
@@ -532,7 +561,9 @@ def merge_patients(con, source_ids: list[int], target_id: int) -> int:
         target_row = cur.execute(
             "SELECT dni, nhc, nhc_alt FROM patients WHERE id = ?", (target_id,)
         ).fetchone()
-        source_row = cur.execute("SELECT dni, nhc FROM patients WHERE id = ?", (source_id,)).fetchone()
+        source_row = cur.execute(
+            "SELECT dni, nhc FROM patients WHERE id = ?", (source_id,)
+        ).fetchone()
         target_dni, target_nhc, target_nhc_alt = target_row
         source_dni, source_nhc = source_row
 
@@ -580,7 +611,9 @@ def merge_patients(con, source_ids: list[int], target_id: int) -> int:
                 cur.execute("DELETE FROM processed_files WHERE report_id = ?", (report_id,))
                 cur.execute("DELETE FROM reports WHERE id = ?", (report_id,))
             else:
-                cur.execute("UPDATE reports SET patient_id = ? WHERE id = ?", (target_id, report_id))
+                cur.execute(
+                    "UPDATE reports SET patient_id = ? WHERE id = ?", (target_id, report_id)
+                )
                 moved += 1
         # Objetivos del médico: se conservan; si los dos tienen uno para la
         # misma prueba, gana el del destino.
@@ -592,14 +625,17 @@ def merge_patients(con, source_ids: list[int], target_id: int) -> int:
         cur.execute("DELETE FROM targets WHERE patient_id = ?", (source_id,))
         # Mediciones de tensión: pasan al destino; una del mismo minuto que
         # ya tenga el destino se descarta (UNIQUE patient_id + measured_at).
-        cur.execute("UPDATE OR IGNORE bp_readings SET patient_id = ? WHERE patient_id = ?", (target_id, source_id))
+        cur.execute(
+            "UPDATE OR IGNORE bp_readings SET patient_id = ? WHERE patient_id = ?",
+            (target_id, source_id),
+        )
         cur.execute("DELETE FROM bp_readings WHERE patient_id = ?", (source_id,))
         cur.execute("DELETE FROM patients WHERE id = ?", (source_id,))
     con.commit()
     return moved
 
 
-def list_canonical_tests(con, patient_id: Optional[int] = None) -> list[dict[str, Any]]:
+def list_canonical_tests(con, patient_id: int | None = None) -> list[dict[str, Any]]:
     q = (
         "SELECT r.canonical_id, MAX(r.raw_name) AS raw_name, MAX(r.unit) AS unit, "
         "MAX(CASE WHEN r.flag_calc IN ('alto', 'bajo') THEN 1 ELSE 0 END) AS out_of_range, "
@@ -655,7 +691,13 @@ def list_canonical_groups(con) -> list[dict[str, Any]]:
     for canonical_id, raw_name, lab, n in cur.fetchall():
         g = groups.setdefault(
             canonical_id,
-            {"canonical_id": canonical_id, "raw_names": {}, "variants": [], "num_results": 0, "labs": set()},
+            {
+                "canonical_id": canonical_id,
+                "raw_names": {},
+                "variants": [],
+                "num_results": 0,
+                "labs": set(),
+            },
         )
         g["raw_names"][raw_name] = g["raw_names"].get(raw_name, 0) + n
         g["variants"].append((raw_name, lab, n))
@@ -711,15 +753,21 @@ def merge_check(con, canonical_ids: list[str]) -> tuple[list[str], list[str]]:
     ).fetchall():
         if loinc[a] and loinc[a] == loinc[b]:
             continue
-        blocked.append(f"«{a}» y «{b}» aparecen juntas en {n_reports} informe(s): son pruebas distintas.")
+        blocked.append(
+            f"«{a}» y «{b}» aparecen juntas en {n_reports} informe(s): son pruebas distintas."
+        )
     for i, a in enumerate(ids):
-        for b in ids[i + 1:]:
+        for b in ids[i + 1 :]:
             if loinc[a] and loinc[b] and not loinc[a] & loinc[b]:
                 warnings.append(
                     f"«{a}» y «{b}» tienen códigos LOINC distintos "
                     f"({', '.join(sorted(loinc[a]))} / {', '.join(sorted(loinc[b]))})."
                 )
-            if units[a] and units[b] and unit_relation(units[a], units[b]) in ("convertible", "incompatible"):
+            if (
+                units[a]
+                and units[b]
+                and unit_relation(units[a], units[b]) in ("convertible", "incompatible")
+            ):
                 warnings.append(
                     f"«{a}» y «{b}» usan unidades distintas "
                     f"({', '.join(sorted(units[a]))} / {', '.join(sorted(units[b]))})."
@@ -788,7 +836,9 @@ def get_series(con, canonical_id: str, patient_id: int) -> list[dict[str, Any]]:
     return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-def get_merged_series(con, canonical_ids: tuple[str, ...], patient_id: int) -> dict[str, dict[str, Any]]:
+def get_merged_series(
+    con, canonical_ids: tuple[str, ...], patient_id: int
+) -> dict[str, dict[str, Any]]:
     """Fusiona la serie de varios `canonical_id` que en realidad son el mismo
     parámetro clínico (distintas plantillas del laboratorio lo nombran de
     forma algo distinta, ver `lipid_risk.TOTAL_IDS` como precedente) en un
@@ -803,7 +853,7 @@ def get_merged_series(con, canonical_ids: tuple[str, ...], patient_id: int) -> d
     return merged
 
 
-def get_latest_report_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
+def get_latest_report_summary(con, patient_id: int) -> dict[str, Any] | None:
     """Resultados numéricos del informe más reciente del paciente (para el
     "semáforo"/resumen de la última analítica), cada
     uno con el valor del informe anterior si existe (`valor_anterior`,
@@ -844,7 +894,7 @@ def get_latest_report_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
     return {"fecha": fecha, "resultados": resultados}
 
 
-def get_all_results(con, patient_id: Optional[int] = None) -> list[dict[str, Any]]:
+def get_all_results(con, patient_id: int | None = None) -> list[dict[str, Any]]:
     q = (
         "SELECT p.full_name AS paciente, "
         f"{_FECHA_SQL} AS fecha, "
@@ -862,7 +912,7 @@ def get_all_results(con, patient_id: Optional[int] = None) -> list[dict[str, Any
     return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-def get_setting(con, key: str, default: Optional[str] = None) -> Optional[str]:
+def get_setting(con, key: str, default: str | None = None) -> str | None:
     row = con.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     return row[0] if row else default
 
@@ -962,7 +1012,7 @@ def delete_all_data(con) -> None:
     con.commit()
 
 
-def get_target(con, patient_id: int, canonical_id: str) -> Optional[dict[str, Any]]:
+def get_target(con, patient_id: int, canonical_id: str) -> dict[str, Any] | None:
     """Objetivo indicado por el médico para esa prueba y paciente (ver
     `db.SCHEMA`, tabla `targets`), o `None` si no se ha introducido."""
     row = con.execute(
@@ -972,8 +1022,9 @@ def get_target(con, patient_id: int, canonical_id: str) -> Optional[dict[str, An
     return dict(zip(("low", "high", "note", "set_on"), row)) if row else None
 
 
-def set_target(con, patient_id: int, canonical_id: str, low: Optional[float], high: Optional[float],
-               note: Optional[str]) -> None:
+def set_target(
+    con, patient_id: int, canonical_id: str, low: float | None, high: float | None, note: str | None
+) -> None:
     """Guarda (o sustituye) el objetivo del médico. Al menos un límite y,
     con los dos, el mínimo por debajo del máximo."""
     if low is None and high is None:
@@ -998,8 +1049,16 @@ def add_bp_reading(con, patient_id: int, reading: dict[str, Any], source: str = 
     cur = con.execute(
         "INSERT OR IGNORE INTO bp_readings (patient_id, measured_at, systolic, diastolic, pulse, place, note, source) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (patient_id, reading["measured_at"], reading["systolic"], reading["diastolic"], reading.get("pulse"),
-         reading.get("place") or "casa", reading.get("note"), source),
+        (
+            patient_id,
+            reading["measured_at"],
+            reading["systolic"],
+            reading["diastolic"],
+            reading.get("pulse"),
+            reading.get("place") or "casa",
+            reading.get("note"),
+            source,
+        ),
     )
     return cur.rowcount == 1
 
@@ -1030,7 +1089,9 @@ def delete_bp_readings(con, patient_id: int, reading_ids: list[int]) -> int:
 
 
 def delete_target(con, patient_id: int, canonical_id: str) -> None:
-    con.execute("DELETE FROM targets WHERE patient_id = ? AND canonical_id = ?", (patient_id, canonical_id))
+    con.execute(
+        "DELETE FROM targets WHERE patient_id = ? AND canonical_id = ?", (patient_id, canonical_id)
+    )
     con.commit()
 
 
@@ -1056,7 +1117,15 @@ def get_stats(con) -> dict[str, Any]:
 # Tablas que se pueden inspeccionar desde la pestaña "Explorador BD" (de
 # solo lectura). Se enumeran explícitamente para no interpolar nunca un
 # nombre de tabla arbitrario en una sentencia SQL.
-EXPLORABLE_TABLES = ("patients", "reports", "results", "processed_files", "settings", "targets", "bp_readings")
+EXPLORABLE_TABLES = (
+    "patients",
+    "reports",
+    "results",
+    "processed_files",
+    "settings",
+    "targets",
+    "bp_readings",
+)
 
 
 def get_table_rows(con, table: str) -> tuple[list[str], list[tuple]]:

@@ -20,10 +20,15 @@ def test_add_list_and_last_database(carpeta):
     assert databases.last_database() is None
     databases.add_database("Paciente B", "paciente_b")
     databases.add_database("paciente a", "paciente_a")
-    assert [d["fichero"] for d in databases.list_databases()] == ["paciente_a", "paciente_b"]  # por nombre
+    assert [d["fichero"] for d in databases.list_databases()] == [
+        "paciente_a",
+        "paciente_b",
+    ]  # por nombre
     # La lista no lleva más que nombre y fichero (va sin cifrar).
-    assert json.loads(config.DB_LIST_PATH.read_text(encoding="utf-8"))[0] == {"nombre": "Paciente B",
-                                                                              "fichero": "paciente_b"}
+    assert json.loads(config.DB_LIST_PATH.read_text(encoding="utf-8"))[0] == {
+        "nombre": "Paciente B",
+        "fichero": "paciente_b",
+    }
 
     databases.set_last_database("paciente_b")
     assert databases.last_database() is None  # el fichero aún no existe
@@ -43,18 +48,21 @@ def test_each_database_has_its_own_password(carpeta):
         connect("clave-uno", databases.db_path("dos"))
 
 
-@pytest.mark.parametrize("nombre, fichero, error", [
-    ("", "x", "nombre para el paciente"),
-    ("x" * 41, "x", "más de 40"),
-    ("Ana", "", "nombre para la base de datos"),
-    ("Ana", "ana/dni", "solo puede llevar"),
-    ("Ana", "-ana", "solo puede llevar"),
-    ("Ana", "ana.", "solo puede llevar"),
-    ("Ana", "CON", "reservado"),
-    ("Ana", "existente", "Ya existe"),
-    ("Ana", "EXISTENTE", "Ya existe"),  # Windows no distingue mayúsculas
-    ("Ya está", "otra", "Ya hay un paciente"),
-])
+@pytest.mark.parametrize(
+    "nombre, fichero, error",
+    [
+        ("", "x", "nombre para el paciente"),
+        ("x" * 41, "x", "más de 40"),
+        ("Ana", "", "nombre para la base de datos"),
+        ("Ana", "ana/dni", "solo puede llevar"),
+        ("Ana", "-ana", "solo puede llevar"),
+        ("Ana", "ana.", "solo puede llevar"),
+        ("Ana", "CON", "reservado"),
+        ("Ana", "existente", "Ya existe"),
+        ("Ana", "EXISTENTE", "Ya existe"),  # Windows no distingue mayúsculas
+        ("Ya está", "otra", "Ya hay un paciente"),
+    ],
+)
 def test_validate_new_rejects(carpeta, nombre, fichero, error):
     databases.add_database("Ya está", "existente")
     assert error in databases.validate_new(nombre, fichero)

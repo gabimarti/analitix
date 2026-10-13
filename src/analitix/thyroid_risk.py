@@ -28,9 +28,10 @@ TSH debe venir en µUI/mL (visto en los PDF reales del proyecto como
 plantillas) y T4 libre en ng/dL — si un resultado viene en otra unidad se
 descarta ese punto, mismo criterio que `lipid_risk._mg_dl`.
 """
+
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from analitix.repository import get_merged_series
 
@@ -38,7 +39,7 @@ TSH_IDS = ("tirotropina_tsh_serum", "tirotropina_tsh")
 T4L_IDS = ("tiroxina_lliure_t4l", "tiroxina_lliure_t4_lliure_serum")
 
 
-def _uui_ml(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _uui_ml(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de la TSH si su unidad es µUI/mL (aceptando tanto
     "mcUI/mL" como "mcIU/mL", el mismo valor con las letras en distinto
     orden según la plantilla)."""
@@ -51,7 +52,7 @@ def _uui_ml(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _ng_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _ng_dl(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de la T4 libre si su unidad es ng/dL."""
     if row is None:
         return None
@@ -85,7 +86,7 @@ def get_thyroid_series(con, patient_id: int) -> dict[str, list[dict[str, Any]]]:
     return series
 
 
-def get_latest_thyroid_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
+def get_latest_thyroid_summary(con, patient_id: int) -> dict[str, Any] | None:
     """Último valor disponible de TSH y de T4L (no necesariamente del
     mismo informe), con su clasificación ya calculada por el propio
     informe. Sin ninguna nota de patrón/cuadrante — ver el aviso del

@@ -109,7 +109,13 @@ def test_parse_result_line(line, expected):
 
 @pytest.mark.parametrize(
     ("value", "low", "high", "expected"),
-    [(None, 0, 1, None), (2, 0, 1, "alto"), (-1, 0, 1, "bajo"), (1, 0, 1, "normal"), (1, None, None, None)],
+    [
+        (None, 0, 1, None),
+        (2, 0, 1, "alto"),
+        (-1, 0, 1, "bajo"),
+        (1, 0, 1, "normal"),
+        (1, None, None, None),
+    ],
 )
 def test_compute_flag_boundaries(value, low, high, expected):
     assert compute_flag(value, low, high) == expected
@@ -303,20 +309,38 @@ def test_snb_eurofins_report_uses_synlab_profile_and_reception_date():
     ("lines", "sample_date", "assistance", "sex"),
     [
         # 2024-2025: extracción y recepción en la misma línea; gana recepción.
-        (["Sexe: Home Servei: MEDICINA",
-          "Núm. història clínica: 1 Tipus petició: Rutina Núm. Assistència: 99E000001",
-          "Data extracció: 01/02/2024 (08:00) Data recepció mostra: 02/02/2024 (09:00) "
-          "Data validació: 05/02/2024 (10:00)"],
-         "2024-02-02 09:00:00", "99E000001", "Hombre"),
+        (
+            [
+                "Sexe: Home Servei: MEDICINA",
+                "Núm. història clínica: 1 Tipus petició: Rutina Núm. Assistència: 99E000001",
+                "Data extracció: 01/02/2024 (08:00) Data recepció mostra: 02/02/2024 (09:00) "
+                "Data validació: 05/02/2024 (10:00)",
+            ],
+            "2024-02-02 09:00:00",
+            "99E000001",
+            "Hombre",
+        ),
         # 2014-2023: "Recepció:" y el tipo de asistencia entre paréntesis.
-        (["Num. Història : 1 CIP : XXXX0000000000 Programada: 01/02/2014 Recepció: 01/02/14 (09:50)",
-          "Num. Assistència : 99H000001 (Hospitalització) Servei : MEDICINA"],
-         "2014-02-01 09:50:00", "99H000001", None),
+        (
+            [
+                "Num. Història : 1 CIP : XXXX0000000000 Programada: 01/02/2014 Recepció: 01/02/14 (09:50)",
+                "Num. Assistència : 99H000001 (Hospitalització) Servei : MEDICINA",
+            ],
+            "2014-02-01 09:50:00",
+            "99H000001",
+            None,
+        ),
         # 2025-2026 bilingüe.
-        (["Data naixement / Fecha de nacimiento: 01/01/1970 (55 anys) Sexe / Sexo:Dona",
-          "Servei Sol·licitant / Servicio Solicitante: MEDICINA Nº Assistència / Nº Assistencia: 99E000002",
-          "Data de la mostra / Fecha y hora de toma de la muestra: 03/03/2026 09:31:07"],
-         "2026-03-03 09:31:07", "99E000002", "Mujer"),
+        (
+            [
+                "Data naixement / Fecha de nacimiento: 01/01/1970 (55 anys) Sexe / Sexo:Dona",
+                "Servei Sol·licitant / Servicio Solicitante: MEDICINA Nº Assistència / Nº Assistencia: 99E000002",
+                "Data de la mostra / Fecha y hora de toma de la muestra: 03/03/2026 09:31:07",
+            ],
+            "2026-03-03 09:31:07",
+            "99E000002",
+            "Mujer",
+        ),
     ],
 )
 def test_maresme_reception_date_assistance_and_sex(lines, sample_date, assistance, sex):
@@ -345,7 +369,10 @@ def test_maresme_cip_autonomico(line):
 
 
 def test_hugtip_cip_autonomico():
-    lines = ["NHC / Nº Historia Clínica: 111111 CIP autonòmic: XXXX0000000000", "NIF / DNI: CIP SNS: 0000"]
+    lines = [
+        "NHC / Nº Historia Clínica: 111111 CIP autonòmic: XXXX0000000000",
+        "NIF / DNI: CIP SNS: 0000",
+    ]
     assert _parse_lines(lines, _hugtip_profile())["header"]["cip"] == "XXXX0000000000"
 
 
@@ -359,7 +386,9 @@ def test_hugtip_compact_cip_with_trailing_noise():
 def test_maresme_calella_2023_data_hora_is_request_date():
     # Única fecha de esa variante; sin ella el informe quedaba sin fecha.
     lines = ["Num. Història : 1 CIP : XXXX0000000000 Data/Hora : 22/03/2023 (17:49)"]
-    assert _parse_lines(lines, _maresme_profile())["header"]["request_date"] == "2023-03-22 17:49:00"
+    assert (
+        _parse_lines(lines, _maresme_profile())["header"]["request_date"] == "2023-03-22 17:49:00"
+    )
 
 
 def _quiron_profile():
@@ -423,7 +452,9 @@ def test_parse_lines_with_quiron_profile():
     assert glucosa["section"] == "Bioquímica básica"
     assert glucosa["value_num"] == 99.9 and glucosa["unit"] == "mg/dl"
     assert glucosa["ref_low"] == 74.0 and glucosa["ref_high"] == 109.0
-    assert glucosa["sample_date"] == "2024-01-03 10:00:00"  # preescaneada pese a ir al final del documento
+    assert (
+        glucosa["sample_date"] == "2024-01-03 10:00:00"
+    )  # preescaneada pese a ir al final del documento
 
     ldl = results_by_name["Colesterol LDL calculado"]
     assert ldl["value_num"] == 60.0 and ldl["unit"] == "mg/dl"
@@ -525,21 +556,47 @@ def test_to_float_thousands_grouping(value, expected):
     [
         # Valor por debajo/encima del límite de detección: es el valor (como
         # texto, sin value_num), no parte del nombre.
-        ("Factor Reumatoide sèrum <8 U/ml ( 0.01 - 14 )",
-         {"raw_name": "Factor Reumatoide sèrum", "value_raw": "<8", "value_num": None, "unit": "U/ml"}),
-        ("IgE clara d'ou sèrum <0.35 kU/L ( 0 - 0.10 )",
-         {"raw_name": "IgE clara d'ou sèrum", "value_raw": "<0.35", "unit": "kU/L"}),
+        (
+            "Factor Reumatoide sèrum <8 U/ml ( 0.01 - 14 )",
+            {
+                "raw_name": "Factor Reumatoide sèrum",
+                "value_raw": "<8",
+                "value_num": None,
+                "unit": "U/ml",
+            },
+        ),
+        (
+            "IgE clara d'ou sèrum <0.35 kU/L ( 0 - 0.10 )",
+            {"raw_name": "IgE clara d'ou sèrum", "value_raw": "<0.35", "unit": "kU/L"},
+        ),
         # Marca "* " de determinación calculada: fuera del nombre.
-        ("* Colesterol LDL 112 mg/dl ( 50 - 129 )", {"raw_name": "Colesterol LDL", "value_num": 112.0}),
+        (
+            "* Colesterol LDL 112 mg/dl ( 50 - 129 )",
+            {"raw_name": "Colesterol LDL", "value_num": 112.0},
+        ),
         # Límite suelto sin "<"/">": su dirección sale de la flecha del PDF o,
         # sin flecha (valor normal), de si el valor lo supera.
-        ("(1) Folat sèrum ↓<1 ng/mL 2.9",
-         {"raw_name": "(1) Folat sèrum", "value_raw": "<1", "unit": "ng/mL", "ref_low": 2.9, "ref_high": None}),
+        (
+            "(1) Folat sèrum ↓<1 ng/mL 2.9",
+            {
+                "raw_name": "(1) Folat sèrum",
+                "value_raw": "<1",
+                "unit": "ng/mL",
+                "ref_low": 2.9,
+                "ref_high": None,
+            },
+        ),
         ("Filtrat glomerular estimat 95 mL/min 90", {"ref_low": 90.0, "ref_high": None}),
-        ("Filtrat glomerular estimat >90 mL/min 90", {"value_raw": ">90", "ref_low": 90.0, "ref_high": None}),
+        (
+            "Filtrat glomerular estimat >90 mL/min 90",
+            {"value_raw": ">90", "ref_low": 90.0, "ref_high": None},
+        ),
         ("Colesterol sèrum 180 mg/dL 200", {"ref_low": None, "ref_high": 200.0}),
         # Rango entre paréntesis cortado tras el guion: solo mínimo.
-        ("Folat 7.5 ng/ml ( 2.9 -", {"raw_name": "Folat", "value_num": 7.5, "ref_low": 2.9, "ref_high": None}),
+        (
+            "Folat 7.5 ng/ml ( 2.9 -",
+            {"raw_name": "Folat", "value_num": 7.5, "ref_low": 2.9, "ref_high": None},
+        ),
     ],
 )
 def test_parse_result_line_censored_and_loose_bounds(line, expected):
@@ -570,7 +627,10 @@ def test_hugtip_unranged_row_takes_recommended_range_below():
         "Srm-Glucosa; c. subst. 91 mg/dL",
     ]
     results = _parse_lines(lines, _hugtip_profile())["results"]
-    assert [r["raw_name"] for r in results] == ["Srm-Colesterol; c. subst.", "Srm-Glucosa; c. subst."]
+    assert [r["raw_name"] for r in results] == [
+        "Srm-Colesterol; c. subst.",
+        "Srm-Glucosa; c. subst.",
+    ]
     assert results[0]["value_num"] == 205.0 and results[0]["ref_high"] == 200.0
     assert results[1]["value_num"] == 91.0 and results[1]["ref_text"] is None
 
@@ -617,10 +677,15 @@ def test_drop_overlapping_spaces_keeps_normal_spaces():
     def char(text, x0, x1):
         return {"object_type": "char", "text": text, "x0": x0, "x1": x1, "top": 100.0}
 
-    page = _FakePage([
-        char("m", 0, 8), char(" ", 8, 11),  # espacio normal entre glifos
-        char("1", 20, 25), char(" ", 22, 26), char("6", 25, 30),  # relleno encima del valor
-    ])
+    page = _FakePage(
+        [
+            char("m", 0, 8),
+            char(" ", 8, 11),  # espacio normal entre glifos
+            char("1", 20, 25),
+            char(" ", 22, 26),
+            char("6", 25, 30),  # relleno encima del valor
+        ]
+    )
     assert [c["text"] for c in _drop_overlapping_spaces(page).chars] == ["m", " ", "1", "6"]
 
 

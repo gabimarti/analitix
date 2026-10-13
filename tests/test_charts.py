@@ -56,8 +56,16 @@ def test_range_position():
 def _row(fecha, value, lab, low=12.0, high=16.0):
     from analitix.pdf_parser import compute_flag
 
-    return dict(fecha=fecha, value_num=value, unit="g/dL", ref_low=low, ref_high=high,
-                flag_calc=compute_flag(value, low, high), lab=lab, raw_name="Hemoglobina")
+    return dict(
+        fecha=fecha,
+        value_num=value,
+        unit="g/dL",
+        ref_low=low,
+        ref_high=high,
+        flag_calc=compute_flag(value, low, high),
+        lab=lab,
+        raw_name="Hemoglobina",
+    )
 
 
 def test_heatmap_figure_cells_and_metadata():
@@ -86,7 +94,9 @@ def test_evolution_points_shaped_by_lab():
     two_labs = one_lab + [_row("2024-04-01", 15.0, "B"), _row("2024-05-01", 13.0, None)]
     groups = scatters(evolution_figure(two_labs, "x"))
     assert [len(g.analitix_series) for g in groups] == [3, 1, 1]  # A, B y "desconocido"
-    labels = [t.get_text() for t in evolution_figure(two_labs, "x").axes[0].get_legend().get_texts()]
+    labels = [
+        t.get_text() for t in evolution_figure(two_labs, "x").axes[0].get_legend().get_texts()
+    ]
     assert {"A", "B", "Laboratorio desconocido"} <= set(labels)
 
 
@@ -135,11 +145,16 @@ def test_evolution_rcv_band():
     (barra,) = [c for c in ax.containers if c.__class__.__name__ == "ErrorbarContainer"]
     (lineas,) = barra.lines[2]
     (segmento,) = lineas.get_segments()
-    assert [round(y, 2) for _, y in segmento] == [12.6, 15.68]  # 14 −10 % y +12 %, centrada en el anterior
+    assert [round(y, 2) for _, y in segmento] == [
+        12.6,
+        15.68,
+    ]  # 14 −10 % y +12 %, centrada en el anterior
     labels = [t.get_text() for t in ax.get_legend().get_texts()]
     assert any("RCV -10% / +12%" in t for t in labels)
 
-    otro = evolution_figure(serie, "x", 2, rcv=dict(estado="otro_lab", rcv_bajada=-10.0, rcv_subida=12.0))
+    otro = evolution_figure(
+        serie, "x", 2, rcv=dict(estado="otro_lab", rcv_bajada=-10.0, rcv_subida=12.0)
+    )
     assert not otro.axes[0].containers
     assert any("otro laboratorio" in t.get_text() for t in otro.axes[0].get_legend().get_texts())
 
@@ -151,23 +166,35 @@ def test_evolution_personal_band():
     pr = dict(bajo=13.0, alto=15.0, punto=14.0, n=3, labs=2)
     ax = evolution_figure(serie, "x", 2, personal=pr).axes[0]
     labels = [t.get_text() for t in ax.get_legend().get_texts()]
-    assert any(t.startswith("Tu rango personal 13–15 (n=3)") and "mezcla laboratorios" in t for t in labels)
-    assert not any("rango personal" in t for t in
-                   [t.get_text() for t in evolution_figure(serie, "x", 2).axes[0].get_legend().get_texts()])
+    assert any(
+        t.startswith("Tu rango personal 13–15 (n=3)") and "mezcla laboratorios" in t for t in labels
+    )
+    assert not any(
+        "rango personal" in t
+        for t in [
+            t.get_text() for t in evolution_figure(serie, "x", 2).axes[0].get_legend().get_texts()
+        ]
+    )
 
 
 def test_series_summary_text():
     from analitix.charts import series_summary
 
     # Rango 12-16 (`_row`): 11 bajo, 14 dentro, 17.6 alto (+10 % sobre 16).
-    serie = [_row("2024-01-01", 11.0, "A"), _row("2024-02-01", 14.0, "A"), _row("2024-03-01", 17.6, "A")]
+    serie = [
+        _row("2024-01-01", 11.0, "A"),
+        _row("2024-02-01", 14.0, "A"),
+        _row("2024-03-01", 17.6, "A"),
+    ]
     assert series_summary(serie) == (
         "Dentro del rango en 1 de 3 analíticas; la última (2024-03-01), un 10 % por encima del límite "
         "superior (16)."
     )
     assert series_summary(serie[:2]).endswith("la última (2024-02-01), dentro.")
     assert "por debajo del límite inferior (12)" in series_summary(serie[:1])
-    sin_rango = [dict(fecha="2024-01-01", value_num=1.5, ref_low=None, ref_high=None, flag_calc=None)]
+    sin_rango = [
+        dict(fecha="2024-01-01", value_num=1.5, ref_low=None, ref_high=None, flag_calc=None)
+    ]
     assert series_summary(sin_rango) is None  # sin rango no hay nada que resumir
 
 
@@ -177,11 +204,11 @@ def test_change_status():
     # Medido en anchos de rango: creatinina 0.9 -> 1.1 (rango 0.5-1.0) sale del rango.
     delta, estado = change_status(0.9, 1.1, 0.5, 1.0)
     assert round(delta, 2) == 0.4 and estado == "empeora"
-    assert change_status(200, 244, 150, 400)[1] == "igual"        # dentro antes y ahora
-    assert change_status(130, 104, 70, 105)[1] == "mejora"        # vuelve al rango
-    assert change_status(25, 18, 30, 300)[1] == "empeora"         # ya fuera, se aleja más
-    assert change_status(230, 210, None, 200)[1] == "mejora"      # un solo límite
-    assert change_status(20, 31, None, None) is None              # sin rango, no se puede medir
+    assert change_status(200, 244, 150, 400)[1] == "igual"  # dentro antes y ahora
+    assert change_status(130, 104, 70, 105)[1] == "mejora"  # vuelve al rango
+    assert change_status(25, 18, 30, 300)[1] == "empeora"  # ya fuera, se aleja más
+    assert change_status(230, 210, None, 200)[1] == "mejora"  # un solo límite
+    assert change_status(20, 31, None, None) is None  # sin rango, no se puede medir
 
 
 def test_changes_figure_orders_and_skips():
@@ -204,7 +231,9 @@ def test_heatmap_labels_only_row_extremes_with_many_columns():
     n = HEATMAP_MAX_LABELED_COLUMNS + 6  # más columnas de las que caben etiquetadas
     valores = [14.0] * n
     valores[3], valores[10], valores[20] = 18.0, 21.0, 9.0  # dos altos y un bajo (rango 12-16)
-    serie = [_row(f"2024-{1 + i // 28:02d}-{1 + i % 28:02d}", v, "A") for i, v in enumerate(valores)]
+    serie = [
+        _row(f"2024-{1 + i // 28:02d}-{1 + i % 28:02d}", v, "A") for i, v in enumerate(valores)
+    ]
     textos = sorted(t.get_text() for t in heatmap_figure([("Hb", serie)], "x").axes[0].texts)
     assert textos == ["21", "9"]  # el máximo por encima y el mínimo por debajo, no el 18
     # Contraste: blanco sobre oscuro, tinta oscura sobre claro.
@@ -216,8 +245,12 @@ def test_out_of_range_labels_carry_symbol_not_only_color():
     # Paleta apta para daltonismo: alto/bajo se leen también sin color.
     from analitix.charts import evolution_figure
 
-    serie = [_row("2024-01-01", 17.0, "A"), _row("2024-02-01", 14.0, "A"),
-             _row("2024-03-01", 11.0, "A"), _row("2024-04-01", 14.5, "A")]
+    serie = [
+        _row("2024-01-01", 17.0, "A"),
+        _row("2024-02-01", 14.0, "A"),
+        _row("2024-03-01", 11.0, "A"),
+        _row("2024-04-01", 14.5, "A"),
+    ]
     textos = [t.get_text() for t in evolution_figure(serie, "x").axes[0].texts]
     assert "▲ 17" in textos and "▼ 11" in textos
 
@@ -225,8 +258,12 @@ def test_out_of_range_labels_carry_symbol_not_only_color():
 def test_last_value_highlighted_once():
     from analitix.charts import evolution_figure
 
-    serie = [_row("2024-01-01", 14.0, "A"), _row("2024-02-01", 15.0, "A"),
-             _row("2024-03-01", 14.5, "A"), _row("2024-04-01", 17.2, "A")]
+    serie = [
+        _row("2024-01-01", 14.0, "A"),
+        _row("2024-02-01", 15.0, "A"),
+        _row("2024-03-01", 14.5, "A"),
+        _row("2024-04-01", 17.2, "A"),
+    ]
     textos = [t.get_text() for t in evolution_figure(serie, "x").axes[0].texts]
     assert "Último: ▲ 17.2" in textos and "▲ 17.2" not in textos  # sin etiqueta duplicada
 
@@ -234,11 +271,18 @@ def test_last_value_highlighted_once():
 def test_doctor_target_replaces_range_and_one_sided_limit_is_drawn():
     from analitix.charts import apply_target, evolution_figure, series_summary
 
-    serie = [_row(f"2024-0{m}-01", v, "A", low=None, high=130.0) for m, v in ((1, 125.0), (2, 110.0), (3, 95.0))]
+    serie = [
+        _row(f"2024-0{m}-01", v, "A", low=None, high=130.0)
+        for m, v in ((1, 125.0), (2, 110.0), (3, 95.0))
+    ]
     con_objetivo = apply_target(serie, {"low": None, "high": 100.0})
     assert [s["flag_calc"] for s in con_objetivo] == ["alto", "alto", "normal"]
-    assert series_summary(con_objetivo).startswith("Dentro del objetivo indicado por su médico en 1 de 3")
-    leyenda = [t.get_text() for t in evolution_figure(con_objetivo, "x").axes[0].get_legend().get_texts()]
+    assert series_summary(con_objetivo).startswith(
+        "Dentro del objetivo indicado por su médico en 1 de 3"
+    )
+    leyenda = [
+        t.get_text() for t in evolution_figure(con_objetivo, "x").axes[0].get_legend().get_texts()
+    ]
     assert "Objetivo indicado por su médico (< 100)" in leyenda
     leyenda = [t.get_text() for t in evolution_figure(serie, "x").axes[0].get_legend().get_texts()]
     assert "Límite de referencia (< 130)" in leyenda  # antes, un solo límite no se dibujaba
@@ -247,19 +291,34 @@ def test_doctor_target_replaces_range_and_one_sided_limit_is_drawn():
 def test_slight_deviation_is_lighter_same_hue_and_labelled():
     from analitix.charts import COLOR_ALTO, _point_style, deviation_label
 
-    leve, contorno = _point_style({"flag_calc": "alto", "value_num": 16.5, "ref_low": 12.0, "ref_high": 16.0}, "g")
-    grave, _ = _point_style({"flag_calc": "alto", "value_num": 20.0, "ref_low": 12.0, "ref_high": 16.0}, "g")
-    assert contorno == COLOR_ALTO and grave == COLOR_ALTO and leve != COLOR_ALTO  # mismo tono, más claro
+    leve, contorno = _point_style(
+        {"flag_calc": "alto", "value_num": 16.5, "ref_low": 12.0, "ref_high": 16.0}, "g"
+    )
+    grave, _ = _point_style(
+        {"flag_calc": "alto", "value_num": 20.0, "ref_low": 12.0, "ref_high": 16.0}, "g"
+    )
+    assert (
+        contorno == COLOR_ALTO and grave == COLOR_ALTO and leve != COLOR_ALTO
+    )  # mismo tono, más claro
     assert [deviation_label(d) for d in (0, 0.1, -0.5, 1.2)] == [
-        "dentro del rango", "ligeramente alto", "bajo", "muy alto"]
+        "dentro del rango",
+        "ligeramente alto",
+        "bajo",
+        "muy alto",
+    ]
 
 
 def test_doctor_target_note_shown_under_chart():
     from analitix.charts import apply_target, series_summary
 
     serie = [_row("2024-01-01", 70.0, "A", 20.0, 45.0), _row("2024-02-01", 50.0, "A", 20.0, 45.0)]
-    texto = series_summary(apply_target(serie, {"low": 30.0, "high": 60.0, "note": "Dra. ficticia, 2026"}))
-    assert texto.splitlines()[1] == "Objetivo indicado por su médico: entre 30 y 60 g/dL · Dra. ficticia, 2026"
+    texto = series_summary(
+        apply_target(serie, {"low": 30.0, "high": 60.0, "note": "Dra. ficticia, 2026"})
+    )
+    assert (
+        texto.splitlines()[1]
+        == "Objetivo indicado por su médico: entre 30 y 60 g/dL · Dra. ficticia, 2026"
+    )
     assert "\n" not in series_summary(serie)  # sin objetivo, una sola línea como antes
 
 
@@ -293,8 +352,16 @@ def test_time_in_range_interpolates_and_skips_long_gaps():
 def test_kdigo_note_only_for_demonstrable_rapid_egfr_decline():
     from analitix.charts import evolution_figure
 
-    fg = [dict(_row(f"20{20 + i}-01-01", 90 - 8 * i, "A", 60.0, 200.0), kdigo_fg=True) for i in range(6)]
+    fg = [
+        dict(_row(f"20{20 + i}-01-01", 90 - 8 * i, "A", 60.0, 200.0), kdigo_fg=True)
+        for i in range(6)
+    ]
     texto = " ".join(t.get_text() for t in evolution_figure(fg, "FG").axes[0].texts)
     assert "progresión rápida" in texto
-    estable = [dict(_row(f"20{20 + i}-01-01", 90 + (i % 2), "A", 60.0, 200.0), kdigo_fg=True) for i in range(6)]
-    assert "progresión rápida" not in " ".join(t.get_text() for t in evolution_figure(estable, "FG").axes[0].texts)
+    estable = [
+        dict(_row(f"20{20 + i}-01-01", 90 + (i % 2), "A", 60.0, 200.0), kdigo_fg=True)
+        for i in range(6)
+    ]
+    assert "progresión rápida" not in " ".join(
+        t.get_text() for t in evolution_figure(estable, "FG").axes[0].texts
+    )

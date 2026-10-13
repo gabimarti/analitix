@@ -6,14 +6,15 @@
 # Última actualización: 2026-10-09
 # ---------------------------------------------------------------------------
 """Interfaz gráfica (Tkinter/ttkbootstrap) de Analitix."""
+
 from __future__ import annotations
 
 import contextlib
 import datetime as dt
 import json
-import re
 import logging
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -26,6 +27,32 @@ import mplcursors
 import ttkbootstrap as ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+from analitix import (
+    __version__,
+    calcium_risk as _calcium,
+    glycemic_risk as _glycemic,
+    hemogram_risk as _hemogram,
+    hepatic_risk as _hepatic,
+    inflammation_risk as _inflammation,
+    iron_risk as _iron,
+    lipid_risk as _lipid,
+    renal_risk as _renal,
+    thyroid_risk as _thyroid,
+    uric_acid_risk as _uric,
+)
+from analitix.blood_pressure import (
+    ABSOLUTE_LIMITS as BP_ABSOLUTE_LIMITS,
+    CSV_TEMPLATE as BP_CSV_TEMPLATE,
+    DEFAULT_LIMITS as BP_DEFAULT_LIMITS,
+    LIMIT_NAMES as BP_LIMIT_NAMES,
+    MEASUREMENT_GUIDE as BP_MEASUREMENT_GUIDE,
+    PLACES as BP_PLACES,
+    bp_summary_text,
+    check_limits as check_bp_limits,
+    period_stats as bp_period_stats,
+    read_csv as read_bp_csv,
+    validate_reading,
+)
 from analitix.branding import load_logo_photo, set_app_icon
 from analitix.calcium_risk import (
     INDEX_LABELS as CALCIUM_INDEX_LABELS,
@@ -51,26 +78,27 @@ from analitix.charts import (
     position_figure,
     trend_arrow,
 )
-from analitix import __version__
-from analitix.blood_pressure import (
-    ABSOLUTE_LIMITS as BP_ABSOLUTE_LIMITS,
-    CSV_TEMPLATE as BP_CSV_TEMPLATE,
-    DEFAULT_LIMITS as BP_DEFAULT_LIMITS,
-    LIMIT_NAMES as BP_LIMIT_NAMES,
-    PLACES as BP_PLACES,
-    check_limits as check_bp_limits,
-    read_csv as read_bp_csv,
-    MEASUREMENT_GUIDE as BP_MEASUREMENT_GUIDE,
-    bp_summary_text,
-    period_stats as bp_period_stats,
-    validate_reading,
+from analitix.config import (
+    DB_LIST_PATH,
+    FROZEN,
+    PATIENTS_DIR,
+    PROJECT_ROOT,
+    REPORTS_DIR,
+    copy_home,
+    set_installed_home_dir,
 )
-from analitix.config import DB_LIST_PATH, FROZEN, PATIENTS_DIR, PROJECT_ROOT, REPORTS_DIR, copy_home, set_installed_home_dir
 from analitix.db import rekey
-from analitix.export import export_csv, export_excel, export_pages_pdf, export_pdf, table_page, text_page
+from analitix.export import (
+    export_csv,
+    export_excel,
+    export_pages_pdf,
+    export_pdf,
+    table_page,
+    text_page,
+)
 from analitix.glycemic_risk import (
-    ADA_NORMAL_HIGH,
     ADA_DIABETES_LOW,
+    ADA_NORMAL_HIGH,
     INDEX_LABELS as GLYCEMIC_INDEX_LABELS,
     get_glucose_series,
     get_glycemic_index_series,
@@ -95,7 +123,12 @@ from analitix.iron_risk import (
     get_iron_index_series,
     get_latest_iron_summary,
 )
-from analitix.lipid_risk import INDEX_LABELS as LIPID_INDEX_LABELS, get_latest_lipid_summary, get_lipid_index_series
+from analitix.lipid_risk import (
+    INDEX_LABELS as LIPID_INDEX_LABELS,
+    get_latest_lipid_summary,
+    get_lipid_index_series,
+)
+from analitix.rcv import classify_change, cusum_drift, cusum_note, personal_range
 from analitix.renal_risk import (
     FG_IDS,
     INDEX_LABELS as RENAL_INDEX_LABELS,
@@ -111,8 +144,8 @@ from analitix.repository import (
     delete_all_data,
     delete_bp_readings,
     delete_patient,
-    delete_target,
     delete_reports,
+    delete_target,
     get_all_results,
     get_excluded_labs,
     get_latest_report_summary,
@@ -120,13 +153,13 @@ from analitix.repository import (
     get_patient_sex,
     get_series,
     get_setting,
-    get_target,
     get_stats,
     get_table_rows,
+    get_target,
+    list_bp_readings,
     list_canonical_groups,
     list_canonical_tests,
     list_files_needing_review,
-    list_bp_readings,
     list_known_test_names,
     list_labs,
     list_orphan_reports,
@@ -140,22 +173,9 @@ from analitix.repository import (
     set_target,
     update_patient,
 )
-from analitix import (
-    calcium_risk as _calcium,
-    glycemic_risk as _glycemic,
-    hemogram_risk as _hemogram,
-    hepatic_risk as _hepatic,
-    inflammation_risk as _inflammation,
-    iron_risk as _iron,
-    lipid_risk as _lipid,
-    renal_risk as _renal,
-    thyroid_risk as _thyroid,
-    uric_acid_risk as _uric,
-)
-from analitix.rcv import classify_change, cusum_drift, cusum_note, personal_range
 from analitix.textutils import strip_accents
-from analitix.tyg_risk import INDEX_LABELS as TYG_INDEX_LABELS, get_tyg_series
 from analitix.thyroid_risk import get_latest_thyroid_summary, get_thyroid_series
+from analitix.tyg_risk import INDEX_LABELS as TYG_INDEX_LABELS, get_tyg_series
 from analitix.updates import AUTHOR_URL, RELEASES_URL, REPO_URL, fetch_latest_release, is_newer
 from analitix.uric_acid_risk import (
     INDEX_LABELS as URIC_ACID_INDEX_LABELS,
@@ -177,25 +197,38 @@ HEATMAP_ALL = "Todos los parámetros"
 # c. nom.", "Hematíes"...).
 HEATMAP_SETS: dict[str, tuple[tuple[str, tuple[str, ...]], ...]] = {
     "Panel: Riesgo cardiovascular": (
-        ("Colesterol total", _lipid.TOTAL_IDS), ("Colesterol HDL", _lipid.HDL_IDS),
-        ("Colesterol LDL", _lipid.LDL_IDS), ("Colesterol no HDL", _lipid.NON_HDL_IDS),
-        ("Colesterol VLDL", _lipid.VLDL_IDS), ("Triglicéridos", _lipid.TG_IDS),
+        ("Colesterol total", _lipid.TOTAL_IDS),
+        ("Colesterol HDL", _lipid.HDL_IDS),
+        ("Colesterol LDL", _lipid.LDL_IDS),
+        ("Colesterol no HDL", _lipid.NON_HDL_IDS),
+        ("Colesterol VLDL", _lipid.VLDL_IDS),
+        ("Triglicéridos", _lipid.TG_IDS),
     ),
     "Panel: Salud hepática": (
-        ("AST (GOT)", _hepatic.AST_IDS), ("ALT (GPT)", _hepatic.ALT_IDS), ("Plaquetas", _hepatic.PLAQUETES_IDS),
+        ("AST (GOT)", _hepatic.AST_IDS),
+        ("ALT (GPT)", _hepatic.ALT_IDS),
+        ("Plaquetas", _hepatic.PLAQUETES_IDS),
     ),
     "Panel: Función renal": (
-        ("Filtrado glomerular", _renal.FG_IDS), ("Creatinina", _renal.CREATININA_IDS),
-        ("Urea", _renal.UREA_IDS), ("Albúmina/creatinina (orina)", _renal.ACR_IDS),
+        ("Filtrado glomerular", _renal.FG_IDS),
+        ("Creatinina", _renal.CREATININA_IDS),
+        ("Urea", _renal.UREA_IDS),
+        ("Albúmina/creatinina (orina)", _renal.ACR_IDS),
     ),
     "Panel: Hemograma": (
-        ("Hematíes", _hemogram.HEMATIES_IDS), ("VCM", _hemogram.VCM_IDS), ("RDW", _hemogram.RDW_IDS),
-        ("Neutrófilos (absoluto)", _hemogram.NEUTROFILS_IDS), ("Linfocitos (absoluto)", _hemogram.LIMFOCITS_IDS),
-        ("Monocitos (absoluto)", _hemogram.MONOCITS_IDS), ("Plaquetas", _hemogram.PLAQUETES_IDS),
+        ("Hematíes", _hemogram.HEMATIES_IDS),
+        ("VCM", _hemogram.VCM_IDS),
+        ("RDW", _hemogram.RDW_IDS),
+        ("Neutrófilos (absoluto)", _hemogram.NEUTROFILS_IDS),
+        ("Linfocitos (absoluto)", _hemogram.LIMFOCITS_IDS),
+        ("Monocitos (absoluto)", _hemogram.MONOCITS_IDS),
+        ("Plaquetas", _hemogram.PLAQUETES_IDS),
     ),
     "Panel: Metabolismo del hierro": (
-        ("Hierro", _iron.FERRO_IDS), ("Ferritina", _iron.FERRITINA_IDS),
-        ("Transferrina", _iron.TRANSFERRINA_IDS), ("Saturación de transferrina", _iron.TSAT_IDS),
+        ("Hierro", _iron.FERRO_IDS),
+        ("Ferritina", _iron.FERRITINA_IDS),
+        ("Transferrina", _iron.TRANSFERRINA_IDS),
+        ("Saturación de transferrina", _iron.TSAT_IDS),
     ),
     "Panel: Inflamación": (("PCR", _inflammation.PCR_IDS), ("VSG", _inflammation.VSG_IDS)),
     "Panel: Ácido úrico": (("Ácido úrico", _uric.URIC_ACID_IDS),),
@@ -219,7 +252,7 @@ def _format_range(item: dict) -> str:
     return "sin rango"
 
 
-def _rcv_tooltip(rcv: Optional[dict]) -> str:
+def _rcv_tooltip(rcv: dict | None) -> str:
     """Líneas del RCV (`rcv.classify_change`) para el tooltip de "Qué ha
     cambiado"; "" si no hay variación biológica para el parámetro."""
     if not rcv:
@@ -242,9 +275,15 @@ CONTACT_EMAIL = "contact@analitix.slmail.me"
 # atributos en `AnalitixApp` (`text_<clave>_summary`, `_<clave>_series`,
 # `_<clave>_indices`) y nombre del menú Paneles clínicos.
 PDF_PANELS = (
-    ("lipid", "Riesgo cardiovascular"), ("hepatic", "Salud hepática"), ("renal", "Función renal"),
-    ("hemogram", "Hemograma"), ("iron", "Metabolismo del hierro"), ("inflammation", "Inflamación"),
-    ("uric_acid", "Ácido úrico"), ("calcio", "Calcio corregido"), ("glucemia", "Glucosa (eAG y TyG)"),
+    ("lipid", "Riesgo cardiovascular"),
+    ("hepatic", "Salud hepática"),
+    ("renal", "Función renal"),
+    ("hemogram", "Hemograma"),
+    ("iron", "Metabolismo del hierro"),
+    ("inflammation", "Inflamación"),
+    ("uric_acid", "Ácido úrico"),
+    ("calcio", "Calcio corregido"),
+    ("glucemia", "Glucosa (eAG y TyG)"),
     ("thyroid", "Tiroides"),
 )
 # Máximo de parámetros por página en el PDF personalizado ("Qué ha cambiado"
@@ -253,12 +292,16 @@ PDF_PANELS = (
 PDF_ROWS_PER_PAGE = 25
 
 # Paneles sin lista de índices: su gráfico es el combinado (serie → nombre).
-PDF_COMBINED_PANELS = {"inflammation": {"pcr": "PCR", "vsg": "VSG"}, "thyroid": {"tsh": "TSH", "t4l": "T4 libre"}}
+PDF_COMBINED_PANELS = {
+    "inflammation": {"pcr": "PCR", "vsg": "VSG"},
+    "thyroid": {"tsh": "TSH", "t4l": "T4 libre"},
+}
+
 
 def _pages_of(filas: list) -> list[tuple[list, str]]:
     """Reparte `filas` en trozos de `PDF_ROWS_PER_PAGE` para el PDF, con el
     sufijo de título de cada uno (" (1/2)"...; vacío si cabe en una)."""
-    trozos = [filas[i:i + PDF_ROWS_PER_PAGE] for i in range(0, len(filas), PDF_ROWS_PER_PAGE)]
+    trozos = [filas[i : i + PDF_ROWS_PER_PAGE] for i in range(0, len(filas), PDF_ROWS_PER_PAGE)]
     if len(trozos) <= 1:
         return [(t, "") for t in trozos]
     return [(t, f" ({n}/{len(trozos)})") for n, t in enumerate(trozos, start=1)]
@@ -339,11 +382,16 @@ def _smoking_summary(patient: dict) -> str:
         parts.append("Fumador")
     if patient.get("smoker_former") == 1:
         desde, hasta = patient.get("smoker_former_from"), patient.get("smoker_former_to")
-        periodo = f"{desde or '?'}-{hasta or '?'}" if desde or hasta else patient.get("smoker_former_period")
+        periodo = (
+            f"{desde or '?'}-{hasta or '?'}"
+            if desde or hasta
+            else patient.get("smoker_former_period")
+        )
         parts.append(f"Exfumador ({periodo})" if periodo else "Exfumador")
     if not parts and (patient.get("smoker_current") == 0 or patient.get("smoker_former") == 0):
         parts.append("No fumador")
     return ", ".join(parts)
+
 
 THEME = "flatly"
 PAD = 12
@@ -363,8 +411,14 @@ COLOR_ALTERADO, COLOR_GRIS = COLOR_ALTO, "#999999"
 CAMBIO_BRUSCO_PCT = 30.0
 
 # Botones de periodo del panel de tensión arterial (días hacia atrás desde hoy).
-BP_RANGOS = (("10d", "Últimos 10 días"), ("1m", "Último mes"), ("3m", "Últimos 3 meses"),
-             ("1a", "Último año"), ("todo", "Todo"), ("intervalo", "Elegir intervalo de fechas"))
+BP_RANGOS = (
+    ("10d", "Últimos 10 días"),
+    ("1m", "Último mes"),
+    ("3m", "Últimos 3 meses"),
+    ("1a", "Último año"),
+    ("todo", "Todo"),
+    ("intervalo", "Elegir intervalo de fechas"),
+)
 BP_RANGO_DIAS = {"10d": 10, "1m": 31, "3m": 92, "1a": 365}
 
 # Aviso común de las pantallas de entrada manual (analíticas y tensión).
@@ -400,8 +454,11 @@ class AnalitixApp(ttk.Window):
         """`con`: la base de datos del paciente abierta (`db.connect`);
         `db_path`/`db_name`: su fichero y su nombre en la lista de bases de
         datos (`databases.py`), para el título y Estadísticas."""
-        titulo = f"Analitix {__version__} — {db_name}" if db_name else (
-            f"Analitix {__version__} — análisis de informes de laboratorio")
+        titulo = (
+            f"Analitix {__version__} — {db_name}"
+            if db_name
+            else (f"Analitix {__version__} — análisis de informes de laboratorio")
+        )
         super().__init__(title=titulo, themename=THEME)
         self.con = con
         self.db_path = db_path
@@ -440,12 +497,20 @@ class AnalitixApp(ttk.Window):
         # (misma carpeta, dos sitios desde donde cambiarla): un único StringVar
         # mantiene ambas etiquetas sincronizadas sin código duplicado.
         self.var_reports_dir = tk.StringVar(value=str(self.reports_dir))
-        self.var_import_subfolders = tk.BooleanVar(value=get_setting(self.con, "import_subfolders", "1") == "1")
-        self.min_points = int(get_setting(self.con, "min_points_evolucion", str(DEFAULT_MIN_POINTS)))
+        self.var_import_subfolders = tk.BooleanVar(
+            value=get_setting(self.con, "import_subfolders", "1") == "1"
+        )
+        self.min_points = int(
+            get_setting(self.con, "min_points_evolucion", str(DEFAULT_MIN_POINTS))
+        )
         # Rango personal (`rcv.personal_range`) en el gráfico de Evolución:
         # desactivado por defecto, se activa con su interruptor en esa pantalla.
-        self.var_personal_range = tk.BooleanVar(value=get_setting(self.con, "personal_range", "0") == "1")
-        self.var_full_history = tk.BooleanVar(value=get_setting(self.con, "full_history", "0") == "1")
+        self.var_personal_range = tk.BooleanVar(
+            value=get_setting(self.con, "personal_range", "0") == "1"
+        )
+        self.var_full_history = tk.BooleanVar(
+            value=get_setting(self.con, "full_history", "0") == "1"
+        )
         # Laboratorios excluidos de gráficos y paneles (Análisis → Laboratorios
         # incluidos...): se guardan en `settings` y se cargan en la tabla
         # temporal de la conexión que filtra las consultas (`repository`).
@@ -479,7 +544,9 @@ class AnalitixApp(ttk.Window):
         menubar.add_cascade(label="Archivo", menu=archivo)
 
         pacientes_menu = tk.Menu(menubar, tearoff=0)
-        pacientes_menu.add_command(label="Cambiar paciente activo...", command=self._choose_active_patient)
+        pacientes_menu.add_command(
+            label="Cambiar paciente activo...", command=self._choose_active_patient
+        )
         pacientes_menu.add_command(label="Pacientes", command=lambda: self._show_page("pacientes"))
         menubar.add_cascade(label="Pacientes", menu=pacientes_menu)
 
@@ -487,22 +554,30 @@ class AnalitixApp(ttk.Window):
         # activo), separados de Pacientes.
         entrada_menu = tk.Menu(menubar, tearoff=0)
         entrada_menu.add_command(label="Analíticas...", command=lambda: self._show_page("manual"))
-        entrada_menu.add_command(label="Tensión arterial...", command=lambda: self._show_page("tension"))
+        entrada_menu.add_command(
+            label="Tensión arterial...", command=lambda: self._show_page("tension")
+        )
         menubar.add_cascade(label="Entrada manual", menu=entrada_menu)
 
         analisis_menu = tk.Menu(menubar, tearoff=0)
         analisis_menu.add_command(label="Evolución", command=lambda: self._show_page("evolucion"))
-        analisis_menu.add_command(label="Comparativa", command=lambda: self._show_page("comparativa"))
+        analisis_menu.add_command(
+            label="Comparativa", command=lambda: self._show_page("comparativa")
+        )
         analisis_menu.add_command(label="Resumen", command=lambda: self._show_page("resumen"))
-        analisis_menu.add_command(label="Mapa de calor", command=lambda: self._show_page("mapa_calor"))
+        analisis_menu.add_command(
+            label="Mapa de calor", command=lambda: self._show_page("mapa_calor")
+        )
         analisis_menu.add_separator()
         analisis_menu.add_command(label="Laboratorios incluidos...", command=self._choose_labs)
         # Opción normal con texto que cambia, no `add_checkbutton`: en Windows
         # la marca ✔ de Tk se dibuja encima de la primera letra.
         analisis_menu.add_command(
             label=self._history_menu_label(),
-            command=lambda: (self.var_full_history.set(not self.var_full_history.get()),
-                             self._toggle_full_history()),
+            command=lambda: (
+                self.var_full_history.set(not self.var_full_history.get()),
+                self._toggle_full_history(),
+            ),
         )
         self._history_menu = (analisis_menu, analisis_menu.index("end"))
         menubar.add_cascade(label="Análisis", menu=analisis_menu)
@@ -524,9 +599,7 @@ class AnalitixApp(ttk.Window):
         paneles_menu.add_command(
             label="Función renal", command=lambda: self._show_page("funcion_renal")
         )
-        paneles_menu.add_command(
-            label="Hemograma", command=lambda: self._show_page("hemograma")
-        )
+        paneles_menu.add_command(label="Hemograma", command=lambda: self._show_page("hemograma"))
         paneles_menu.add_command(
             label="Metabolismo del hierro", command=lambda: self._show_page("hierro")
         )
@@ -542,16 +615,16 @@ class AnalitixApp(ttk.Window):
         paneles_menu.add_command(
             label="Glucosa (eAG y TyG)", command=lambda: self._show_page("glucemia")
         )
-        paneles_menu.add_command(
-            label="Tiroides", command=lambda: self._show_page("tiroides")
-        )
+        paneles_menu.add_command(label="Tiroides", command=lambda: self._show_page("tiroides"))
         paneles_menu.add_command(
             label="Tensión arterial", command=lambda: self._show_page("tension_panel")
         )
         menubar.add_cascade(label="Paneles clínicos", menu=paneles_menu)
 
         herramientas_menu = tk.Menu(menubar, tearoff=0)
-        herramientas_menu.add_command(label="Explorador BD", command=lambda: self._show_page("explorador"))
+        herramientas_menu.add_command(
+            label="Explorador BD", command=lambda: self._show_page("explorador")
+        )
         herramientas_menu.add_command(
             label="Normalizar pruebas", command=lambda: self._show_page("catalogo")
         )
@@ -563,7 +636,9 @@ class AnalitixApp(ttk.Window):
         # Documentación en línea (rama principal del repositorio público):
         # siempre la versión más reciente, con todas las fuentes citadas.
         for label, path in DOC_LINKS:
-            ayuda_menu.add_command(label=label, command=lambda p=path: webbrowser.open(f"{REPO_URL}/{p}"))
+            ayuda_menu.add_command(
+                label=label, command=lambda p=path: webbrowser.open(f"{REPO_URL}/{p}")
+            )
         ayuda_menu.add_separator()
         ayuda_menu.add_command(
             label="Buscar actualizaciones...", command=lambda: self._check_updates(manual=True)
@@ -617,20 +692,22 @@ class AnalitixApp(ttk.Window):
 
         ttk.Label(body, text="Analitix", font=("Segoe UI", 16, "bold")).pack()
         ttk.Label(body, text=f"Versión {__version__}", bootstyle="secondary").pack()
-        ttk.Label(
-            body, text="Análisis de informes de laboratorio", bootstyle="secondary"
-        ).pack(pady=(0, 10))
+        ttk.Label(body, text="Análisis de informes de laboratorio", bootstyle="secondary").pack(
+            pady=(0, 10)
+        )
         ttk.Label(body, text="Autor: Gabriel Marti").pack()
         correo = ttk.Label(body, text=CONTACT_EMAIL, bootstyle="info", cursor="hand2")
         correo.pack()
         correo.bind("<Button-1>", lambda _e: webbrowser.open(f"mailto:{CONTACT_EMAIL}"))
-        contacto = ttk.Label(
-            body, text="github.com/gabimarti", bootstyle="info", cursor="hand2"
-        )
+        contacto = ttk.Label(body, text="github.com/gabimarti", bootstyle="info", cursor="hand2")
         contacto.pack()
         contacto.bind("<Button-1>", lambda _e: webbrowser.open("https://github.com/gabimarti"))
-        web = ttk.Label(body, text=AUTHOR_URL.removeprefix("https://").rstrip("/"), bootstyle="info",
-                        cursor="hand2")
+        web = ttk.Label(
+            body,
+            text=AUTHOR_URL.removeprefix("https://").rstrip("/"),
+            bootstyle="info",
+            cursor="hand2",
+        )
         web.pack(pady=(0, PAD))
         web.bind("<Button-1>", lambda _e: webbrowser.open(AUTHOR_URL))
 
@@ -679,7 +756,9 @@ class AnalitixApp(ttk.Window):
                     webbrowser.open(release[1])
             elif manual:
                 messagebox.showinfo(
-                    "Analitix está al día", f"Tienes la última versión ({__version__}).", parent=self
+                    "Analitix está al día",
+                    f"Tienes la última versión ({__version__}).",
+                    parent=self,
                 )
 
         poll()
@@ -751,8 +830,21 @@ class AnalitixApp(ttk.Window):
         # Mismo criterio que antes con las pestañas: estas páginas no se
         # muestran sin un paciente elegido explícitamente (ver `_build_menu`).
         self._patient_required_pages = (
-            "evolucion", "comparativa", "resumen", "mapa_calor", "riesgo_cv", "salud_hepatica", "funcion_renal", "hemograma",
-            "hierro", "inflamacion", "acido_urico", "calcio", "glucemia", "tiroides", "exportar",
+            "evolucion",
+            "comparativa",
+            "resumen",
+            "mapa_calor",
+            "riesgo_cv",
+            "salud_hepatica",
+            "funcion_renal",
+            "hemograma",
+            "hierro",
+            "inflamacion",
+            "acido_urico",
+            "calcio",
+            "glucemia",
+            "tiroides",
+            "exportar",
         )
 
         self._build_tab_importar()
@@ -792,9 +884,9 @@ class AnalitixApp(ttk.Window):
     def _build_statusbar(self) -> None:
         bar = ttk.Frame(self, bootstyle="secondary")
         bar.pack(fill="x", side="bottom")
-        ttk.Label(bar, textvariable=self.status_var, bootstyle="inverse-secondary", padding=(PAD, 4)).pack(
-            anchor="w"
-        )
+        ttk.Label(
+            bar, textvariable=self.status_var, bootstyle="inverse-secondary", padding=(PAD, 4)
+        ).pack(anchor="w")
 
     def _set_status(self, text: str) -> None:
         self.status_var.set(text)
@@ -809,20 +901,32 @@ class AnalitixApp(ttk.Window):
             side="left", padx=(6, 0)
         )
         ttk.Button(
-            top, text="Cambiar carpeta...", bootstyle="secondary-outline", command=self._change_reports_dir
+            top,
+            text="Cambiar carpeta...",
+            bootstyle="secondary-outline",
+            command=self._change_reports_dir,
         ).pack(side="left", padx=(8, 0))
         ttk.Checkbutton(
-            top, text="Incluir subcarpetas", variable=self.var_import_subfolders, bootstyle="round-toggle",
+            top,
+            text="Incluir subcarpetas",
+            variable=self.var_import_subfolders,
+            bootstyle="round-toggle",
             command=lambda: set_setting(
                 self.con, "import_subfolders", "1" if self.var_import_subfolders.get() else "0"
             ),
         ).pack(side="left", padx=(12, 0))
         self.btn_reimport_forced = ttk.Button(
-            top, text="Reimportar todo (forzar)", bootstyle="warning-outline", command=self._run_ingest_forced
+            top,
+            text="Reimportar todo (forzar)",
+            bootstyle="warning-outline",
+            command=self._run_ingest_forced,
         )
         self.btn_reimport_forced.pack(side="right", padx=(0, 8))
         self.btn_import = ttk.Button(
-            top, text="Buscar e importar informes nuevos", bootstyle="success", command=self._run_ingest
+            top,
+            text="Buscar e importar informes nuevos",
+            bootstyle="success",
+            command=self._run_ingest,
         )
         self.btn_import.pack(side="right")
         self._same_width(self.btn_import, self.btn_reimport_forced)
@@ -830,7 +934,9 @@ class AnalitixApp(ttk.Window):
         progreso = ttk.Frame(frame)
         progreso.pack(fill="x", padx=PAD, pady=(0, PAD))
         self.var_progress_text = tk.StringVar(value="")
-        ttk.Label(progreso, textvariable=self.var_progress_text, bootstyle="secondary").pack(anchor="w")
+        ttk.Label(progreso, textvariable=self.var_progress_text, bootstyle="secondary").pack(
+            anchor="w"
+        )
         self.progressbar = ttk.Progressbar(progreso, mode="determinate")
         self.progressbar.pack(fill="x", pady=(2, 0))
 
@@ -872,7 +978,10 @@ class AnalitixApp(ttk.Window):
         self.update_idletasks()
         try:
             result = ingest_folder(
-                self.con, reports_dir=self.reports_dir, force=force, on_progress=self._on_ingest_progress,
+                self.con,
+                reports_dir=self.reports_dir,
+                force=force,
+                on_progress=self._on_ingest_progress,
                 recursive=self.var_import_subfolders.get(),
             )
         finally:
@@ -911,14 +1020,35 @@ class AnalitixApp(ttk.Window):
     # -- Pacientes --------------------------------------------------------
     def _build_tab_pacientes(self) -> None:
         frame = self.tab_pacientes
-        columns = ("activo", "full_name", "birth_date", "sex", "dni", "cip", "nhc", "nhc_alt", "tabaco", "num_reports")
+        columns = (
+            "activo",
+            "full_name",
+            "birth_date",
+            "sex",
+            "dni",
+            "cip",
+            "nhc",
+            "nhc_alt",
+            "tabaco",
+            "num_reports",
+        )
         self.tree_patients = ttk.Treeview(
             frame, columns=columns, show="headings", selectmode="extended", bootstyle="primary"
         )
         for col, label, width in zip(
             columns,
-            ("Activo", "Nombre", "Fecha nacimiento", "Sexo", "DNI", "CIP", "NHC", "NHC secundario", "Tabaco",
-             "Informes"),
+            (
+                "Activo",
+                "Nombre",
+                "Fecha nacimiento",
+                "Sexo",
+                "DNI",
+                "CIP",
+                "NHC",
+                "NHC secundario",
+                "Tabaco",
+                "Informes",
+            ),
             (50, 240, 120, 70, 100, 130, 100, 110, 140, 70),
         ):
             self.tree_patients.heading(col, text=label)
@@ -941,32 +1071,43 @@ class AnalitixApp(ttk.Window):
             "(análisis, paneles, exportar y entrada manual). Si el mismo paciente aparece en "
             "dos filas (p. ej. un PDF antiguo con el nombre abreviado), marca las dos casillas "
             "y fusiónalas.",
-            bootstyle="secondary", wraplength=900,
+            bootstyle="secondary",
+            wraplength=900,
         ).pack(anchor="w", padx=PAD)
 
         activo_frame = ttk.Frame(frame)
         activo_frame.pack(fill="x", padx=PAD, pady=(6, 0))
-        self.label_active_patient = ttk.Label(activo_frame, text="Paciente activo: ninguno", bootstyle="info")
+        self.label_active_patient = ttk.Label(
+            activo_frame, text="Paciente activo: ninguno", bootstyle="info"
+        )
         self.label_active_patient.pack(side="left")
         ttk.Button(
-            activo_frame, text="Cambiar paciente activo...", bootstyle="info",
+            activo_frame,
+            text="Cambiar paciente activo...",
+            bootstyle="info",
             command=self._choose_active_patient,
         ).pack(side="left", padx=(18, 0))
 
         botones = ttk.Frame(frame)
         botones.pack(fill="x", padx=PAD, pady=(4, PAD))
         boton_editar = ttk.Button(
-            botones, text="Editar ficha...", bootstyle="info-outline",
+            botones,
+            text="Editar ficha...",
+            bootstyle="info-outline",
             command=self._edit_selected_patient,
         )
         boton_editar.pack(side="left", padx=(0, 8))
         boton_eliminar = ttk.Button(
-            botones, text="Eliminar paciente seleccionado...", bootstyle="danger-outline",
+            botones,
+            text="Eliminar paciente seleccionado...",
+            bootstyle="danger-outline",
             command=self._delete_selected_patient,
         )
         boton_eliminar.pack(side="left")
         boton_fusionar = ttk.Button(
-            botones, text="Fusionar seleccionados...", bootstyle="primary",
+            botones,
+            text="Fusionar seleccionados...",
+            bootstyle="primary",
             command=self._merge_selected_patients,
         )
         boton_fusionar.pack(side="left", padx=(8, 0))
@@ -987,7 +1128,9 @@ class AnalitixApp(ttk.Window):
     def _choose_active_patient(self) -> None:
         if not self.patients:
             messagebox.showinfo(
-                "Sin pacientes", "Todavía no hay pacientes: importa antes algún informe.", parent=self
+                "Sin pacientes",
+                "Todavía no hay pacientes: importa antes algún informe.",
+                parent=self,
             )
             return
         patient_id = self._ask_active_patient()
@@ -1074,7 +1217,12 @@ class AnalitixApp(ttk.Window):
         label = ttk.Label(left, text=text, justify="left")
         label.pack(anchor="w")
         lista = tk.Listbox(
-            left, height=height, width=LIST_COLUMN_CHARS, exportselection=False, relief="flat", **opts
+            left,
+            height=height,
+            width=LIST_COLUMN_CHARS,
+            exportselection=False,
+            relief="flat",
+            **opts,
         )
         lista.pack(fill="y", expand=True, pady=(4, 0))
         self._style_plain_widget(lista)
@@ -1096,7 +1244,9 @@ class AnalitixApp(ttk.Window):
         widgets. La rueda del ratón solo actúa con el puntero encima."""
         contenedor = ttk.Frame(parent)
         contenedor.pack(fill="both", expand=True)
-        canvas = tk.Canvas(contenedor, height=height, highlightthickness=0, background=self.style.colors.bg)
+        canvas = tk.Canvas(
+            contenedor, height=height, highlightthickness=0, background=self.style.colors.bg
+        )
         barra = ttk.Scrollbar(contenedor, orient="vertical", command=canvas.yview)
         interior = ttk.Frame(canvas)
         ventana = canvas.create_window((0, 0), window=interior, anchor="nw")
@@ -1128,7 +1278,9 @@ class AnalitixApp(ttk.Window):
                 return None
             iid = tree.identify_row(event.y)
             if tree.get_children(iid) and "indicator" in tree.identify_element(event.x, event.y):
-                tree.item(iid, open=not tree.item(iid, "open"))  # ▸ solo despliega, no toca las marcas
+                tree.item(
+                    iid, open=not tree.item(iid, "open")
+                )  # ▸ solo despliega, no toca las marcas
                 return "break"
             tree.focus(iid)
             if not tree.parent(iid):
@@ -1155,7 +1307,11 @@ class AnalitixApp(ttk.Window):
         lista = ttk.Frame(body)
         lista.pack(fill="both", expand=True)
         listbox = tk.Listbox(
-            lista, height=min(len(self.patients), 15), width=45, activestyle="none", exportselection=False
+            lista,
+            height=min(len(self.patients), 15),
+            width=45,
+            activestyle="none",
+            exportselection=False,
         )
         scroll = ttk.Scrollbar(lista, orient="vertical", command=listbox.yview)
         listbox.configure(yscrollcommand=scroll.set)
@@ -1192,7 +1348,9 @@ class AnalitixApp(ttk.Window):
     def _update_active_patient_display(self) -> None:
         patient = next((p for p in self.patients if p["id"] == self.current_patient_id), None)
         self.label_active_patient.configure(
-            text=f"Paciente activo: {patient['full_name']}" if patient else "Paciente activo: ninguno"
+            text=f"Paciente activo: {patient['full_name']}"
+            if patient
+            else "Paciente activo: ninguno"
         )
         self._refresh_manual_patient_label()
         self._refresh_tension_page()
@@ -1232,37 +1390,47 @@ class AnalitixApp(ttk.Window):
 
         yes_no = {None: "", 1: "Sí", 0: "No"}
         text_fields = (
-            ("full_name", "Nombre"), ("birth_date", "Fecha nacimiento (AAAA-MM-DD)"),
-            ("dni", "DNI"), ("cip", "CIP"), ("nhc", "NHC"), ("nhc_alt", "NHC secundario"),
+            ("full_name", "Nombre"),
+            ("birth_date", "Fecha nacimiento (AAAA-MM-DD)"),
+            ("dni", "DNI"),
+            ("cip", "CIP"),
+            ("nhc", "NHC"),
+            ("nhc_alt", "NHC secundario"),
         )
         vars_: dict[str, tk.StringVar] = {}
         row = 0
         for key, label in text_fields:
             ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", pady=3)
             vars_[key] = tk.StringVar(value=patient[key] or "")
-            ttk.Entry(form, textvariable=vars_[key], width=40).grid(row=row, column=1, sticky="we", pady=3)
+            ttk.Entry(form, textvariable=vars_[key], width=40).grid(
+                row=row, column=1, sticky="we", pady=3
+            )
             row += 1
         ttk.Label(form, text="Sexo").grid(row=row, column=0, sticky="w", pady=3)
         vars_["sex"] = tk.StringVar(value=patient["sex"] or "")
-        ttk.Combobox(form, textvariable=vars_["sex"], values=["", *SEX_OPTIONS], state="readonly", width=12).grid(
-            row=row, column=1, sticky="w", pady=3
-        )
+        ttk.Combobox(
+            form, textvariable=vars_["sex"], values=["", *SEX_OPTIONS], state="readonly", width=12
+        ).grid(row=row, column=1, sticky="w", pady=3)
         row += 1
 
         ttk.Separator(form).grid(row=row, column=0, columnspan=2, sticky="we", pady=(10, 6))
         row += 1
         ttk.Label(form, text="Tabaquismo", bootstyle="info").grid(row=row, column=0, sticky="w")
         row += 1
-        for key, label in (("smoker_current", "Fumador actual"), ("smoker_former", "Fumador anterior")):
+        for key, label in (
+            ("smoker_current", "Fumador actual"),
+            ("smoker_former", "Fumador anterior"),
+        ):
             ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", pady=3)
             vars_[key] = tk.StringVar(value=yes_no[patient[key]])
-            ttk.Combobox(form, textvariable=vars_[key], values=["", "Sí", "No"], state="readonly", width=12).grid(
-                row=row, column=1, sticky="w", pady=3
-            )
+            ttk.Combobox(
+                form, textvariable=vars_[key], values=["", "Sí", "No"], state="readonly", width=12
+            ).grid(row=row, column=1, sticky="w", pady=3)
             row += 1
         former_widgets = []
         for key, label, width in (
-            ("smoker_former_from", "  Desde año", 8), ("smoker_former_to", "  Hasta año", 8),
+            ("smoker_former_from", "  Desde año", 8),
+            ("smoker_former_to", "  Hasta año", 8),
             ("smoker_former_period", "  Periodo (texto libre)", 40),
         ):
             ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", pady=3)
@@ -1273,8 +1441,11 @@ class AnalitixApp(ttk.Window):
             former_widgets.append(entry)
             row += 1
         ttk.Label(
-            form, text="Indica los años o, si no los sabes, un periodo aproximado "
-            "(p. ej. «unos 10 años, de joven»).", bootstyle="secondary", wraplength=420,
+            form,
+            text="Indica los años o, si no los sabes, un periodo aproximado "
+            "(p. ej. «unos 10 años, de joven»).",
+            bootstyle="secondary",
+            wraplength=420,
         ).grid(row=row, column=0, columnspan=2, sticky="w")
 
         def _sync_former_state(*_args) -> None:
@@ -1304,11 +1475,15 @@ class AnalitixApp(ttk.Window):
         informes = ttk.Labelframe(outer, text=f"Informes importados ({len(reports)})", padding=6)
         informes.pack(fill="both", expand=True, pady=(PAD, 0))
         columns = ("fecha", "lab", "source_file", "num_results", "file_md5")
-        tree = ttk.Treeview(informes, columns=columns, show="headings", height=min(max(len(reports), 3), 10))
+        tree = ttk.Treeview(
+            informes, columns=columns, show="headings", height=min(max(len(reports), 3), 10)
+        )
         for col, label, width, anchor in (
-            ("fecha", "Fecha analítica", 110, "w"), ("lab", "Laboratorio", 120, "w"),
+            ("fecha", "Fecha analítica", 110, "w"),
+            ("lab", "Laboratorio", 120, "w"),
             ("source_file", "Fichero", 300, "w"),
-            ("num_results", "Parámetros", 80, "center"), ("file_md5", "MD5", 260, "w"),
+            ("num_results", "Parámetros", 80, "center"),
+            ("file_md5", "MD5", 260, "w"),
         ):
             tree.heading(col, text=label)
             tree.column(col, width=width, anchor=anchor)
@@ -1317,9 +1492,17 @@ class AnalitixApp(ttk.Window):
         tree.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
         for r in reports:
-            tree.insert("", "end", values=(
-                (r["fecha"] or "")[:10], r["lab"] or "—", r["source_file"], r["num_results"], r["file_md5"] or "—",
-            ))
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    (r["fecha"] or "")[:10],
+                    r["lab"] or "—",
+                    r["source_file"],
+                    r["num_results"],
+                    r["file_md5"] or "—",
+                ),
+            )
 
         botones = ttk.Frame(outer)
         botones.pack(fill="x", pady=(PAD, 0))
@@ -1335,8 +1518,9 @@ class AnalitixApp(ttk.Window):
         selected_ids = [int(iid) for iid in self.tree_patients.selection()]
         if len(selected_ids) < 2:
             messagebox.showwarning(
-                "Selecciona al menos 2", "Marca dos o más filas que sean el mismo "
-                "paciente para fusionarlas.", parent=self,
+                "Selecciona al menos 2",
+                "Marca dos o más filas que sean el mismo paciente para fusionarlas.",
+                parent=self,
             )
             return
         candidates = [p for p in self.patients if p["id"] in selected_ids]
@@ -1411,11 +1595,20 @@ class AnalitixApp(ttk.Window):
         self.tree_patients.delete(*self.tree_patients.get_children())
         for p in self.patients:
             self.tree_patients.insert(
-                "", "end", iid=str(p["id"]),
+                "",
+                "end",
+                iid=str(p["id"]),
                 values=(
                     "★" if p["id"] == self.current_patient_id else "",
-                    p["full_name"], p["birth_date"] or "", p["sex"] or "", p["dni"] or "", p["cip"] or "", p["nhc"] or "",
-                    p["nhc_alt"] or "", _smoking_summary(p), p["num_reports"],
+                    p["full_name"],
+                    p["birth_date"] or "",
+                    p["sex"] or "",
+                    p["dni"] or "",
+                    p["cip"] or "",
+                    p["nhc"] or "",
+                    p["nhc_alt"] or "",
+                    _smoking_summary(p),
+                    p["num_reports"],
                 ),
             )
         # La fila del activo queda preseleccionada, así "Editar ficha..." sin
@@ -1444,7 +1637,7 @@ class AnalitixApp(ttk.Window):
         self._set_status(f"{texto} · {filtro}" if filtro else texto)
 
     def _lab_filter_text(self) -> str:
-        """"" sin filtro; si no, qué laboratorios se están usando."""
+        """ "" sin filtro; si no, qué laboratorios se están usando."""
         excluidos = get_excluded_labs(self.con)
         if not excluidos:
             return ""
@@ -1469,21 +1662,25 @@ class AnalitixApp(ttk.Window):
             text="Datos de qué laboratorios se usan en gráficos, paneles clínicos, Resumen e informe PDF.\n"
             "Cada laboratorio puede usar métodos o rangos distintos: quedarse con uno (o con varios "
             "compatibles) da series más coherentes. La exportación Excel/CSV no se filtra.",
-            wraplength=520, justify="left",
+            wraplength=520,
+            justify="left",
         ).pack(anchor="w", pady=(0, 6))
         variables = {}
         for l in labs:
             var = tk.BooleanVar(value=l["lab"] not in excluidos)
             variables[l["lab"]] = var
             ttk.Checkbutton(
-                body, text=f"{l['lab'] or LAB_UNKNOWN} ({l['n']} informe{'s' if l['n'] != 1 else ''})",
+                body,
+                text=f"{l['lab'] or LAB_UNKNOWN} ({l['n']} informe{'s' if l['n'] != 1 else ''})",
                 variable=var,
             ).pack(anchor="w", padx=8, pady=2)
 
         def _aceptar() -> None:
             nuevos = sorted(lab for lab, var in variables.items() if not var.get())
             if len(nuevos) == len(variables):
-                messagebox.showwarning("Laboratorios", "Deja al menos un laboratorio marcado.", parent=dialog)
+                messagebox.showwarning(
+                    "Laboratorios", "Deja al menos un laboratorio marcado.", parent=dialog
+                )
                 return
             set_setting(self.con, "excluded_labs", json.dumps(nuevos, ensure_ascii=False))
             set_excluded_labs(self.con, nuevos)
@@ -1493,8 +1690,12 @@ class AnalitixApp(ttk.Window):
 
         botones = ttk.Frame(body)
         botones.pack(fill="x", pady=(PAD, 0))
-        ttk.Button(botones, text="Marcar todos", bootstyle="secondary-outline",
-                   command=lambda: [v.set(True) for v in variables.values()]).pack(side="left")
+        ttk.Button(
+            botones,
+            text="Marcar todos",
+            bootstyle="secondary-outline",
+            command=lambda: [v.set(True) for v in variables.values()],
+        ).pack(side="left")
         boton_cancelar = ttk.Button(botones, text="Cancelar", command=dialog.destroy)
         boton_cancelar.pack(side="right")
         boton_ok = ttk.Button(botones, text="Aceptar", bootstyle="primary", command=_aceptar)
@@ -1505,15 +1706,19 @@ class AnalitixApp(ttk.Window):
     # -- Entrada manual -----------------------------------------------------
     def _build_tab_manual(self) -> None:
         frame = self.tab_manual
-        ttk.Label(frame, text="Analíticas", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=PAD, pady=(PAD, 0))
-        ttk.Label(frame, text=AVISO_ENTRADA_MANUAL, bootstyle="warning", wraplength=900, justify="left").pack(
-            anchor="w", padx=PAD, pady=(6, 4))
+        ttk.Label(frame, text="Analíticas", font=("Segoe UI", 14, "bold")).pack(
+            anchor="w", padx=PAD, pady=(PAD, 0)
+        )
+        ttk.Label(
+            frame, text=AVISO_ENTRADA_MANUAL, bootstyle="warning", wraplength=900, justify="left"
+        ).pack(anchor="w", padx=PAD, pady=(6, 4))
         ttk.Label(
             frame,
             text="Para analíticas cuyo PDF no se ha podido interpretar (o que no vienen en PDF): "
             "añade una fila por cada determinación y guarda. Los datos se guardan siempre para "
             "el paciente activo — cámbialo con Pacientes → Cambiar paciente activo... si es otra persona.",
-            bootstyle="secondary", wraplength=900,
+            bootstyle="secondary",
+            wraplength=900,
         ).pack(anchor="w", padx=PAD, pady=(0, 6))
 
         cabecera = ttk.Frame(frame)
@@ -1558,9 +1763,13 @@ class AnalitixApp(ttk.Window):
         self.btn_manual_add.grid(row=0, column=10, sticky="w")
 
         columns = ("raw_name", "value", "unit", "ref_low", "ref_high")
-        self.tree_manual = ttk.Treeview(frame, columns=columns, show="headings", height=10, bootstyle="primary")
+        self.tree_manual = ttk.Treeview(
+            frame, columns=columns, show="headings", height=10, bootstyle="primary"
+        )
         for col, label, width in zip(
-            columns, ("Prueba", "Valor", "Unidad", "Rango bajo", "Rango alto"), (300, 90, 90, 90, 90)
+            columns,
+            ("Prueba", "Valor", "Unidad", "Rango bajo", "Rango alto"),
+            (300, 90, 90, 90, 90),
         ):
             self.tree_manual.heading(col, text=label)
             self.tree_manual.column(col, width=width)
@@ -1570,7 +1779,9 @@ class AnalitixApp(ttk.Window):
         botones = ttk.Frame(frame)
         botones.pack(fill="x", padx=PAD, pady=(0, PAD))
         ttk.Button(
-            botones, text="Quitar fila seleccionada", bootstyle="danger-outline",
+            botones,
+            text="Quitar fila seleccionada",
+            bootstyle="danger-outline",
             command=self._remove_manual_row,
         ).pack(side="left")
         self.btn_manual_save = ttk.Button(
@@ -1584,9 +1795,13 @@ class AnalitixApp(ttk.Window):
         # caracteres de control y con longitud máxima.
         decimal = r"-?\d{0,7}(?:[.,]\d{0,6})?"
         for entrada, patron in (
-            (entry_fecha, r"[\d-]{0,10}"), (entry_valor, decimal), (entry_ref_low, decimal),
-            (entry_ref_high, decimal), (entry_unidad, r"[^\x00-\x1f\x7f]{0,20}"),
-            (entry_notas, r"[^\x00-\x1f\x7f]{0,200}"), (self.combo_manual_nombre, r"[^\x00-\x1f\x7f]{0,80}"),
+            (entry_fecha, r"[\d-]{0,10}"),
+            (entry_valor, decimal),
+            (entry_ref_low, decimal),
+            (entry_ref_high, decimal),
+            (entry_unidad, r"[^\x00-\x1f\x7f]{0,20}"),
+            (entry_notas, r"[^\x00-\x1f\x7f]{0,200}"),
+            (self.combo_manual_nombre, r"[^\x00-\x1f\x7f]{0,80}"),
         ):
             self._restrict(entrada, patron)
 
@@ -1595,8 +1810,13 @@ class AnalitixApp(ttk.Window):
         # elegido, aunque luego "Guardar analítica" lo bloqueara — confuso,
         # porque parecía que se podían entrar datos sin paciente.
         self._manual_input_widgets = (
-            self.combo_manual_nombre, entry_valor, entry_unidad, entry_ref_low, entry_ref_high,
-            entry_notas, self.btn_manual_add,
+            self.combo_manual_nombre,
+            entry_valor,
+            entry_unidad,
+            entry_ref_low,
+            entry_ref_high,
+            entry_notas,
+            self.btn_manual_add,
         )
         self._update_manual_tab_enabled()
 
@@ -1623,7 +1843,9 @@ class AnalitixApp(ttk.Window):
     def _add_manual_row(self) -> None:
         nombre = self.var_manual_nombre.get().strip()
         if not nombre:
-            messagebox.showwarning("Falta la prueba", "Escribe el nombre de la determinación.", parent=self)
+            messagebox.showwarning(
+                "Falta la prueba", "Escribe el nombre de la determinación.", parent=self
+            )
             return
         valor_text = self.var_manual_valor.get().strip()
         valor = self._parse_float_field(valor_text)
@@ -1635,20 +1857,36 @@ class AnalitixApp(ttk.Window):
         ref_low = self._parse_float_field(ref_low_text)
         ref_high = self._parse_float_field(ref_high_text)
         if ref_low_text and ref_low is None or ref_high_text and ref_high is None:
-            messagebox.showwarning("Rango no válido", "El rango de referencia debe ser numérico.", parent=self)
+            messagebox.showwarning(
+                "Rango no válido", "El rango de referencia debe ser numérico.", parent=self
+            )
             return
         if ref_low is not None and ref_high is not None and ref_low > ref_high:
             messagebox.showwarning(
-                "Rango no válido", "El rango bajo no puede ser mayor que el rango alto.", parent=self
+                "Rango no válido",
+                "El rango bajo no puede ser mayor que el rango alto.",
+                parent=self,
             )
             return
         unidad = self.var_manual_unidad.get().strip() or None
-        entry = {"raw_name": nombre, "value_num": valor, "unit": unidad, "ref_low": ref_low, "ref_high": ref_high}
+        entry = {
+            "raw_name": nombre,
+            "value_num": valor,
+            "unit": unidad,
+            "ref_low": ref_low,
+            "ref_high": ref_high,
+        }
         self._manual_entries.append(entry)
         self.tree_manual.insert(
-            "", "end",
-            values=(nombre, f"{valor:g}", unidad or "", "" if ref_low is None else f"{ref_low:g}",
-                    "" if ref_high is None else f"{ref_high:g}"),
+            "",
+            "end",
+            values=(
+                nombre,
+                f"{valor:g}",
+                unidad or "",
+                "" if ref_low is None else f"{ref_low:g}",
+                "" if ref_high is None else f"{ref_high:g}",
+            ),
         )
         self.var_manual_nombre.set("")
         self.var_manual_valor.set("")
@@ -1679,7 +1917,9 @@ class AnalitixApp(ttk.Window):
         try:
             dt.datetime.strptime(fecha, "%Y-%m-%d")
         except ValueError:
-            messagebox.showwarning("Fecha no válida", "La fecha debe tener el formato AAAA-MM-DD.", parent=self)
+            messagebox.showwarning(
+                "Fecha no válida", "La fecha debe tener el formato AAAA-MM-DD.", parent=self
+            )
             return
         if not self._manual_entries:
             messagebox.showwarning(
@@ -1687,10 +1927,15 @@ class AnalitixApp(ttk.Window):
             )
             return
         notas = self.var_manual_notas.get().strip() or None
-        create_manual_report(self.con, self.current_patient_id, fecha, self._manual_entries, notes=notas)
+        create_manual_report(
+            self.con, self.current_patient_id, fecha, self._manual_entries, notes=notas
+        )
         logger.info(
             "Entrada manual guardada: paciente id=%s, fecha=%s, %d determinaciones, con notas=%s",
-            self.current_patient_id, fecha, len(self._manual_entries), notas is not None,
+            self.current_patient_id,
+            fecha,
+            len(self._manual_entries),
+            notas is not None,
         )
         n = len(self._manual_entries)
         self._manual_entries = []
@@ -1699,7 +1944,9 @@ class AnalitixApp(ttk.Window):
         self.combo_manual_nombre["values"] = list_known_test_names(self.con)
         self._refresh_test_lists()
         self._refresh_stats()
-        messagebox.showinfo("Analitix", f"Analítica guardada con {n} determinación(es).", parent=self)
+        messagebox.showinfo(
+            "Analitix", f"Analítica guardada con {n} determinación(es).", parent=self
+        )
 
     # -- Validación al teclear (entradas manuales) --------------------------
     def _restrict(self, entry, patron: str) -> None:
@@ -1708,7 +1955,10 @@ class AnalitixApp(ttk.Window):
         de control, con longitud máxima. Comprobar que el valor tiene
         sentido es cosa de quien guarda (p. ej. `validate_reading`)."""
         regla = re.compile(patron)
-        entry.configure(validate="key", validatecommand=(self.register(lambda P: bool(regla.fullmatch(P))), "%P"))
+        entry.configure(
+            validate="key",
+            validatecommand=(self.register(lambda P: bool(regla.fullmatch(P))), "%P"),
+        )
 
     # -- Entrada manual: tensión arterial ---------------------------------
     def _build_tab_tension(self) -> None:
@@ -1716,33 +1966,47 @@ class AnalitixApp(ttk.Window):
         importación CSV (`blood_pressure.read_csv`) y borrado. Las
         mediciones se validan con `blood_pressure.validate_reading`."""
         frame = self.tab_tension
-        ttk.Label(frame, text="Tensión arterial", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=PAD, pady=(PAD, 0))
-        ttk.Label(frame, text=AVISO_ENTRADA_MANUAL, bootstyle="warning", wraplength=900, justify="left").pack(
-            anchor="w", padx=PAD, pady=(6, 4))
+        ttk.Label(frame, text="Tensión arterial", font=("Segoe UI", 14, "bold")).pack(
+            anchor="w", padx=PAD, pady=(PAD, 0)
+        )
+        ttk.Label(
+            frame, text=AVISO_ENTRADA_MANUAL, bootstyle="warning", wraplength=900, justify="left"
+        ).pack(anchor="w", padx=PAD, pady=(6, 4))
         ttk.Label(
             frame,
             text="Cada medición se guarda para el paciente activo (cámbialo con Pacientes → Cambiar paciente "
             "activo...). «Lugar» indica si la tomaste en casa o en la consulta: las guías usan umbrales "
             "distintos para cada caso. Para importar un CSV, guarda antes la plantilla para ver el formato "
             "(también se aceptan las exportaciones de Omron Connect y Withings).",
-            bootstyle="secondary", wraplength=900, justify="left",
+            bootstyle="secondary",
+            wraplength=900,
+            justify="left",
         ).pack(anchor="w", padx=PAD, pady=(0, 6))
         cabecera = ttk.Frame(frame)
         cabecera.pack(fill="x", padx=PAD)
         ttk.Label(cabecera, text="Paciente activo:").pack(side="left")
         self.label_tension_patient = ttk.Label(cabecera, text="ninguno", bootstyle="info")
         self.label_tension_patient.pack(side="left", padx=6)
-        ttk.Button(cabecera, text="ℹ️ ¿Cómo medirla?", bootstyle="info",
-                   command=lambda: self._show_disclaimer_popup("Cómo medir la tensión en casa", BP_MEASUREMENT_GUIDE)
-                   ).pack(side="right")
+        ttk.Button(
+            cabecera,
+            text="ℹ️ ¿Cómo medirla?",
+            bootstyle="info",
+            command=lambda: self._show_disclaimer_popup(
+                "Cómo medir la tensión en casa", BP_MEASUREMENT_GUIDE
+            ),
+        ).pack(side="right")
 
         forma = ttk.Labelframe(frame, text="Añadir medición", padding=PAD)
         forma.pack(fill="x", padx=PAD, pady=6)
         ahora = dt.datetime.now()
         self.vars_tension = {
-            "fecha": tk.StringVar(value=ahora.strftime("%Y-%m-%d")), "hora": tk.StringVar(value=ahora.strftime("%H:%M")),
-            "sistolica": tk.StringVar(), "diastolica": tk.StringVar(), "pulso": tk.StringVar(),
-            "lugar": tk.StringVar(value=BP_PLACES[0]), "nota": tk.StringVar(),
+            "fecha": tk.StringVar(value=ahora.strftime("%Y-%m-%d")),
+            "hora": tk.StringVar(value=ahora.strftime("%H:%M")),
+            "sistolica": tk.StringVar(),
+            "diastolica": tk.StringVar(),
+            "pulso": tk.StringVar(),
+            "lugar": tk.StringVar(value=BP_PLACES[0]),
+            "nota": tk.StringVar(),
         }
         campos = (
             ("fecha", "Fecha (AAAA-MM-DD):", 12, r"[\d-]{0,10}"),
@@ -1759,24 +2023,39 @@ class AnalitixApp(ttk.Window):
             entrada.grid(row=0, column=2 * col + 1, sticky="w", padx=(6, 14))
             self._tension_widgets.append(entrada)
         ttk.Label(forma, text="Lugar:").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        lugar = ttk.Combobox(forma, textvariable=self.vars_tension["lugar"], values=BP_PLACES, state="readonly", width=10)
+        lugar = ttk.Combobox(
+            forma,
+            textvariable=self.vars_tension["lugar"],
+            values=BP_PLACES,
+            state="readonly",
+            width=10,
+        )
         lugar.grid(row=1, column=1, sticky="w", padx=(6, 14), pady=(8, 0))
         ttk.Label(forma, text="Nota (opcional):").grid(row=1, column=2, sticky="w", pady=(8, 0))
         nota = ttk.Entry(forma, textvariable=self.vars_tension["nota"], width=50)
         self._restrict(nota, r"[^\x00-\x1f\x7f]{0,200}")
         nota.grid(row=1, column=3, columnspan=5, sticky="we", padx=(6, 14), pady=(8, 0))
-        guardar = ttk.Button(forma, text="Guardar medición", bootstyle="success", command=self._save_bp)
+        guardar = ttk.Button(
+            forma, text="Guardar medición", bootstyle="success", command=self._save_bp
+        )
         guardar.grid(row=1, column=8, columnspan=2, sticky="e", pady=(8, 0))
         self._tension_widgets += [lugar, nota, guardar]
 
         columnas = ("fecha_hora", "sistolica", "diastolica", "pulso", "lugar", "nota", "origen")
         tabla = ttk.Frame(frame)
         tabla.pack(fill="both", expand=True, padx=PAD, pady=(0, 6))
-        self.tree_tension = ttk.Treeview(tabla, columns=columnas, show="headings", height=14, selectmode="extended")
-        for col, texto, ancho in zip(columnas, ("Fecha y hora", "Sistólica", "Diastólica", "Pulso", "Lugar", "Nota", "Origen"),
-                                     (140, 80, 80, 60, 80, 360, 70)):
+        self.tree_tension = ttk.Treeview(
+            tabla, columns=columnas, show="headings", height=14, selectmode="extended"
+        )
+        for col, texto, ancho in zip(
+            columnas,
+            ("Fecha y hora", "Sistólica", "Diastólica", "Pulso", "Lugar", "Nota", "Origen"),
+            (140, 80, 80, 60, 80, 360, 70),
+        ):
             self.tree_tension.heading(col, text=texto)
-            self.tree_tension.column(col, width=ancho, anchor="w" if col in ("fecha_hora", "nota") else "center")
+            self.tree_tension.column(
+                col, width=ancho, anchor="w" if col in ("fecha_hora", "nota") else "center"
+            )
         self._checkbox_tree(self.tree_tension)
         barra = ttk.Scrollbar(tabla, orient="vertical", command=self.tree_tension.yview)
         self.tree_tension.configure(yscrollcommand=barra.set)
@@ -1787,10 +2066,21 @@ class AnalitixApp(ttk.Window):
         botones.pack(fill="x", padx=PAD, pady=(0, PAD))
         self.label_tension_count = ttk.Label(botones, text="", bootstyle="secondary")
         self.label_tension_count.pack(side="left")
-        borrar = ttk.Button(botones, text="Borrar marcadas", bootstyle="danger-outline", command=self._delete_bp_selected)
-        plantilla = ttk.Button(botones, text="Guardar plantilla CSV...", bootstyle="secondary-outline",
-                               command=self._save_bp_template)
-        importar = ttk.Button(botones, text="Importar CSV...", bootstyle="success", command=self._import_bp_csv)
+        borrar = ttk.Button(
+            botones,
+            text="Borrar marcadas",
+            bootstyle="danger-outline",
+            command=self._delete_bp_selected,
+        )
+        plantilla = ttk.Button(
+            botones,
+            text="Guardar plantilla CSV...",
+            bootstyle="secondary-outline",
+            command=self._save_bp_template,
+        )
+        importar = ttk.Button(
+            botones, text="Importar CSV...", bootstyle="success", command=self._import_bp_csv
+        )
         for boton in (importar, plantilla, borrar):
             boton.pack(side="right", padx=(8, 0))
         self._same_width(borrar, plantilla, importar)
@@ -1804,14 +2094,29 @@ class AnalitixApp(ttk.Window):
         self.label_tension_patient.configure(text=patient["full_name"] if patient else "ninguno")
         estado = "normal" if self.current_patient_id is not None else "disabled"
         for widget in self._tension_widgets:
-            widget.configure(state="readonly" if estado == "normal" and isinstance(widget, ttk.Combobox) else estado)
+            widget.configure(
+                state="readonly"
+                if estado == "normal" and isinstance(widget, ttk.Combobox)
+                else estado
+            )
         self.tree_tension.delete(*self.tree_tension.get_children())
-        lecturas = list_bp_readings(self.con, self.current_patient_id) if self.current_patient_id else []
+        lecturas = (
+            list_bp_readings(self.con, self.current_patient_id) if self.current_patient_id else []
+        )
         for r in reversed(lecturas):  # la más reciente arriba
             self.tree_tension.insert(
-                "", "end", iid=str(r["id"]),
-                values=(r["measured_at"], r["systolic"], r["diastolic"], r["pulse"] or "", r["place"], r["note"] or "",
-                        r["source"]),
+                "",
+                "end",
+                iid=str(r["id"]),
+                values=(
+                    r["measured_at"],
+                    r["systolic"],
+                    r["diastolic"],
+                    r["pulse"] or "",
+                    r["place"],
+                    r["note"] or "",
+                    r["source"],
+                ),
             )
         self._sync_checks(self.tree_tension)
         self.label_tension_count.configure(text=f"{len(lecturas)} mediciones")
@@ -1823,13 +2128,26 @@ class AnalitixApp(ttk.Window):
             return
         v = {k: var.get() for k, var in self.vars_tension.items()}
         try:
-            lectura = validate_reading(f"{v['fecha']} {v['hora']}", v["sistolica"], v["diastolica"], v["pulso"],
-                                       v["lugar"], v["nota"], limits=self._bp_limits())
+            lectura = validate_reading(
+                f"{v['fecha']} {v['hora']}",
+                v["sistolica"],
+                v["diastolica"],
+                v["pulso"],
+                v["lugar"],
+                v["nota"],
+                limits=self._bp_limits(),
+            )
         except ValueError as exc:
-            messagebox.showwarning("Medición no válida", str(exc)[:1].upper() + str(exc)[1:] + ".", parent=self)
+            messagebox.showwarning(
+                "Medición no válida", str(exc)[:1].upper() + str(exc)[1:] + ".", parent=self
+            )
             return
         if not add_bp_reading(self.con, self.current_patient_id, lectura):
-            messagebox.showwarning("Ya existe", f"Ya hay una medición guardada el {lectura['measured_at']}.", parent=self)
+            messagebox.showwarning(
+                "Ya existe",
+                f"Ya hay una medición guardada el {lectura['measured_at']}.",
+                parent=self,
+            )
             return
         self.con.commit()
         for clave in ("sistolica", "diastolica", "pulso", "nota"):
@@ -1840,7 +2158,9 @@ class AnalitixApp(ttk.Window):
         if self.current_patient_id is None:
             messagebox.showwarning("Sin paciente", "Elige antes un paciente activo.", parent=self)
             return
-        ruta = filedialog.askopenfilename(filetypes=[("CSV", "*.csv"), ("Texto", "*.txt")], parent=self)
+        ruta = filedialog.askopenfilename(
+            filetypes=[("CSV", "*.csv"), ("Texto", "*.txt")], parent=self
+        )
         if not ruta:
             return
         try:
@@ -1848,23 +2168,38 @@ class AnalitixApp(ttk.Window):
         except OSError as exc:
             messagebox.showerror("Importar CSV", f"No se pudo leer el fichero: {exc}", parent=self)
             return
-        nuevas = sum(add_bp_reading(self.con, self.current_patient_id, r, source="csv") for r in lecturas)
+        nuevas = sum(
+            add_bp_reading(self.con, self.current_patient_id, r, source="csv") for r in lecturas
+        )
         self.con.commit()
         # Sin valores en el registro: solo recuentos (datos de salud).
-        logger.info("CSV de tensión: %d nuevas, %d repetidas, %d errores", nuevas, len(lecturas) - nuevas, len(errores))
+        logger.info(
+            "CSV de tensión: %d nuevas, %d repetidas, %d errores",
+            nuevas,
+            len(lecturas) - nuevas,
+            len(errores),
+        )
         texto = f"{nuevas} mediciones importadas"
         if len(lecturas) > nuevas:
             texto += f", {len(lecturas) - nuevas} ya existían (no se duplican)"
         if errores:
-            texto += f".\n\n{len(errores)} líneas con error (no importadas):\n" + "\n".join(errores[:12])
+            texto += f".\n\n{len(errores)} líneas con error (no importadas):\n" + "\n".join(
+                errores[:12]
+            )
             if len(errores) > 12:
                 texto += f"\n… y {len(errores) - 12} más."
-        (messagebox.showwarning if errores else messagebox.showinfo)("Importar CSV", texto, parent=self)
+        (messagebox.showwarning if errores else messagebox.showinfo)(
+            "Importar CSV", texto, parent=self
+        )
         self._refresh_tension_page()
 
     def _save_bp_template(self) -> None:
-        ruta = filedialog.asksaveasfilename(defaultextension=".csv", initialfile="plantilla_tension_arterial.csv",
-                                            filetypes=[("CSV", "*.csv")], parent=self)
+        ruta = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            initialfile="plantilla_tension_arterial.csv",
+            filetypes=[("CSV", "*.csv")],
+            parent=self,
+        )
         if ruta:
             # BOM UTF-8 para que Excel muestre bien los acentos.
             Path(ruta).write_text(BP_CSV_TEMPLATE, encoding="utf-8-sig")
@@ -1872,9 +2207,13 @@ class AnalitixApp(ttk.Window):
     def _delete_bp_selected(self) -> None:
         marcadas = [int(iid) for iid in self.tree_tension.selection()]
         if not marcadas or self.current_patient_id is None:
-            messagebox.showinfo("Borrar", "Marca antes las mediciones que quieras borrar.", parent=self)
+            messagebox.showinfo(
+                "Borrar", "Marca antes las mediciones que quieras borrar.", parent=self
+            )
             return
-        if messagebox.askyesno("Borrar", f"¿Borrar {len(marcadas)} mediciones? No se puede deshacer.", parent=self):
+        if messagebox.askyesno(
+            "Borrar", f"¿Borrar {len(marcadas)} mediciones? No se puede deshacer.", parent=self
+        ):
             delete_bp_readings(self.con, self.current_patient_id, marcadas)
             self._refresh_tension_page()
 
@@ -1885,21 +2224,26 @@ class AnalitixApp(ttk.Window):
         `charts.bp_figure` para las fuentes). Se rehace al cambiar de
         paciente y al añadir, importar o borrar mediciones."""
         frame = self.tab_tension_panel
-        ttk.Label(frame, text="Tensión arterial", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=PAD, pady=(PAD, 0))
-        ttk.Label(frame, textvariable=self.status_var, bootstyle="info").pack(anchor="w", padx=PAD, pady=(0, 2))
+        ttk.Label(frame, text="Tensión arterial", font=("Segoe UI", 14, "bold")).pack(
+            anchor="w", padx=PAD, pady=(PAD, 0)
+        )
+        ttk.Label(frame, textvariable=self.status_var, bootstyle="info").pack(
+            anchor="w", padx=PAD, pady=(0, 2)
+        )
         self._build_disclaimer_button(
-            frame, "Aviso — Tensión arterial",
+            frame,
+            "Aviso — Tensión arterial",
             "⚠ Apoyo informativo y de seguimiento, nunca un diagnóstico: la interpretación clínica final es "
             "siempre del médico.\n"
-            "Protocolo de automedida en casa: Stergiou GS, et al. \"2021 European Society of Hypertension "
-            "practice guidelines for office and out-of-office blood pressure measurement.\" J Hypertens. "
+            'Protocolo de automedida en casa: Stergiou GS, et al. "2021 European Society of Hypertension '
+            'practice guidelines for office and out-of-office blood pressure measurement." J Hypertens. '
             "2021;39(7):1293-1302 (recuadros 6 y 7: 7 días, al menos 3 con al menos 12 lecturas; se descarta "
             "el primer día y se promedian las demás; las lecturas sueltas tienen poca precisión diagnóstica).\n"
-            "Categorías: McEvoy JW, et al. \"2024 ESC Guidelines for the management of elevated blood "
-            "pressure and hypertension.\" Eur Heart J. 2024;45(38):3912-4018 (tabla 5: en casa, no elevada "
+            'Categorías: McEvoy JW, et al. "2024 ESC Guidelines for the management of elevated blood '
+            'pressure and hypertension." Eur Heart J. 2024;45(38):3912-4018 (tabla 5: en casa, no elevada '
             "< 120/70, elevada 120/70 a < 135/85, hipertensión ≥ 135/85; en la consulta, hipertensión "
             "≥ 140/90). Solo se clasifica una media que cumple el protocolo. Más detalle en Ayuda → "
-            "Referencias científicas (\"referencias_tension_arterial\").",
+            'Referencias científicas ("referencias_tension_arterial").',
         )
         self.text_bp_summary = tk.Text(frame, height=5, wrap="word", relief="flat")
         self.text_bp_summary.pack(fill="x", padx=PAD, pady=(0, 4))
@@ -1916,33 +2260,64 @@ class AnalitixApp(ttk.Window):
         botones_rango.pack(fill="x", padx=PAD, pady=(0, 4))
         self.botones_bp_rango = {}
         for clave, texto in BP_RANGOS:
-            boton = ttk.Button(botones_rango, text=texto, command=lambda c=clave: self._set_bp_rango(c),
-                               bootstyle="primary" if clave == "todo" else "secondary-outline")
+            boton = ttk.Button(
+                botones_rango,
+                text=texto,
+                command=lambda c=clave: self._set_bp_rango(c),
+                bootstyle="primary" if clave == "todo" else "secondary-outline",
+            )
             boton.pack(side="left", padx=(0, 6))
             self.botones_bp_rango[clave] = boton
         self._same_width(*self.botones_bp_rango.values())
         periodos = ttk.Frame(frame)
         self.frame_bp_fechas = periodos
         self._bp_fechas_antes = botones_rango
-        self.vars_bp_periodo = {k: tk.StringVar() for k in ("desde", "hasta", "cmp_desde", "cmp_hasta")}
-        for col, (clave, texto) in enumerate((("desde", "Intervalo: desde"), ("hasta", "hasta"),
-                                              ("cmp_desde", "Comparar con: desde"), ("cmp_hasta", "hasta"))):
-            ttk.Label(periodos, text=texto).grid(row=0, column=2 * col, sticky="w", padx=(0 if col == 0 else 10, 4))
+        self.vars_bp_periodo = {
+            k: tk.StringVar() for k in ("desde", "hasta", "cmp_desde", "cmp_hasta")
+        }
+        for col, (clave, texto) in enumerate(
+            (
+                ("desde", "Intervalo: desde"),
+                ("hasta", "hasta"),
+                ("cmp_desde", "Comparar con: desde"),
+                ("cmp_hasta", "hasta"),
+            )
+        ):
+            ttk.Label(periodos, text=texto).grid(
+                row=0, column=2 * col, sticky="w", padx=(0 if col == 0 else 10, 4)
+            )
             entrada = ttk.Entry(periodos, textvariable=self.vars_bp_periodo[clave], width=11)
             self._restrict(entrada, r"[\d-]{0,10}")
             entrada.grid(row=0, column=2 * col + 1, sticky="w")
-        aplicar = ttk.Button(periodos, text="Aplicar", bootstyle="primary", command=self._refresh_bp_panel)
+        aplicar = ttk.Button(
+            periodos, text="Aplicar", bootstyle="primary", command=self._refresh_bp_panel
+        )
         aplicar.grid(row=0, column=8, padx=(12, 4))
-        ttk.Label(periodos, text="Fechas AAAA-MM-DD; en blanco, sin límite. Las medias son de las mediciones "
-                  "en casa y no se clasifican.", bootstyle="secondary").grid(row=1, column=0, columnspan=10,
-                                                                              sticky="w", pady=(2, 0))
+        ttk.Label(
+            periodos,
+            text="Fechas AAAA-MM-DD; en blanco, sin límite. Las medias son de las mediciones "
+            "en casa y no se clasifican.",
+            bootstyle="secondary",
+        ).grid(row=1, column=0, columnspan=10, sticky="w", pady=(2, 0))
         columnas = ("periodo", "fechas", "n", "dias", "sistolica", "diastolica", "pulso")
         self.tree_bp_medias = ttk.Treeview(frame, columns=columnas, show="headings", height=3)
-        for col, texto, ancho in zip(columnas, ("Periodo", "Fechas", "Mediciones", "Días", "Sistólica media",
-                                                "Diastólica media", "Pulso medio"),
-                                     (170, 200, 90, 60, 110, 110, 90)):
+        for col, texto, ancho in zip(
+            columnas,
+            (
+                "Periodo",
+                "Fechas",
+                "Mediciones",
+                "Días",
+                "Sistólica media",
+                "Diastólica media",
+                "Pulso medio",
+            ),
+            (170, 200, 90, 60, 110, 110, 90),
+        ):
             self.tree_bp_medias.heading(col, text=texto)
-            self.tree_bp_medias.column(col, width=ancho, anchor="w" if col in ("periodo", "fechas") else "center")
+            self.tree_bp_medias.column(
+                col, width=ancho, anchor="w" if col in ("periodo", "fechas") else "center"
+            )
         self.tree_bp_medias.pack(fill="x", padx=PAD, pady=(0, 6))
         self.chart_canvas_tension = ttk.Frame(frame)
         self.chart_canvas_tension.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
@@ -1951,7 +2326,9 @@ class AnalitixApp(ttk.Window):
     def _bp_readings_windowed(self) -> tuple[list[dict], int]:
         """Mediciones del paciente activo en la ventana de años de los
         gráficos (`_windowed`), y cuántas quedan fuera."""
-        lecturas = list_bp_readings(self.con, self.current_patient_id) if self.current_patient_id else []
+        lecturas = (
+            list_bp_readings(self.con, self.current_patient_id) if self.current_patient_id else []
+        )
         en_ventana = self._windowed([{**r, "fecha": r["measured_at"]} for r in lecturas])
         return en_ventana, len(lecturas) - len(en_ventana)
 
@@ -1967,7 +2344,9 @@ class AnalitixApp(ttk.Window):
             self.frame_bp_fechas.pack_forget()
         self._refresh_bp_panel()
 
-    def _bp_periodo(self, desde_clave: str, hasta_clave: str) -> tuple[str | None, str | None] | None:
+    def _bp_periodo(
+        self, desde_clave: str, hasta_clave: str
+    ) -> tuple[str | None, str | None] | None:
         """(desde, hasta) del formulario (ver `_check_period`)."""
         return _check_period(*(self.vars_bp_periodo[k].get() for k in (desde_clave, hasta_clave)))
 
@@ -1985,25 +2364,48 @@ class AnalitixApp(ttk.Window):
                 intervalo = self._bp_periodo("desde", "hasta")
                 comparacion = self._bp_periodo("cmp_desde", "cmp_hasta")
             except ValueError as exc:
-                messagebox.showwarning("Fechas no válidas", f"Revisa las fechas (AAAA-MM-DD): {exc}.", parent=self)
+                messagebox.showwarning(
+                    "Fechas no válidas", f"Revisa las fechas (AAAA-MM-DD): {exc}.", parent=self
+                )
                 return
-        todas = list_bp_readings(self.con, self.current_patient_id) if self.current_patient_id else []
+        todas = (
+            list_bp_readings(self.con, self.current_patient_id) if self.current_patient_id else []
+        )
         self.tree_bp_medias.delete(*self.tree_bp_medias.get_children())
-        for nombre, periodo in (("Todo el histórico", (None, None)), ("Periodo mostrado", intervalo),
-                                ("Periodo de comparación", comparacion)):
+        for nombre, periodo in (
+            ("Todo el histórico", (None, None)),
+            ("Periodo mostrado", intervalo),
+            ("Periodo de comparación", comparacion),
+        ):
             if periodo is None or (nombre == "Todo el histórico" and not todas):
                 continue
             s = bp_period_stats(todas, *periodo)
             if s is None:
-                self.tree_bp_medias.insert("", "end", values=(nombre, "sin mediciones en casa", "", "", "", "", ""))
+                self.tree_bp_medias.insert(
+                    "", "end", values=(nombre, "sin mediciones en casa", "", "", "", "", "")
+                )
                 continue
-            self.tree_bp_medias.insert("", "end", values=(
-                nombre, f"{s['desde']} a {s['hasta']}", s["n"], s["dias"], f"{s['systolic']:.0f}",
-                f"{s['diastolic']:.0f}", "" if s["pulse"] is None else f"{s['pulse']:.0f}"))
+            self.tree_bp_medias.insert(
+                "",
+                "end",
+                values=(
+                    nombre,
+                    f"{s['desde']} a {s['hasta']}",
+                    s["n"],
+                    s["dias"],
+                    f"{s['systolic']:.0f}",
+                    f"{s['diastolic']:.0f}",
+                    "" if s["pulse"] is None else f"{s['pulse']:.0f}",
+                ),
+            )
         if intervalo is not None:
             desde, hasta = intervalo
-            lecturas = [r for r in todas if (desde is None or r["measured_at"][:10] >= desde)
-                        and (hasta is None or r["measured_at"][:10] <= hasta)]
+            lecturas = [
+                r
+                for r in todas
+                if (desde is None or r["measured_at"][:10] >= desde)
+                and (hasta is None or r["measured_at"][:10] <= hasta)
+            ]
             ocultas = 0  # el intervalo manda sobre la ventana de años
         else:
             lecturas, ocultas = self._bp_readings_windowed()
@@ -2013,36 +2415,55 @@ class AnalitixApp(ttk.Window):
         self.text_bp_summary.configure(state="disabled")
         for child in self.chart_canvas_tension.winfo_children():
             child.destroy()
-        titulo = "Tensión arterial" if intervalo is None else (
-            f"Tensión arterial · {intervalo[0] or 'inicio'} a {intervalo[1] or 'hoy'}")
+        titulo = (
+            "Tensión arterial"
+            if intervalo is None
+            else (f"Tensión arterial · {intervalo[0] or 'inicio'} a {intervalo[1] or 'hoy'}")
+        )
         if lecturas or desde_eje is not None:
-            self._embed_figure(self._mark_window(bp_figure(lecturas, titulo, dias=dias, desde=desde_eje), ocultas,
-                                                 "mediciones"), self.chart_canvas_tension)
+            self._embed_figure(
+                self._mark_window(
+                    bp_figure(lecturas, titulo, dias=dias, desde=desde_eje), ocultas, "mediciones"
+                ),
+                self.chart_canvas_tension,
+            )
 
     # -- Evolución --------------------------------------------------------
     def _build_tab_evolucion(self) -> None:
         frame = self.tab_evolucion
         left = ttk.Frame(frame)
         left.pack(side="left", fill="y", padx=PAD, pady=PAD)
-        self.list_tests_evolucion = self._list_column(left, "Prueba (⚠ = alguna vez fuera de rango):", height=28)
+        self.list_tests_evolucion = self._list_column(
+            left, "Prueba (⚠ = alguna vez fuera de rango):", height=28
+        )
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_evolution
         ).pack(pady=(8, 4), fill="x")
         ttk.Button(
-            left, text="ℹ️ ¿Qué es este parámetro?", bootstyle="info",
+            left,
+            text="ℹ️ ¿Qué es este parámetro?",
+            bootstyle="info",
             command=lambda: self._show_test_info(self.list_tests_evolucion.curselection()),
         ).pack(fill="x")
         ttk.Button(
-            left, text="🎯 Objetivo indicado por mi médico...", bootstyle="secondary-outline",
+            left,
+            text="🎯 Objetivo indicado por mi médico...",
+            bootstyle="secondary-outline",
             command=self._edit_target,
         ).pack(fill="x", pady=(4, 0))
         ttk.Checkbutton(
-            left, text="Mostrar mi rango personal", variable=self.var_personal_range,
-            command=self._toggle_personal_range, bootstyle="round-toggle",
+            left,
+            text="Mostrar mi rango personal",
+            variable=self.var_personal_range,
+            command=self._toggle_personal_range,
+            bootstyle="round-toggle",
         ).pack(anchor="w", pady=(10, 0))
         ttk.Checkbutton(
-            left, text=f"Ver todo el histórico (si no, {HISTORY_YEARS} años)", variable=self.var_full_history,
-            command=self._toggle_full_history, bootstyle="round-toggle",
+            left,
+            text=f"Ver todo el histórico (si no, {HISTORY_YEARS} años)",
+            variable=self.var_full_history,
+            command=self._toggle_full_history,
+            bootstyle="round-toggle",
         ).pack(anchor="w", pady=(6, 0))
 
         self.chart_frame_evolucion = ttk.Frame(frame)
@@ -2067,13 +2488,23 @@ class AnalitixApp(ttk.Window):
         de lo que le haya indicado su médico; Analitix nunca lo propone ni lo
         calcula. En los gráficos sustituye al rango del laboratorio."""
         selection = self.list_tests_evolucion.curselection()
-        if self.current_patient_id is None or not selection or self._evolution_tests[selection[0]][0] is None:
+        if (
+            self.current_patient_id is None
+            or not selection
+            or self._evolution_tests[selection[0]][0] is None
+        ):
             messagebox.showinfo("Objetivo", "Elige antes una prueba de la lista.", parent=self)
             return
         canonical_id, label = self._evolution_tests[selection[0]]
         actual = get_target(self.con, self.current_patient_id, canonical_id) or {}
-        unidad = next((s.get("unit") for s in get_series(self.con, canonical_id, self.current_patient_id)
-                       if s.get("unit")), "")
+        unidad = next(
+            (
+                s.get("unit")
+                for s in get_series(self.con, canonical_id, self.current_patient_id)
+                if s.get("unit")
+            ),
+            "",
+        )
         dialog, body = self._new_dialog("Objetivo indicado por mi médico")
         ttk.Label(body, text=label, font=("Segoe UI", 11, "bold")).pack(anchor="w")
         ttk.Label(
@@ -2085,7 +2516,8 @@ class AnalitixApp(ttk.Window):
             "laboratorio, con la etiqueta «Objetivo indicado por su médico», y marcan ▲/▼ respecto a "
             "él. La tabla del Resumen y los informes PDF completo y de alterados siguen usando el "
             "rango del laboratorio. Deja vacío el límite que no te hayan indicado.",
-            wraplength=480, justify="left",
+            wraplength=480,
+            justify="left",
         ).pack(anchor="w", pady=(4, 8))
         campos = ttk.Frame(body)
         campos.pack(anchor="w")
@@ -2097,14 +2529,18 @@ class AnalitixApp(ttk.Window):
             if actual.get(clave) is not None:
                 entrada.insert(0, f"{actual[clave]:g}")
             entrada.grid(row=fila, column=1, sticky="w", padx=6, pady=2)
-            ttk.Label(campos, text=unidad, bootstyle="secondary").grid(row=fila, column=2, sticky="w")
+            ttk.Label(campos, text=unidad, bootstyle="secondary").grid(
+                row=fila, column=2, sticky="w"
+            )
             valores[clave] = entrada
         ttk.Label(campos, text="Nota (opcional):").grid(row=2, column=0, sticky="w", pady=2)
         nota = ttk.Entry(campos, width=36)
         nota.insert(0, actual.get("note") or "")
         nota.grid(row=2, column=1, columnspan=2, sticky="w", padx=6, pady=2)
         if actual.get("set_on"):
-            ttk.Label(body, text=f"Guardado el {actual['set_on']}.", bootstyle="secondary").pack(anchor="w", pady=(4, 0))
+            ttk.Label(body, text=f"Guardado el {actual['set_on']}.", bootstyle="secondary").pack(
+                anchor="w", pady=(4, 0)
+            )
 
         def _redibujar() -> None:
             dialog.destroy()
@@ -2115,11 +2551,21 @@ class AnalitixApp(ttk.Window):
             textos = {k: e.get().strip() for k, e in valores.items()}
             numeros = {k: self._parse_float_field(t) for k, t in textos.items()}
             if any(textos[k] and numeros[k] is None for k in textos):
-                messagebox.showwarning("Objetivo", "Escribe los límites como números (p. ej. 100 o 4,5).", parent=dialog)
+                messagebox.showwarning(
+                    "Objetivo",
+                    "Escribe los límites como números (p. ej. 100 o 4,5).",
+                    parent=dialog,
+                )
                 return
             try:
-                set_target(self.con, self.current_patient_id, canonical_id, numeros["low"], numeros["high"],
-                           nota.get().strip())
+                set_target(
+                    self.con,
+                    self.current_patient_id,
+                    canonical_id,
+                    numeros["low"],
+                    numeros["high"],
+                    nota.get().strip(),
+                )
             except ValueError as exc:
                 messagebox.showwarning("Objetivo", str(exc), parent=dialog)
                 return
@@ -2132,7 +2578,9 @@ class AnalitixApp(ttk.Window):
         botones = ttk.Frame(body)
         botones.pack(fill="x", pady=(PAD, 0))
         if actual:
-            ttk.Button(botones, text="Quitar objetivo", bootstyle="danger-outline", command=_quitar).pack(side="left")
+            ttk.Button(
+                botones, text="Quitar objetivo", bootstyle="danger-outline", command=_quitar
+            ).pack(side="left")
         boton_cancelar = ttk.Button(botones, text="Cancelar", command=dialog.destroy)
         boton_cancelar.pack(side="right")
         boton_ok = ttk.Button(botones, text="Guardar", bootstyle="primary", command=_guardar)
@@ -2153,11 +2601,14 @@ class AnalitixApp(ttk.Window):
         candidatos = [tests[i] for i in selection if tests[i][0] is not None]
         if not candidatos:
             messagebox.showwarning(
-                "Sin selección", "Selecciona antes uno o varios parámetros en la lista.", parent=self
+                "Sin selección",
+                "Selecciona antes uno o varios parámetros en la lista.",
+                parent=self,
             )
             return
         dialog, outer = self._new_dialog(
-            "Acerca de este parámetro" if len(candidatos) == 1 else "Acerca de estos parámetros", resizable=True
+            "Acerca de este parámetro" if len(candidatos) == 1 else "Acerca de estos parámetros",
+            resizable=True,
         )
 
         # Ancho acotado a la pantalla (con un tope de 96 caracteres, cómodo
@@ -2175,7 +2626,9 @@ class AnalitixApp(ttk.Window):
         for canonical_id, label in candidatos:
             descripcion = get_description(canonical_id)
             text.insert("end", f"{label}\n", "titulo")
-            text.insert("end", (descripcion or "Todavía no hay una ficha para este parámetro.") + "\n\n")
+            text.insert(
+                "end", (descripcion or "Todavía no hay una ficha para este parámetro.") + "\n\n"
+            )
         text.tag_configure("titulo", font=("Segoe UI", 10, "bold"))
         text.configure(state="disabled")
         self._style_plain_widget(text)
@@ -2211,7 +2664,8 @@ class AnalitixApp(ttk.Window):
             outer,
             text="Información general, no sustituye el consejo médico. Ver el manual de usuario "
             "(§3.1) para añadir o corregir una ficha.",
-            bootstyle="secondary", wraplength=width * 7,
+            bootstyle="secondary",
+            wraplength=width * 7,
         ).pack(anchor="w")
         botones = ttk.Frame(outer)
         botones.pack(fill="x", pady=(PAD, 0))
@@ -2227,7 +2681,9 @@ class AnalitixApp(ttk.Window):
         espacio en pantalla al propio gráfico en todos los paneles
         clínicos."""
         ttk.Button(
-            parent, text="⚠️ Aviso e información científica", bootstyle="warning",
+            parent,
+            text="⚠️ Aviso e información científica",
+            bootstyle="warning",
             command=lambda: self._show_disclaimer_popup(titulo, texto),
         ).pack(anchor="w", padx=PAD, pady=(0, 6))
 
@@ -2271,22 +2727,28 @@ class AnalitixApp(ttk.Window):
         # en una columna del mismo ancho que la de Evolución.
         self._fixed_column(left)
         ttk.Label(
-            left, text=f"Pruebas (máx. {MAX_COMPARISON_TESTS}; ⚠ = alguna vez fuera de rango):",
-            justify="left", wraplength=left.cget("width"),
+            left,
+            text=f"Pruebas (máx. {MAX_COMPARISON_TESTS}; ⚠ = alguna vez fuera de rango):",
+            justify="left",
+            wraplength=left.cget("width"),
         ).pack(anchor="w")
         self.style.configure("Alterado.TCheckbutton", foreground=COLOR_ALTERADO)
         self.style.configure("Gris.TCheckbutton", foreground=COLOR_GRIS)
         self.checks_comparativa = self._scrollable_frame(left)
         self._comparativa_vars: list[tk.BooleanVar | None] = []
+        ttk.Button(left, text="Comparar", bootstyle="primary", command=self._show_comparison).pack(
+            pady=(8, 4), fill="x"
+        )
         ttk.Button(
-            left, text="Comparar", bootstyle="primary", command=self._show_comparison
-        ).pack(pady=(8, 4), fill="x")
-        ttk.Button(
-            left, text="ℹ️ ¿Qué son estos parámetros?", bootstyle="info",
+            left,
+            text="ℹ️ ¿Qué son estos parámetros?",
+            bootstyle="info",
             command=lambda: self._show_test_info(self._comparativa_selection()),
         ).pack(fill="x")
         ttk.Button(
-            left, text="Desmarcar todo", bootstyle="secondary-outline",
+            left,
+            text="Desmarcar todo",
+            bootstyle="secondary-outline",
             command=lambda: [v.set(False) for v in self._comparativa_vars if v is not None],
         ).pack(pady=(4, 0), fill="x")
 
@@ -2338,7 +2800,10 @@ class AnalitixApp(ttk.Window):
         ttk.Label(top, text="Mostrar:").pack(side="left", padx=(24, 6))
         self.var_mapa_calor_set = tk.StringVar(value=HEATMAP_OUT_OF_RANGE)
         combo = ttk.Combobox(
-            top, textvariable=self.var_mapa_calor_set, state="readonly", width=36,
+            top,
+            textvariable=self.var_mapa_calor_set,
+            state="readonly",
+            width=36,
             values=[HEATMAP_OUT_OF_RANGE, HEATMAP_ALL, *HEATMAP_SETS],
         )
         combo.pack(side="left")
@@ -2351,7 +2816,9 @@ class AnalitixApp(ttk.Window):
             text="Cada fila es un parámetro y cada columna una analítica. Azul = por debajo del rango de "
             "referencia de ese informe, rojo = por encima (más intenso cuanto más lejos del rango), gris = "
             "dentro del rango. Pasa el ratón por una casilla para ver el valor, el rango y el laboratorio.",
-            bootstyle="secondary", wraplength=1000, justify="left",
+            bootstyle="secondary",
+            wraplength=1000,
+            justify="left",
         ).pack(anchor="w", padx=PAD, pady=(0, 4))
         self.chart_canvas_mapa_calor = ttk.Frame(frame)
         self.chart_canvas_mapa_calor.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
@@ -2361,7 +2828,9 @@ class AnalitixApp(ttk.Window):
         if choice in HEATMAP_SETS:
             rows = []
             for label, ids in HEATMAP_SETS[choice]:
-                series = sorted(get_merged_series(self.con, ids, pid).values(), key=lambda r: r["fecha"])
+                series = sorted(
+                    get_merged_series(self.con, ids, pid).values(), key=lambda r: r["fecha"]
+                )
                 if series:
                     rows.append((label, series))
             return rows
@@ -2380,7 +2849,9 @@ class AnalitixApp(ttk.Window):
         if not rows:
             for child in container.winfo_children():
                 child.destroy()
-            ttk.Label(container, text="Sin datos para esta selección.", bootstyle="secondary").pack(anchor="w")
+            ttk.Label(container, text="Sin datos para esta selección.", bootstyle="secondary").pack(
+                anchor="w"
+            )
             return
         fig = heatmap_figure(rows, choice)
         fig.analitix_scroll = len(rows) > HEATMAP_SCROLL_ROWS
@@ -2396,7 +2867,12 @@ class AnalitixApp(ttk.Window):
         meta = ax.analitix_heatmap
         n_cols = len(meta["dates"])
         annot = ax.annotate(
-            "", xy=(0, 0), xytext=(12, 12), textcoords="offset points", fontsize=8, zorder=10,
+            "",
+            xy=(0, 0),
+            xytext=(12, 12),
+            textcoords="offset points",
+            fontsize=8,
+            zorder=10,
             bbox=dict(boxstyle="round", fc="white", ec="#c3c2b7"),
         )
         annot.set_visible(False)
@@ -2453,13 +2929,15 @@ class AnalitixApp(ttk.Window):
             frame,
             text="⚠ Apoyo informativo y de seguimiento, nunca un diagnóstico: la interpretación "
             "clínica final es siempre del médico. Estado según el rango de referencia de cada "
-            f"informe; \"⚡ cambio brusco\" cuando el valor varía ±{CAMBIO_BRUSCO_PCT:g}% o más "
-            "respecto al informe anterior, esté o no dentro de rango. \"Tendencia\" (↑/→/↓) usa "
+            f'informe; "⚡ cambio brusco" cuando el valor varía ±{CAMBIO_BRUSCO_PCT:g}% o más '
+            'respecto al informe anterior, esté o no dentro de rango. "Tendencia" (↑/→/↓) usa '
             "todo el histórico del parámetro, no solo el último informe, con el % anual que "
             "recorre del rango de referencia (p. ej. +100%/año = cruza todo el rango normal en "
-            "un año, tendencia fuerte); → si no hay tendencia demostrable; \"—\" con menos de 5 "
+            'un año, tendencia fuerte); → si no hay tendencia demostrable; "—" con menos de 5 '
             "analíticas o menos de 2 años.",
-            bootstyle="secondary", wraplength=900, justify="left",
+            bootstyle="secondary",
+            wraplength=900,
+            justify="left",
         ).pack(anchor="w", padx=PAD, pady=(0, PAD))
 
         # Dos vistas del mismo informe: la tabla y "Qué ha cambiado".
@@ -2479,7 +2957,9 @@ class AnalitixApp(ttk.Window):
             "valor actual y el hueco el anterior. Fuera del rango: ▲ alto / ▼ bajo, más claro si la "
             "desviación es leve. Arriba, los más alejados. Estar en el centro de la franja no es "
             "«mejor» que estar cerca de un límite: todo el rango es normal.",
-            bootstyle="secondary", wraplength=900, justify="left",
+            bootstyle="secondary",
+            wraplength=900,
+            justify="left",
         ).pack(anchor="w", pady=(6, 2))
         self.label_resumen_posicion = ttk.Label(posicion, text="", bootstyle="secondary")
         self.label_resumen_posicion.pack(anchor="w", pady=(0, 4))
@@ -2495,7 +2975,9 @@ class AnalitixApp(ttk.Window):
             "propia persona + imprecisión del análisis, según estudios publicados); no se valora si "
             "los dos valores son de laboratorios distintos. Pasa el ratón por una barra para ver los "
             "valores, el % de cambio, el RCV y su fuente.",
-            bootstyle="secondary", wraplength=900, justify="left",
+            bootstyle="secondary",
+            wraplength=900,
+            justify="left",
         ).pack(anchor="w", pady=(6, 2))
         self.label_resumen_cambios = ttk.Label(cambios, text="", bootstyle="secondary")
         self.label_resumen_cambios.pack(anchor="w", pady=(0, 4))
@@ -2513,7 +2995,9 @@ class AnalitixApp(ttk.Window):
             ("tendencia", "Tendencia", 130),
         ):
             self.tree_resumen.heading(col, text=texto)
-            self.tree_resumen.column(col, width=width, anchor="center" if col == "tendencia" else "w")
+            self.tree_resumen.column(
+                col, width=width, anchor="center" if col == "tendencia" else "w"
+            )
         self.tree_resumen.tag_configure("alto", foreground=COLOR_ALTO)
         self.tree_resumen.tag_configure("bajo", foreground=COLOR_BAJO)
         self.tree_resumen.tag_configure("brusco", foreground=COLOR_BRUSCO)
@@ -2557,9 +3041,15 @@ class AnalitixApp(ttk.Window):
                 child.destroy()
         self.label_resumen_cambios.configure(text="")
         self.label_resumen_posicion.configure(text="")
-        summary = get_latest_report_summary(self.con, self.current_patient_id) if self.current_patient_id else None
+        summary = (
+            get_latest_report_summary(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else None
+        )
         if not summary:
-            self.label_resumen_fecha.configure(text="Sin informes con resultados numéricos para este paciente")
+            self.label_resumen_fecha.configure(
+                text="Sin informes con resultados numéricos para este paciente"
+            )
             return
         self.label_resumen_fecha.configure(text=f"Último informe: {summary['fecha'][:10]}")
         self._draw_changes(summary)
@@ -2568,18 +3058,31 @@ class AnalitixApp(ttk.Window):
         for f in self._classify_latest_report(summary):
             flag, pct, brusco = f["flag_calc"], f["pct"], f["brusco"]
             ref_low, ref_high = f["ref_low"], f["ref_high"]
-            referencia = f"{ref_low:g} - {ref_high:g}" if ref_low is not None and ref_high is not None else "—"
+            referencia = (
+                f"{ref_low:g} - {ref_high:g}"
+                if ref_low is not None and ref_high is not None
+                else "—"
+            )
             # ▲/▼ en vez de 🔴/🟠/🟢: los emojis de color no se distinguen con daltonismo.
             estado = {"alto": "▲ Alto", "bajo": "▼ Bajo"}.get(flag, "Normal")
             variacion = "—" if pct is None else f"{'⚡ ' if brusco else ''}{pct:+.1f}%"
-            serie = get_series(self.con, f["canonical_id"], self.current_patient_id) if f["canonical_id"] else []
+            serie = (
+                get_series(self.con, f["canonical_id"], self.current_patient_id)
+                if f["canonical_id"]
+                else []
+            )
             tendencia = trend_arrow(serie, ref_low, ref_high) or "—"
             tag = flag if flag in ("alto", "bajo") else ("brusco" if brusco else "")
             self.tree_resumen.insert(
-                "", "end",
+                "",
+                "end",
                 values=(
-                    f["raw_name"], f"{f['value_num']:g} {f['unit'] or ''}".strip(), referencia, estado,
-                    variacion, tendencia,
+                    f["raw_name"],
+                    f"{f['value_num']:g} {f['unit'] or ''}".strip(),
+                    referencia,
+                    estado,
+                    variacion,
+                    tendencia,
                 ),
                 tags=(tag,) if tag else (),
             )
@@ -2589,10 +3092,23 @@ class AnalitixApp(ttk.Window):
         pestaña Resumen y el informe PDF personalizado."""
         sex = get_patient_sex(self.con, self.current_patient_id)
         return [
-            dict(label=f["raw_name"], value=f["value_num"], previous=f["valor_anterior"], unit=f["unit"],
-                 ref_low=f["ref_low"], ref_high=f["ref_high"], pct=f["pct"],
-                 rcv=classify_change(f["canonical_id"], f["valor_anterior"], f["value_num"], sex,
-                                     f.get("lab_anterior"), f.get("lab")))
+            dict(
+                label=f["raw_name"],
+                value=f["value_num"],
+                previous=f["valor_anterior"],
+                unit=f["unit"],
+                ref_low=f["ref_low"],
+                ref_high=f["ref_high"],
+                pct=f["pct"],
+                rcv=classify_change(
+                    f["canonical_id"],
+                    f["valor_anterior"],
+                    f["value_num"],
+                    sex,
+                    f.get("lab_anterior"),
+                    f.get("lab"),
+                ),
+            )
             for f in self._classify_latest_report(summary)
         ]
 
@@ -2601,26 +3117,33 @@ class AnalitixApp(ttk.Window):
         informe frente al anterior de cada parámetro."""
         filas = self._changes_rows(summary)
         con_anterior = [f for f in filas if f["previous"] is not None]
-        medibles = [f for f in con_anterior if f["ref_low"] is not None or f["ref_high"] is not None]
+        medibles = [
+            f for f in con_anterior if f["ref_low"] is not None or f["ref_high"] is not None
+        ]
         omitidos = []
         if len(filas) > len(con_anterior):
             omitidos.append(f"{len(filas) - len(con_anterior)} sin valor anterior")
         if len(con_anterior) > len(medibles):
             omitidos.append(f"{len(con_anterior) - len(medibles)} sin rango de referencia")
         self.label_resumen_cambios.configure(
-            text=f"{len(medibles)} parámetros comparados" + (f" (se omiten {', '.join(omitidos)})" if omitidos else "")
+            text=f"{len(medibles)} parámetros comparados"
+            + (f" (se omiten {', '.join(omitidos)})" if omitidos else "")
         )
         if not medibles:
             ttk.Label(
-                self.chart_canvas_resumen_cambios, text="No hay ningún parámetro con informe anterior para comparar.",
+                self.chart_canvas_resumen_cambios,
+                text="No hay ningún parámetro con informe anterior para comparar.",
                 bootstyle="secondary",
             ).pack(anchor="w")
             return
-        fig = changes_figure(medibles, f"Qué ha cambiado — último informe ({summary['fecha'][:10]})")
+        fig = changes_figure(
+            medibles, f"Qué ha cambiado — último informe ({summary['fecha'][:10]})"
+        )
         sin_cambio = fig.axes[0].analitix_changes_unchanged
         if sin_cambio:
             self.label_resumen_cambios.configure(
-                text=self.label_resumen_cambios.cget("text") + f"; {sin_cambio} sin cambio no se dibujan"
+                text=self.label_resumen_cambios.cget("text")
+                + f"; {sin_cambio} sin cambio no se dibujan"
             )
         fig.analitix_scroll = len(fig.axes[0].analitix_changes) > HEATMAP_SCROLL_ROWS
         self._embed_figure(fig, self.chart_canvas_resumen_cambios)
@@ -2630,11 +3153,19 @@ class AnalitixApp(ttk.Window):
         """Gráfico "Posición en el rango" (`charts.position_figure`) del
         último informe, con el valor anterior de cada parámetro."""
         filas = [
-            dict(label=f["raw_name"], value=f["value_num"], previous=f["valor_anterior"], unit=f["unit"],
-                 ref_low=f["ref_low"], ref_high=f["ref_high"])
+            dict(
+                label=f["raw_name"],
+                value=f["value_num"],
+                previous=f["valor_anterior"],
+                unit=f["unit"],
+                ref_low=f["ref_low"],
+                ref_high=f["ref_high"],
+            )
             for f in self._classify_latest_report(summary)
         ]
-        fig = position_figure(filas, f"Posición en el rango — último informe ({summary['fecha'][:10]})")
+        fig = position_figure(
+            filas, f"Posición en el rango — último informe ({summary['fecha'][:10]})"
+        )
         ax = fig.axes[0]
         dibujados, omitidos = len(ax.analitix_positions), ax.analitix_position_skipped
         self.label_resumen_posicion.configure(
@@ -2653,11 +3184,21 @@ class AnalitixApp(ttk.Window):
             return
         items = ax.analitix_changes
         annot = ax.annotate(
-            "", xy=(0, 0), xytext=(12, -12), textcoords="offset points", fontsize=8, zorder=10, va="top",
+            "",
+            xy=(0, 0),
+            xytext=(12, -12),
+            textcoords="offset points",
+            fontsize=8,
+            zorder=10,
+            va="top",
             bbox=dict(boxstyle="round", fc="white", ec="#c3c2b7"),
         )
         annot.set_visible(False)
-        estados = {"empeora": "se aleja del rango", "mejora": "se acerca al rango", "igual": "dentro del rango"}
+        estados = {
+            "empeora": "se aleja del rango",
+            "mejora": "se acerca al rango",
+            "igual": "dentro del rango",
+        }
 
         def _on_move(event) -> None:
             item = None
@@ -2674,7 +3215,8 @@ class AnalitixApp(ttk.Window):
             pct = f" ({item['pct']:+.1f}%)" if item.get("pct") is not None else ""
             annot.set_text(
                 f"{item['label']}\n{item['previous']:g} → {item['value']:g} {unit}{pct}\n"
-                f"Rango: {_format_range(item)} · {estados[item['estado']]}" + _rcv_tooltip(item.get("rcv"))
+                f"Rango: {_format_range(item)} · {estados[item['estado']]}"
+                + _rcv_tooltip(item.get("rcv"))
             )
             annot.xy = (0, i)
             annot.set_visible(True)
@@ -2698,12 +3240,13 @@ class AnalitixApp(ttk.Window):
             frame, text="Último panel lipídico disponible", font=("Segoe UI", 11, "bold")
         ).pack(anchor="w", padx=PAD, pady=(2, 4))
         self._build_disclaimer_button(
-            frame, "Aviso — Riesgo cardiovascular",
+            frame,
+            "Aviso — Riesgo cardiovascular",
             "⚠ Los umbrales de estos índices proceden de estudios en Colombia y EE. UU., "
             "no de población europea — las guías europeas actuales (ESC/EAS, SCORE2) no fijan "
             "un umbral así para estos índices: usan un cálculo de riesgo personalizado (edad, "
-            "sexo, tensión, tabaquismo) que Analitix no calcula hoy. Ver \"ℹ ¿Qué es este "
-            "índice?\" para el detalle completo con fuentes.",
+            'sexo, tensión, tabaquismo) que Analitix no calcula hoy. Ver "ℹ ¿Qué es este '
+            'índice?" para el detalle completo con fuentes.',
         )
         self.text_lipid_summary = tk.Text(frame, height=11, wrap="word", relief="flat")
         self.text_lipid_summary.pack(fill="x", padx=PAD, pady=(0, PAD))
@@ -2714,13 +3257,19 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        self.list_lipid_indices = self._list_column(left, "Índice (⚠ = alguna vez por encima del umbral orientativo):", height=10)
+        self.list_lipid_indices = self._list_column(
+            left, "Índice (⚠ = alguna vez por encima del umbral orientativo):", height=10
+        )
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_lipid_index
         ).pack(pady=(8, 4), fill="x")
         ttk.Button(
-            left, text="ℹ️ ¿Qué es este índice?", bootstyle="info",
-            command=lambda: self._show_test_info(self.list_lipid_indices.curselection(), tests=self._lipid_indices),
+            left,
+            text="ℹ️ ¿Qué es este índice?",
+            bootstyle="info",
+            command=lambda: self._show_test_info(
+                self.list_lipid_indices.curselection(), tests=self._lipid_indices
+            ),
         ).pack(fill="x")
 
         self.chart_frame_riesgo_cv = ttk.Frame(body)
@@ -2756,32 +3305,52 @@ class AnalitixApp(ttk.Window):
         def linea_indice(etiqueta, valor, umbral):
             if valor is None:
                 return f"{etiqueta}: no calculable con este informe"
-            marca = " ⚠ por encima del umbral orientativo" if valor >= umbral else " — dentro del umbral orientativo"
+            marca = (
+                " ⚠ por encima del umbral orientativo"
+                if valor >= umbral
+                else " — dentro del umbral orientativo"
+            )
             return f"{etiqueta}: {valor:.2f}{marca} (umbral: {umbral:g})"
 
         ldl_nota = " (estimado por fórmula de Friedewald)" if s.get("ldl_estimado") else ""
         lineas = [
             f"Fecha del informe: {s['fecha'][:10]} (el más reciente con perfil lipídico completo; "
-            "usa \"Ver evolución\" en la lista de abajo para el histórico de cada índice)",
+            'usa "Ver evolución" en la lista de abajo para el histórico de cada índice)',
             "",
-            linea_valor("Colesterol total", s["total"], "umbral orientativo ATP III: 200 mg/dL", s["total_flag"]),
-            linea_valor("Colesterol HDL", s["hdl"], "umbral orientativo ATP III: >= 40 mg/dL", s["hdl_flag"]),
-            linea_valor(f"Colesterol LDL{ldl_nota}", s["ldl"], "umbral orientativo ATP III: 130 mg/dL", s["ldl_flag"]),
-            linea_valor("Triglicéridos", s["tg"], "umbral orientativo ATP III: 150 mg/dL", s["tg_flag"]),
+            linea_valor(
+                "Colesterol total",
+                s["total"],
+                "umbral orientativo ATP III: 200 mg/dL",
+                s["total_flag"],
+            ),
+            linea_valor(
+                "Colesterol HDL", s["hdl"], "umbral orientativo ATP III: >= 40 mg/dL", s["hdl_flag"]
+            ),
+            linea_valor(
+                f"Colesterol LDL{ldl_nota}",
+                s["ldl"],
+                "umbral orientativo ATP III: 130 mg/dL",
+                s["ldl_flag"],
+            ),
+            linea_valor(
+                "Triglicéridos", s["tg"], "umbral orientativo ATP III: 150 mg/dL", s["tg_flag"]
+            ),
             "",
             linea_indice("Índice aterogénico (CT/HDL, Castelli I)", s["castelli_1"], 5.0),
             linea_indice("Índice LDL/HDL (Castelli II)", s["castelli_2"], 3.0),
             linea_indice("Índice TG/HDL", s["tg_hdl"], 3.0),
             "",
             "Valores orientativos de apoyo al seguimiento, no un diagnóstico — la lista de "
-            "índices de abajo enlaza a las fuentes científicas completas (\"ℹ ¿Qué es este "
-            "índice?\").",
+            'índices de abajo enlaza a las fuentes científicas completas ("ℹ ¿Qué es este '
+            'índice?").',
         ]
         return "\n".join(lineas)
 
     def _refresh_lipid_panel(self) -> None:
         self._lipid_series = (
-            get_lipid_index_series(self.con, self.current_patient_id) if self.current_patient_id else {}
+            get_lipid_index_series(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else {}
         )
         self._lipid_indices = [(cid, LIPID_INDEX_LABELS[cid]) for cid in self._lipid_series]
         self.list_lipid_indices.delete(0, "end")
@@ -2789,11 +3358,17 @@ class AnalitixApp(ttk.Window):
             points = self._lipid_series[cid]
             fuera_de_rango = any(p["flag_calc"] == "alto" for p in points)
             idx = self.list_lipid_indices.size()
-            self.list_lipid_indices.insert("end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})")
+            self.list_lipid_indices.insert(
+                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+            )
             if fuera_de_rango:
                 self.list_lipid_indices.itemconfig(idx, fg=COLOR_ALTERADO)
 
-        summary = get_latest_lipid_summary(self.con, self.current_patient_id) if self.current_patient_id else None
+        summary = (
+            get_latest_lipid_summary(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else None
+        )
         self.text_lipid_summary.configure(state="normal")
         self.text_lipid_summary.delete("1.0", "end")
         self.text_lipid_summary.insert(
@@ -2820,7 +3395,8 @@ class AnalitixApp(ttk.Window):
             frame, text="Último panel hepático disponible", font=("Segoe UI", 11, "bold")
         ).pack(anchor="w", padx=PAD, pady=(2, 4))
         self._build_disclaimer_button(
-            frame, "Aviso — Salud hepática",
+            frame,
+            "Aviso — Salud hepática",
             "⚠ FIB-4 y APRI son índices de cribado de fibrosis hepática, no un diagnóstico: "
             "un resultado alterado no sustituye una prueba de imagen, una biopsia ni la valoración "
             "de un hepatólogo. FIB-4 solo se muestra si se conoce la fecha de nacimiento del "
@@ -2829,7 +3405,7 @@ class AnalitixApp(ttk.Window):
             "APRI (Wai et al., Hepatology 2003, validado en hepatitis C); FIB-4 (Sterling et al., "
             "Hepatology 2006, validado en VIH/VHC), con los puntos de corte más recientes de la "
             "guía de práctica clínica de la AASLD para hígado graso (Rinella et al., Hepatology "
-            "2023) en vez de los del estudio original de 2006. Ver \"ℹ ¿Qué es este índice?\" "
+            '2023) en vez de los del estudio original de 2006. Ver "ℹ ¿Qué es este índice?" '
             "para la cita completa (DOI/PMID) y los límites de cada índice.",
         )
         self.text_hepatic_summary = tk.Text(frame, height=11, wrap="word", relief="flat")
@@ -2841,13 +3417,19 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        self.list_hepatic_indices = self._list_column(left, "Índice (⚠ = alguna vez por encima del umbral orientativo):", height=10)
+        self.list_hepatic_indices = self._list_column(
+            left, "Índice (⚠ = alguna vez por encima del umbral orientativo):", height=10
+        )
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_hepatic_index
         ).pack(pady=(8, 4), fill="x")
         ttk.Button(
-            left, text="ℹ️ ¿Qué es este índice?", bootstyle="info",
-            command=lambda: self._show_test_info(self.list_hepatic_indices.curselection(), tests=self._hepatic_indices),
+            left,
+            text="ℹ️ ¿Qué es este índice?",
+            bootstyle="info",
+            command=lambda: self._show_test_info(
+                self.list_hepatic_indices.curselection(), tests=self._hepatic_indices
+            ),
         ).pack(fill="x")
 
         self.chart_frame_salud_hepatica = ttk.Frame(body)
@@ -2865,7 +3447,9 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._hepatic_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = self._evolution_figure(self._hepatic_series.get(canonical_id, []), label, canonical_id)
+        fig = self._evolution_figure(
+            self._hepatic_series.get(canonical_id, []), label, canonical_id
+        )
         self._embed_figure(fig, self.chart_canvas_salud_hepatica)
 
     def _format_hepatic_summary(self, s: dict) -> str:
@@ -2904,10 +3488,14 @@ class AnalitixApp(ttk.Window):
         else:
             de_ritis_linea = f"Ratio AST/ALT (De Ritis): {de_ritis:.2f}"
 
-        edad_txt = f"{s['edad']} años" if s.get("edad") is not None else "no disponible (falta la fecha de nacimiento)"
+        edad_txt = (
+            f"{s['edad']} años"
+            if s.get("edad") is not None
+            else "no disponible (falta la fecha de nacimiento)"
+        )
         lineas = [
             f"Fecha del informe: {s['fecha'][:10]} (el más reciente con AST y ALT; "
-            "usa \"Ver evolución\" en la lista de abajo para el histórico de cada índice)",
+            'usa "Ver evolución" en la lista de abajo para el histórico de cada índice)',
             f"Edad del paciente en esa fecha: {edad_txt}",
             "",
             linea_valor("AST", s["ast"], "U/L"),
@@ -2919,14 +3507,16 @@ class AnalitixApp(ttk.Window):
             linea_indice_fibrosis("FIB-4", s.get("fib4"), 1.3, 2.67),
             "",
             "Valores orientativos de apoyo al seguimiento, no un diagnóstico — la lista de "
-            "índices de abajo enlaza a las fuentes científicas completas (\"ℹ ¿Qué es este "
-            "índice?\").",
+            'índices de abajo enlaza a las fuentes científicas completas ("ℹ ¿Qué es este '
+            'índice?").',
         ]
         return "\n".join(lineas)
 
     def _refresh_hepatic_panel(self) -> None:
         self._hepatic_series = (
-            get_hepatic_index_series(self.con, self.current_patient_id) if self.current_patient_id else {}
+            get_hepatic_index_series(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else {}
         )
         self._hepatic_indices = [(cid, HEPATIC_INDEX_LABELS[cid]) for cid in self._hepatic_series]
         self.list_hepatic_indices.delete(0, "end")
@@ -2934,11 +3524,17 @@ class AnalitixApp(ttk.Window):
             points = self._hepatic_series[cid]
             fuera_de_rango = any(p["flag_calc"] == "alto" for p in points)
             idx = self.list_hepatic_indices.size()
-            self.list_hepatic_indices.insert("end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})")
+            self.list_hepatic_indices.insert(
+                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+            )
             if fuera_de_rango:
                 self.list_hepatic_indices.itemconfig(idx, fg=COLOR_ALTERADO)
 
-        summary = get_latest_hepatic_summary(self.con, self.current_patient_id) if self.current_patient_id else None
+        summary = (
+            get_latest_hepatic_summary(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else None
+        )
         self.text_hepatic_summary.configure(state="normal")
         self.text_hepatic_summary.delete("1.0", "end")
         self.text_hepatic_summary.insert(
@@ -2962,10 +3558,13 @@ class AnalitixApp(ttk.Window):
             anchor="w", padx=PAD, pady=(0, 2)
         )
         ttk.Label(
-            frame, text="Último informe con filtrado glomerular disponible", font=("Segoe UI", 11, "bold")
+            frame,
+            text="Último informe con filtrado glomerular disponible",
+            font=("Segoe UI", 11, "bold"),
         ).pack(anchor="w", padx=PAD, pady=(2, 4))
         self._build_disclaimer_button(
-            frame, "Aviso — Función renal",
+            frame,
+            "Aviso — Función renal",
             "⚠ Apoyo informativo y de seguimiento, nunca un diagnóstico: la interpretación "
             "clínica final es siempre del médico/nefrólogo.\n"
             "Basado en: clasificación y mapa de riesgo KDIGO 2012 (Kidney Int Suppl. 2013), "
@@ -2973,7 +3572,7 @@ class AnalitixApp(ttk.Window):
             "urea/creatinina (Higgins, acutecaretesting.org, 2016); aviso de subida brusca de "
             "creatinina adaptado del algoritmo de alerta de AKI del NHS de Inglaterra (Sawhney et "
             "al., Nephrol Dial Transplant 2015) — señal débil, no una detección de fallo renal "
-            "agudo. Ver \"ℹ ¿Qué es este índice?\" para la cita completa (DOI/PMID) de cada uno.",
+            'agudo. Ver "ℹ ¿Qué es este índice?" para la cita completa (DOI/PMID) de cada uno.',
         )
         self.text_renal_summary = tk.Text(frame, height=11, wrap="word", relief="flat")
         self.text_renal_summary.pack(fill="x", padx=PAD, pady=(0, PAD))
@@ -2984,13 +3583,19 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        self.list_renal_indices = self._list_column(left, "Índice (⚠ = alguna vez por encima/debajo del umbral orientativo):", height=10)
+        self.list_renal_indices = self._list_column(
+            left, "Índice (⚠ = alguna vez por encima/debajo del umbral orientativo):", height=10
+        )
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_renal_index
         ).pack(pady=(8, 4), fill="x")
         ttk.Button(
-            left, text="ℹ️ ¿Qué es este índice?", bootstyle="info",
-            command=lambda: self._show_test_info(self.list_renal_indices.curselection(), tests=self._renal_indices),
+            left,
+            text="ℹ️ ¿Qué es este índice?",
+            bootstyle="info",
+            command=lambda: self._show_test_info(
+                self.list_renal_indices.curselection(), tests=self._renal_indices
+            ),
         ).pack(fill="x")
 
         self.chart_frame_funcion_renal = ttk.Frame(body)
@@ -3029,15 +3634,21 @@ class AnalitixApp(ttk.Window):
                 "albúmina/creatinina de este informe"
             )
         else:
-            riesgo_linea = f"Riesgo KDIGO (FG × albuminuria): {KDIGO_RISK_LABELS[riesgo]} ({riesgo})"
+            riesgo_linea = (
+                f"Riesgo KDIGO (FG × albuminuria): {KDIGO_RISK_LABELS[riesgo]} ({riesgo})"
+            )
 
         urea_creat = s.get("urea_creatinina")
         if urea_creat is None:
             urea_creat_linea = "Ratio urea/creatinina: no calculable con este informe"
         elif urea_creat > 42.8:
-            urea_creat_linea = f"Ratio urea/creatinina: {urea_creat:.1f} ⚠ — sugiere causa prerrenal"
+            urea_creat_linea = (
+                f"Ratio urea/creatinina: {urea_creat:.1f} ⚠ — sugiere causa prerrenal"
+            )
         elif urea_creat < 21.4:
-            urea_creat_linea = f"Ratio urea/creatinina: {urea_creat:.1f} ⚠ — sugiere causa renal intrínseca"
+            urea_creat_linea = (
+                f"Ratio urea/creatinina: {urea_creat:.1f} ⚠ — sugiere causa renal intrínseca"
+            )
         else:
             urea_creat_linea = f"Ratio urea/creatinina: {urea_creat:.1f}"
 
@@ -3057,7 +3668,7 @@ class AnalitixApp(ttk.Window):
 
         lineas = [
             f"Fecha del informe: {s['fecha'][:10]} (el más reciente con filtrado glomerular "
-            "estimado; usa \"Ver evolución\" en la lista de abajo para el histórico de cada índice)",
+            'estimado; usa "Ver evolución" en la lista de abajo para el histórico de cada índice)',
             "",
             linea_valor("Filtrado glomerular estimado", s["fg"], "mL/min", s.get("g_categoria")),
             linea_valor("Ratio albúmina/creatinina", s["acr"], "mg/g", s.get("a_categoria")),
@@ -3069,14 +3680,16 @@ class AnalitixApp(ttk.Window):
             aki_linea,
             "",
             "Valores orientativos de apoyo al seguimiento, no un diagnóstico — la lista de "
-            "índices de abajo enlaza a las fuentes científicas completas (\"ℹ ¿Qué es este "
-            "índice?\").",
+            'índices de abajo enlaza a las fuentes científicas completas ("ℹ ¿Qué es este '
+            'índice?").',
         ]
         return "\n".join(lineas)
 
     def _refresh_renal_panel(self) -> None:
         self._renal_series = (
-            get_renal_index_series(self.con, self.current_patient_id) if self.current_patient_id else {}
+            get_renal_index_series(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else {}
         )
         self._renal_indices = [(cid, RENAL_INDEX_LABELS[cid]) for cid in self._renal_series]
         self.list_renal_indices.delete(0, "end")
@@ -3087,11 +3700,17 @@ class AnalitixApp(ttk.Window):
             # causa renal intrínseca), no solo "alto".
             fuera_de_rango = any(p["flag_calc"] in ("alto", "bajo") for p in points)
             idx = self.list_renal_indices.size()
-            self.list_renal_indices.insert("end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})")
+            self.list_renal_indices.insert(
+                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+            )
             if fuera_de_rango:
                 self.list_renal_indices.itemconfig(idx, fg=COLOR_ALTERADO)
 
-        summary = get_latest_renal_summary(self.con, self.current_patient_id) if self.current_patient_id else None
+        summary = (
+            get_latest_renal_summary(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else None
+        )
         self.text_renal_summary.configure(state="normal")
         self.text_renal_summary.delete("1.0", "end")
         self.text_renal_summary.insert(
@@ -3116,7 +3735,8 @@ class AnalitixApp(ttk.Window):
             frame, text="Último informe con hemograma disponible", font=("Segoe UI", 11, "bold")
         ).pack(anchor="w", padx=PAD, pady=(2, 4))
         self._build_disclaimer_button(
-            frame, "Aviso — Hemograma",
+            frame,
+            "Aviso — Hemograma",
             "⚠ Apoyo informativo y de seguimiento, nunca un diagnóstico: la interpretación "
             "clínica final es siempre del médico/hematólogo.\n"
             "Basado en: NLR/PLR/LMR — Wang J et al., Clin Lab Anal. 2021;35(9):e23935; "
@@ -3126,7 +3746,7 @@ class AnalitixApp(ttk.Window):
             "ningún score combinado de riesgo de leucemia u otras neoplasias hematológicas (no "
             "existe ninguno validado en la literatura) — solo el aviso puntual de linfocitosis "
             "sostenida > 5×10⁹/L en ≥2 informes descrito en el resumen de abajo (ESMO 2021/iwCLL "
-            "2018). Ver \"ℹ ¿Qué es este índice?\" para la cita completa (DOI/PMID) y una "
+            '2018). Ver "ℹ ¿Qué es este índice?" para la cita completa (DOI/PMID) y una '
             "explicación en lenguaje sencillo de cada uno.",
         )
         self.text_hemogram_summary = tk.Text(frame, height=13, wrap="word", relief="flat")
@@ -3138,12 +3758,16 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        self.list_hemogram_indices = self._list_column(left, "Índice (⚠ = alguna vez por encima del umbral orientativo):", height=10)
+        self.list_hemogram_indices = self._list_column(
+            left, "Índice (⚠ = alguna vez por encima del umbral orientativo):", height=10
+        )
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_hemogram_index
         ).pack(pady=(8, 4), fill="x")
         ttk.Button(
-            left, text="ℹ️ ¿Qué es este índice?", bootstyle="info",
+            left,
+            text="ℹ️ ¿Qué es este índice?",
+            bootstyle="info",
             command=lambda: self._show_test_info(
                 self.list_hemogram_indices.curselection(), tests=self._hemogram_indices
             ),
@@ -3164,10 +3788,12 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._hemogram_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = self._evolution_figure(self._hemogram_series.get(canonical_id, []), label, canonical_id)
+        fig = self._evolution_figure(
+            self._hemogram_series.get(canonical_id, []), label, canonical_id
+        )
         self._embed_figure(fig, self.chart_canvas_hemograma)
 
-    def _format_hemogram_summary(self, s: dict, alerta_linfocitosis: Optional[dict] = None) -> str:
+    def _format_hemogram_summary(self, s: dict, alerta_linfocitosis: dict | None = None) -> str:
         """Texto legible del último panel de hemograma (`hemogram_risk.
         get_latest_hemogram_summary`): orientación de anemia por VCM/RDW en
         lenguaje llano y técnico, más los índices calculables ese mismo día."""
@@ -3206,18 +3832,26 @@ class AnalitixApp(ttk.Window):
 
         nlr_v, plr_v, lmr_v = s.get("nlr"), s.get("plr"), s.get("lmr")
         nlr_linea = (
-            f"NLR (neutrófilos/linfocitos): {nlr_v:.2f}" + (" ⚠" if nlr_v is not None and nlr_v > 3.83 else "")
-            if nlr_v is not None else "NLR: no calculable con este informe"
+            f"NLR (neutrófilos/linfocitos): {nlr_v:.2f}"
+            + (" ⚠" if nlr_v is not None and nlr_v > 3.83 else "")
+            if nlr_v is not None
+            else "NLR: no calculable con este informe"
         )
         plr_linea = (
-            f"PLR (plaquetas/linfocitos): {plr_v:.2f}" + (" ⚠" if plr_v is not None and plr_v > 185.52 else "")
-            if plr_v is not None else "PLR: no calculable con este informe"
+            f"PLR (plaquetas/linfocitos): {plr_v:.2f}"
+            + (" ⚠" if plr_v is not None and plr_v > 185.52 else "")
+            if plr_v is not None
+            else "PLR: no calculable con este informe"
         )
-        lmr_linea = f"LMR (linfocitos/monocitos): {lmr_v:.2f}" if lmr_v is not None else "LMR: no calculable con este informe"
+        lmr_linea = (
+            f"LMR (linfocitos/monocitos): {lmr_v:.2f}"
+            if lmr_v is not None
+            else "LMR: no calculable con este informe"
+        )
 
         lineas = [
             f"Fecha del informe: {s['fecha'][:10]} (el más reciente con hemograma disponible; "
-            "usa \"Ver evolución\" en la lista de abajo para el histórico de cada índice)",
+            'usa "Ver evolución" en la lista de abajo para el histórico de cada índice)',
             "",
             vcm_linea,
             linea_valor("RDW (variabilidad del tamaño de los glóbulos rojos)", s.get("rdw"), "%"),
@@ -3229,14 +3863,14 @@ class AnalitixApp(ttk.Window):
             "",
             "En lenguaje sencillo: NLR y PLR suelen subir con inflamación o estrés físico "
             "reciente (infección, cirugía...), sin señalar ninguna enfermedad concreta; LMR se "
-            "muestra solo como tendencia, sin umbral fiable de \"bajo\".",
+            'muestra solo como tendencia, sin umbral fiable de "bajo".',
             nlr_linea,
             plr_linea,
             lmr_linea,
             "",
             "Valores orientativos de apoyo al seguimiento, no un diagnóstico — la lista de "
-            "índices de abajo enlaza a las fuentes científicas completas (\"ℹ ¿Qué es este "
-            "índice?\").",
+            'índices de abajo enlaza a las fuentes científicas completas ("ℹ ¿Qué es este '
+            'índice?").',
         ]
         if alerta_linfocitosis:
             lineas += ["", self._format_lymphocytosis_alert(alerta_linfocitosis)]
@@ -3256,24 +3890,33 @@ class AnalitixApp(ttk.Window):
 
     def _refresh_hemogram_panel(self) -> None:
         self._hemogram_series = (
-            get_hemogram_index_series(self.con, self.current_patient_id) if self.current_patient_id else {}
+            get_hemogram_index_series(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else {}
         )
-        self._hemogram_indices = [(cid, HEMOGRAM_INDEX_LABELS[cid]) for cid in self._hemogram_series]
+        self._hemogram_indices = [
+            (cid, HEMOGRAM_INDEX_LABELS[cid]) for cid in self._hemogram_series
+        ]
         self.list_hemogram_indices.delete(0, "end")
         for cid, label in self._hemogram_indices:
             points = self._hemogram_series[cid]
             fuera_de_rango = any(p["flag_calc"] in ("alto", "bajo") for p in points)
             idx = self.list_hemogram_indices.size()
-            self.list_hemogram_indices.insert("end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})")
+            self.list_hemogram_indices.insert(
+                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+            )
             if fuera_de_rango:
                 self.list_hemogram_indices.itemconfig(idx, fg=COLOR_ALTERADO)
 
         summary = (
-            get_latest_hemogram_summary(self.con, self.current_patient_id) if self.current_patient_id else None
+            get_latest_hemogram_summary(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else None
         )
         alerta_linfocitosis = (
             get_sustained_lymphocytosis_alert(self.con, self.current_patient_id)
-            if self.current_patient_id else None
+            if self.current_patient_id
+            else None
         )
         if summary:
             texto = self._format_hemogram_summary(summary, alerta_linfocitosis)
@@ -3297,11 +3940,13 @@ class AnalitixApp(ttk.Window):
             anchor="w", padx=PAD, pady=(0, 2)
         )
         ttk.Label(
-            frame, text="Último informe con algún dato del metabolismo del hierro disponible",
+            frame,
+            text="Último informe con algún dato del metabolismo del hierro disponible",
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor="w", padx=PAD, pady=(2, 4))
         self._build_disclaimer_button(
-            frame, "Aviso — Metabolismo del hierro",
+            frame,
+            "Aviso — Metabolismo del hierro",
             "⚠ Apoyo informativo y de seguimiento, nunca un diagnóstico: la interpretación "
             "clínica final es siempre del médico.\n"
             "Basado en: umbrales de ferritina — WHO guideline on ferritin concentrations, 2020; "
@@ -3309,7 +3954,7 @@ class AnalitixApp(ttk.Window):
             "Medscape; fórmula de TSAT — Total Iron-Binding Capacity y protocolo NCT03920657. No "
             "se automatiza ningún diagnóstico diferencial entre ferropenia/anemia de trastorno "
             "crónico/sobrecarga de hierro: Analitix no guarda si hay un proceso inflamatorio "
-            "activo, dato imprescindible para esa distinción. Ver \"ℹ ¿Qué es este índice?\" para "
+            'activo, dato imprescindible para esa distinción. Ver "ℹ ¿Qué es este índice?" para '
             "la cita completa y una explicación en lenguaje sencillo de cada uno.",
         )
         self.text_iron_summary = tk.Text(frame, height=13, wrap="word", relief="flat")
@@ -3321,12 +3966,16 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        self.list_iron_indices = self._list_column(left, "Índice (⚠ = alguna vez fuera del rango orientativo):", height=10)
+        self.list_iron_indices = self._list_column(
+            left, "Índice (⚠ = alguna vez fuera del rango orientativo):", height=10
+        )
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_iron_index
         ).pack(pady=(8, 4), fill="x")
         ttk.Button(
-            left, text="ℹ️ ¿Qué es este índice?", bootstyle="info",
+            left,
+            text="ℹ️ ¿Qué es este índice?",
+            bootstyle="info",
             command=lambda: self._show_test_info(
                 self.list_iron_indices.curselection(), tests=self._iron_indices
             ),
@@ -3362,9 +4011,11 @@ class AnalitixApp(ttk.Window):
             return f"{etiqueta}: {valor:g} {unidad}{marca}"
 
         tsat = s.get("tsat")
-        tsat_nota = " (estimada a partir de hierro/transferrina, este informe no la trae calculada)" if s.get(
-            "tsat_estimado"
-        ) else ""
+        tsat_nota = (
+            " (estimada a partir de hierro/transferrina, este informe no la trae calculada)"
+            if s.get("tsat_estimado")
+            else ""
+        )
         tsat_linea = (
             f"Saturación de transferrina (TSAT): {tsat:.1f} %{tsat_nota}"
             + (" ⚠" if s.get("tsat_flag") in ("alto", "bajo") else "")
@@ -3374,13 +4025,18 @@ class AnalitixApp(ttk.Window):
 
         lineas = [
             f"Fecha del informe: {s['fecha'][:10]} (el más reciente con algún dato del hierro; "
-            "usa \"Ver evolución\" en la lista de abajo para el histórico de cada índice)",
+            'usa "Ver evolución" en la lista de abajo para el histórico de cada índice)',
             "",
             "En lenguaje sencillo: la ferritina son las reservas de hierro guardadas; el hierro y "
             "la saturación de transferrina reflejan el hierro circulando en ese momento. Un valor "
             "alto de ferritina no siempre significa exceso de hierro: también sube con cualquier "
             "inflamación o infección.",
-            linea_valor("Ferritina (reservas de hierro)", s.get("ferritina"), "ng/mL", s.get("ferritina_flag")),
+            linea_valor(
+                "Ferritina (reservas de hierro)",
+                s.get("ferritina"),
+                "ng/mL",
+                s.get("ferritina_flag"),
+            ),
             tsat_linea,
             linea_valor("Hierro sérico", s.get("ferro"), "µg/dL"),
             linea_valor("Transferrina", s.get("transferrina"), "mg/dL"),
@@ -3394,14 +4050,16 @@ class AnalitixApp(ttk.Window):
             "de sobrecarga de hierro.",
             "",
             "Valores orientativos de apoyo al seguimiento, no un diagnóstico — la lista de "
-            "índices de abajo enlaza a las fuentes científicas completas (\"ℹ ¿Qué es este "
-            "índice?\").",
+            'índices de abajo enlaza a las fuentes científicas completas ("ℹ ¿Qué es este '
+            'índice?").',
         ]
         return "\n".join(lineas)
 
     def _refresh_iron_panel(self) -> None:
         self._iron_series = (
-            get_iron_index_series(self.con, self.current_patient_id) if self.current_patient_id else {}
+            get_iron_index_series(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else {}
         )
         self._iron_indices = [(cid, IRON_INDEX_LABELS[cid]) for cid in self._iron_series]
         self.list_iron_indices.delete(0, "end")
@@ -3409,11 +4067,17 @@ class AnalitixApp(ttk.Window):
             points = self._iron_series[cid]
             fuera_de_rango = any(p["flag_calc"] in ("alto", "bajo") for p in points)
             idx = self.list_iron_indices.size()
-            self.list_iron_indices.insert("end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})")
+            self.list_iron_indices.insert(
+                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+            )
             if fuera_de_rango:
                 self.list_iron_indices.itemconfig(idx, fg=COLOR_ALTERADO)
 
-        summary = get_latest_iron_summary(self.con, self.current_patient_id) if self.current_patient_id else None
+        summary = (
+            get_latest_iron_summary(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else None
+        )
         self.text_iron_summary.configure(state="normal")
         self.text_iron_summary.delete("1.0", "end")
         self.text_iron_summary.insert(
@@ -3442,16 +4106,17 @@ class AnalitixApp(ttk.Window):
             frame, text="Últimos valores de PCR y VSG disponibles", font=("Segoe UI", 11, "bold")
         ).pack(anchor="w", padx=PAD, pady=(2, 4))
         self._build_disclaimer_button(
-            frame, "Aviso — Inflamación",
+            frame,
+            "Aviso — Inflamación",
             "⚠ Apoyo informativo y de seguimiento, nunca un diagnóstico: la interpretación "
             "clínica final es siempre del médico.\n"
             "No existe ningún índice combinado PCR+VSG validado: sus cinéticas son demasiado "
             "distintas para combinarlas con sentido fisiológico — la PCR sube y baja en días, la "
             "VSG mucho más despacio (Lapić I et al., Am J Clin Pathol. 2020;153(1):14-29; College "
-            "of American Pathologists, \"C-Reactive Protein and Erythrocyte Sedimentation Rate "
-            "Test Use\"). Por eso se muestran por separado, cada una clasificada contra el rango "
+            'of American Pathologists, "C-Reactive Protein and Erythrocyte Sedimentation Rate '
+            'Test Use"). Por eso se muestran por separado, cada una clasificada contra el rango '
             "de referencia de su propio informe, y se avisa si discrepan entre sí. Ver "
-            "\"ℹ️ ¿Qué es esto?\" para la cita completa y una explicación en lenguaje sencillo.",
+            '"ℹ️ ¿Qué es esto?" para la cita completa y una explicación en lenguaje sencillo.',
         )
         self.text_inflammation_summary = tk.Text(frame, height=8, wrap="word", relief="flat")
         self.text_inflammation_summary.pack(fill="x", padx=PAD, pady=(0, 6))
@@ -3464,11 +4129,15 @@ class AnalitixApp(ttk.Window):
         left.pack(side="left", fill="y")
         self._fixed_column(left)
         ttk.Button(
-            left, text="Ver evolución (PCR + VSG)", bootstyle="primary",
+            left,
+            text="Ver evolución (PCR + VSG)",
+            bootstyle="primary",
             command=self._show_inflammation_chart,
         ).pack(pady=(0, 4), fill="x")
         ttk.Button(
-            left, text="ℹ️ ¿Qué es esto?", bootstyle="info",
+            left,
+            text="ℹ️ ¿Qué es esto?",
+            bootstyle="info",
             command=lambda: self._show_test_info((0,), tests=[("idx_inflamacion", "PCR + VSG")]),
         ).pack(fill="x")
 
@@ -3521,7 +4190,9 @@ class AnalitixApp(ttk.Window):
 
     def _refresh_inflammation_panel(self) -> None:
         self._inflammation_series = (
-            get_inflammation_series(self.con, self.current_patient_id) if self.current_patient_id else {}
+            get_inflammation_series(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else {}
         )
         summary = (
             get_latest_inflammation_summary(self.con, self.current_patient_id)
@@ -3554,16 +4225,17 @@ class AnalitixApp(ttk.Window):
             frame, text="Último valor de ácido úrico disponible", font=("Segoe UI", 11, "bold")
         ).pack(anchor="w", padx=PAD, pady=(2, 4))
         self._build_disclaimer_button(
-            frame, "Aviso — Ácido úrico",
+            frame,
+            "Aviso — Ácido úrico",
             "⚠ Apoyo informativo y de seguimiento, nunca un diagnóstico: la interpretación "
             "clínica final es siempre del médico.\n"
             "Umbral de hiperuricemia asintomática (≥6.8 mg/dL, unisex): FitzGerald JD, et al., "
-            "para el American College of Rheumatology. \"2020 American College of Rheumatology "
-            "Guideline for the Management of Gout.\" Arthritis Care Res (Hoboken). "
+            'para el American College of Rheumatology. "2020 American College of Rheumatology '
+            'Guideline for the Management of Gout." Arthritis Care Res (Hoboken). '
             "2020;72(6):744-760. Un valor alto es hiperuricemia, no un diagnóstico de gota: eso "
             "requiere confirmación por cristales de urato o el patrón clínico de los criterios "
-            "ACR/EULAR 2015, que no viven en una analítica de sangre. Ver \"ℹ ¿Qué es este "
-            "índice?\" para la cita completa y una explicación en lenguaje sencillo.",
+            'ACR/EULAR 2015, que no viven en una analítica de sangre. Ver "ℹ ¿Qué es este '
+            'índice?" para la cita completa y una explicación en lenguaje sencillo.',
         )
         self.text_uric_acid_summary = tk.Text(frame, height=6, wrap="word", relief="flat")
         self.text_uric_acid_summary.pack(fill="x", padx=PAD, pady=(0, PAD))
@@ -3574,12 +4246,16 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        self.list_uric_acid_indices = self._list_column(left, "Índice (⚠ = alguna vez por encima del umbral orientativo):", height=10)
+        self.list_uric_acid_indices = self._list_column(
+            left, "Índice (⚠ = alguna vez por encima del umbral orientativo):", height=10
+        )
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_uric_acid_index
         ).pack(pady=(8, 4), fill="x")
         ttk.Button(
-            left, text="ℹ️ ¿Qué es este índice?", bootstyle="info",
+            left,
+            text="ℹ️ ¿Qué es este índice?",
+            bootstyle="info",
             command=lambda: self._show_test_info(
                 self.list_uric_acid_indices.curselection(), tests=self._uric_acid_indices
             ),
@@ -3600,7 +4276,9 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._uric_acid_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = self._evolution_figure(self._uric_acid_series.get(canonical_id, []), label, canonical_id)
+        fig = self._evolution_figure(
+            self._uric_acid_series.get(canonical_id, []), label, canonical_id
+        )
         self._embed_figure(fig, self.chart_canvas_acido_urico)
 
     def _format_uric_acid_summary(self, s: dict) -> str:
@@ -3608,7 +4286,8 @@ class AnalitixApp(ttk.Window):
         (`uric_acid_risk.get_latest_uric_acid_summary`)."""
         lineas = [
             f"Fecha del informe: {s['fecha'][:10]}",
-            f"Ácido úrico: {s['value']:g} mg/dL" + (" ⚠ hiperuricemia" if s["flag"] == "alto" else ""),
+            f"Ácido úrico: {s['value']:g} mg/dL"
+            + (" ⚠ hiperuricemia" if s["flag"] == "alto" else ""),
             "",
         ]
         if s["flag"] == "alto":
@@ -3623,21 +4302,27 @@ class AnalitixApp(ttk.Window):
         lineas += [
             "",
             "Valor orientativo de apoyo al seguimiento, no un diagnóstico — la lista de índices "
-            "de abajo enlaza a la fuente científica completa (\"ℹ ¿Qué es este índice?\").",
+            'de abajo enlaza a la fuente científica completa ("ℹ ¿Qué es este índice?").',
         ]
         return "\n".join(lineas)
 
     def _refresh_uric_acid_panel(self) -> None:
         self._uric_acid_series = (
-            get_uric_acid_series(self.con, self.current_patient_id) if self.current_patient_id else {}
+            get_uric_acid_series(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else {}
         )
-        self._uric_acid_indices = [(cid, URIC_ACID_INDEX_LABELS[cid]) for cid in self._uric_acid_series]
+        self._uric_acid_indices = [
+            (cid, URIC_ACID_INDEX_LABELS[cid]) for cid in self._uric_acid_series
+        ]
         self.list_uric_acid_indices.delete(0, "end")
         for cid, label in self._uric_acid_indices:
             points = self._uric_acid_series[cid]
             fuera_de_rango = any(p["flag_calc"] == "alto" for p in points)
             idx = self.list_uric_acid_indices.size()
-            self.list_uric_acid_indices.insert("end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})")
+            self.list_uric_acid_indices.insert(
+                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+            )
             if fuera_de_rango:
                 self.list_uric_acid_indices.itemconfig(idx, fg=COLOR_ALTERADO)
 
@@ -3668,17 +4353,19 @@ class AnalitixApp(ttk.Window):
             anchor="w", padx=PAD, pady=(0, 2)
         )
         ttk.Label(
-            frame, text="Último calcio corregido disponible (solo en informes con calcio y albúmina)",
+            frame,
+            text="Último calcio corregido disponible (solo en informes con calcio y albúmina)",
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor="w", padx=PAD, pady=(2, 4))
         self._build_disclaimer_button(
-            frame, "Aviso — Calcio corregido",
+            frame,
+            "Aviso — Calcio corregido",
             "⚠ Apoyo informativo y de seguimiento, nunca un diagnóstico: la interpretación "
             "clínica final es siempre del médico.\n"
-            "Fórmula: Payne RB, Little AJ, Williams RB, Milner JR. \"Interpretation of serum "
-            "calcium in patients with abnormal serum proteins.\" Br Med J. 1973;4(5893):643-646. "
+            'Fórmula: Payne RB, Little AJ, Williams RB, Milner JR. "Interpretation of serum '
+            'calcium in patients with abnormal serum proteins." Br Med J. 1973;4(5893):643-646. '
             "Se clasifica con el mismo rango de referencia que el laboratorio ya usa para el "
-            "calcio total, sin inventar ningún umbral nuevo. Ver \"ℹ ¿Qué es este índice?\" para "
+            'calcio total, sin inventar ningún umbral nuevo. Ver "ℹ ¿Qué es este índice?" para '
             "la cita completa y una explicación en lenguaje sencillo.",
         )
         self.text_calcio_summary = tk.Text(frame, height=6, wrap="word", relief="flat")
@@ -3690,12 +4377,16 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        self.list_calcio_indices = self._list_column(left, "Índice (⚠ = alguna vez fuera del rango de referencia):", height=10)
+        self.list_calcio_indices = self._list_column(
+            left, "Índice (⚠ = alguna vez fuera del rango de referencia):", height=10
+        )
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_calcio_index
         ).pack(pady=(8, 4), fill="x")
         ttk.Button(
-            left, text="ℹ️ ¿Qué es este índice?", bootstyle="info",
+            left,
+            text="ℹ️ ¿Qué es este índice?",
+            bootstyle="info",
             command=lambda: self._show_test_info(
                 self.list_calcio_indices.curselection(), tests=self._calcio_indices
             ),
@@ -3742,19 +4433,20 @@ class AnalitixApp(ttk.Window):
             )
         else:
             lineas.append(
-                "En lenguaje sencillo: dentro del rango habitual una vez corregido por la "
-                "albúmina."
+                "En lenguaje sencillo: dentro del rango habitual una vez corregido por la albúmina."
             )
         lineas += [
             "",
             "Valor orientativo de apoyo al seguimiento, no un diagnóstico — la lista de índices "
-            "de abajo enlaza a la fuente científica completa (\"ℹ ¿Qué es este índice?\").",
+            'de abajo enlaza a la fuente científica completa ("ℹ ¿Qué es este índice?").',
         ]
         return "\n".join(lineas)
 
     def _refresh_calcio_panel(self) -> None:
         self._calcio_series = (
-            get_calcium_index_series(self.con, self.current_patient_id) if self.current_patient_id else {}
+            get_calcium_index_series(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else {}
         )
         self._calcio_indices = [(cid, CALCIUM_INDEX_LABELS[cid]) for cid in self._calcio_series]
         self.list_calcio_indices.delete(0, "end")
@@ -3762,7 +4454,9 @@ class AnalitixApp(ttk.Window):
             points = self._calcio_series[cid]
             fuera_de_rango = any(p["flag_calc"] in ("alto", "bajo") for p in points)
             idx = self.list_calcio_indices.size()
-            self.list_calcio_indices.insert("end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})")
+            self.list_calcio_indices.insert(
+                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+            )
             if fuera_de_rango:
                 self.list_calcio_indices.itemconfig(idx, fg=COLOR_ALTERADO)
 
@@ -3785,27 +4479,31 @@ class AnalitixApp(ttk.Window):
         """Glucosa media estimada (eAG) a partir de la HbA1c (ver
         `glycemic_risk.py` para las citas científicas). Mismo patrón que "🩹 Ácido úrico"."""
         frame = self.tab_glucemia
-        ttk.Label(frame, text="Glucosa: glucosa media estimada (eAG) e índice TyG", font=("Segoe UI", 14, "bold")).pack(
-            anchor="w", padx=PAD, pady=(PAD, 0)
-        )
+        ttk.Label(
+            frame,
+            text="Glucosa: glucosa media estimada (eAG) e índice TyG",
+            font=("Segoe UI", 14, "bold"),
+        ).pack(anchor="w", padx=PAD, pady=(PAD, 0))
         ttk.Label(frame, textvariable=self.status_var, bootstyle="info").pack(
             anchor="w", padx=PAD, pady=(0, 2)
         )
         ttk.Label(
-            frame, text="Última HbA1c disponible, traducida a glucosa media estimada",
+            frame,
+            text="Última HbA1c disponible, traducida a glucosa media estimada",
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor="w", padx=PAD, pady=(2, 4))
         self._build_disclaimer_button(
-            frame, "Aviso — Glucosa (eAG y TyG)",
+            frame,
+            "Aviso — Glucosa (eAG y TyG)",
             "⚠ Apoyo informativo y de seguimiento, nunca un diagnóstico: la interpretación "
             "clínica final es siempre del médico.\n"
             "Fórmula ADAG: eAG (mg/dL) = 28.7 × HbA1c(%) − 46.7. Nathan DM, Kuenen J, Borg R, "
-            "Zheng H, Schoenfeld D, Heine RJ, for the ADAG Study Group. \"Translating the A1C "
-            "Assay Into Estimated Average Glucose Values.\" Diabetes Care. 2008;31(8):1473-1478. "
+            'Zheng H, Schoenfeld D, Heine RJ, for the ADAG Study Group. "Translating the A1C '
+            'Assay Into Estimated Average Glucose Values." Diabetes Care. 2008;31(8):1473-1478. '
             "Los puntos de corte de HbA1c (normal <5.7%, prediabetes 5.7-6.4%, diabetes ≥6.5%) "
             "son umbrales diagnósticos oficiales de la ADA, pero requieren un HbA1c de "
-            "laboratorio estandarizado para uso diagnóstico formal. Ver \"ℹ ¿Qué es este "
-            "índice?\" para la cita completa, las limitaciones (anemia, ferropenia, embarazo...) "
+            'laboratorio estandarizado para uso diagnóstico formal. Ver "ℹ ¿Qué es este '
+            'índice?" para la cita completa, las limitaciones (anemia, ferropenia, embarazo...) '
             "y una explicación en lenguaje sencillo.\n"
             "Índice TyG = ln[triglicéridos (mg/dL) × glucosa (mg/dL) / 2], marcador indirecto de "
             "resistencia a la insulina (Simental-Mendía LE et al., Metab Syndr Relat Disord "
@@ -3822,23 +4520,33 @@ class AnalitixApp(ttk.Window):
         body.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         left = ttk.Frame(body)
         left.pack(side="left", fill="y")
-        self.list_glucemia_indices = self._list_column(left, "Índice (⚠ = alguna vez en rango de diabetes):", height=10)
+        self.list_glucemia_indices = self._list_column(
+            left, "Índice (⚠ = alguna vez en rango de diabetes):", height=10
+        )
         ttk.Button(
             left, text="Ver evolución", bootstyle="primary", command=self._show_glucemia_index
         ).pack(pady=(8, 4), fill="x")
         ttk.Button(
-            left, text="ℹ️ ¿Qué es este índice?", bootstyle="info",
+            left,
+            text="ℹ️ ¿Qué es este índice?",
+            bootstyle="info",
             command=lambda: self._show_test_info(
                 self.list_glucemia_indices.curselection(), tests=self._glucemia_indices
             ),
         ).pack(fill="x")
         ttk.Button(
-            left, text="Ver evolución (Glucosa + eAG)", bootstyle="primary-outline",
+            left,
+            text="Ver evolución (Glucosa + eAG)",
+            bootstyle="primary-outline",
             command=self._show_glucose_eag_chart,
         ).pack(pady=(12, 4), fill="x")
         ttk.Button(
-            left, text="ℹ️ ¿Qué es esto?", bootstyle="info",
-            command=lambda: self._show_test_info((0,), tests=[("idx_glucosa_eag", "Glucosa + eAG")]),
+            left,
+            text="ℹ️ ¿Qué es esto?",
+            bootstyle="info",
+            command=lambda: self._show_test_info(
+                (0,), tests=[("idx_glucosa_eag", "Glucosa + eAG")]
+            ),
         ).pack(fill="x")
 
         self.chart_frame_glucemia = ttk.Frame(body)
@@ -3874,13 +4582,19 @@ class AnalitixApp(ttk.Window):
         canonical_id, label = self._glucemia_indices[selection[0]]
         if canonical_id is None:
             return
-        fig = self._evolution_figure(self._glucemia_series.get(canonical_id, []), label, canonical_id)
+        fig = self._evolution_figure(
+            self._glucemia_series.get(canonical_id, []), label, canonical_id
+        )
         self._embed_figure(fig, self.chart_canvas_glucemia)
 
     def _format_glucemia_summary(self, s: dict) -> str:
         """Texto legible de la última HbA1c/eAG
         (`glycemic_risk.get_latest_glycemic_summary`)."""
-        categorias = {"normal": "normal", "prediabetes": "prediabetes", "diabetes": "rango de diabetes"}
+        categorias = {
+            "normal": "normal",
+            "prediabetes": "prediabetes",
+            "diabetes": "rango de diabetes",
+        }
         lineas = [
             f"Fecha del informe: {s['fecha'][:10]}",
             f"HbA1c: {s['hba1c']:g}% ({categorias.get(s['categoria'], s['categoria'])})",
@@ -3905,13 +4619,15 @@ class AnalitixApp(ttk.Window):
             "",
             "Valores orientativos de apoyo al seguimiento, no un diagnóstico — la lista de "
             "índices de abajo enlaza a la fuente científica completa y a las limitaciones "
-            "(\"ℹ ¿Qué es este índice?\").",
+            '("ℹ ¿Qué es este índice?").',
         ]
         return "\n".join(lineas)
 
     def _refresh_glucemia_panel(self) -> None:
         self._glucemia_series = (
-            get_glycemic_index_series(self.con, self.current_patient_id) if self.current_patient_id else {}
+            get_glycemic_index_series(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else {}
         )
         self._glucose_series = (
             get_glucose_series(self.con, self.current_patient_id) if self.current_patient_id else []
@@ -3926,7 +4642,9 @@ class AnalitixApp(ttk.Window):
             points = self._glucemia_series[cid]
             fuera_de_rango = any(p["flag_calc"] == "alto" for p in points)
             idx = self.list_glucemia_indices.size()
-            self.list_glucemia_indices.insert("end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})")
+            self.list_glucemia_indices.insert(
+                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+            )
             if fuera_de_rango:
                 self.list_glucemia_indices.itemconfig(idx, fg=COLOR_ALTERADO)
 
@@ -3959,18 +4677,21 @@ class AnalitixApp(ttk.Window):
             anchor="w", padx=PAD, pady=(0, 2)
         )
         ttk.Label(
-            frame, text="Últimos valores de TSH y T4 libre disponibles", font=("Segoe UI", 11, "bold")
+            frame,
+            text="Últimos valores de TSH y T4 libre disponibles",
+            font=("Segoe UI", 11, "bold"),
         ).pack(anchor="w", padx=PAD, pady=(2, 4))
         self._build_disclaimer_button(
-            frame, "Aviso — Tiroides",
+            frame,
+            "Aviso — Tiroides",
             "⚠ Apoyo informativo y de seguimiento, nunca un diagnóstico: la interpretación "
             "clínica final es siempre del médico.\n"
             "Este panel NO clasifica por cuadrante (hipotiroidismo/hipertiroidismo) ni interpreta "
             "el patrón: esa tabla es literalmente el criterio clínico diagnóstico estándar, y su "
             "umbral cambia con el embarazo, dato que Analitix no registra. Solo muestra las dos "
             "series juntas (relación fisiológica inversa: American Thyroid Association, "
-            "\"Clinical Thyroidology for the Public\") clasificadas cada una contra el rango de "
-            "referencia de su propio informe. Ver \"ℹ️ ¿Qué es esto?\" para la cita completa.",
+            '"Clinical Thyroidology for the Public") clasificadas cada una contra el rango de '
+            'referencia de su propio informe. Ver "ℹ️ ¿Qué es esto?" para la cita completa.',
         )
         self.text_thyroid_summary = tk.Text(frame, height=2, wrap="word", relief="flat")
         self.text_thyroid_summary.pack(fill="x", padx=PAD, pady=(0, 6))
@@ -3983,11 +4704,15 @@ class AnalitixApp(ttk.Window):
         left.pack(side="left", fill="y")
         self._fixed_column(left)
         ttk.Button(
-            left, text="Ver evolución (TSH + T4L)", bootstyle="primary",
+            left,
+            text="Ver evolución (TSH + T4L)",
+            bootstyle="primary",
             command=self._show_thyroid_chart,
         ).pack(pady=(0, 4), fill="x")
         ttk.Button(
-            left, text="ℹ️ ¿Qué es esto?", bootstyle="info",
+            left,
+            text="ℹ️ ¿Qué es esto?",
+            bootstyle="info",
             command=lambda: self._show_test_info((0,), tests=[("idx_tiroides", "TSH + T4L")]),
         ).pack(fill="x")
 
@@ -4045,7 +4770,11 @@ class AnalitixApp(ttk.Window):
         self.text_thyroid_summary.configure(state="disabled")
 
     def _refresh_test_lists(self) -> None:
-        tests = list_canonical_tests(self.con, self.current_patient_id) if self.current_patient_id else []
+        tests = (
+            list_canonical_tests(self.con, self.current_patient_id)
+            if self.current_patient_id
+            else []
+        )
         normales = [t for t in tests if t["num_points"] >= self.min_points]
         pocos_datos = [t for t in tests if t["num_points"] < self.min_points]
 
@@ -4061,14 +4790,19 @@ class AnalitixApp(ttk.Window):
 
         # (texto, color) de cada fila, alineadas también con `_evolution_tests`.
         filas: list[tuple[str, str | None]] = [
-            (f"{'⚠ ' if t.get('out_of_range') else ''}{t['raw_name']}", COLOR_ALTERADO if t.get("out_of_range") else None)
+            (
+                f"{'⚠ ' if t.get('out_of_range') else ''}{t['raw_name']}",
+                COLOR_ALTERADO if t.get("out_of_range") else None,
+            )
             for t in normales
         ]
         if pocos_datos:
             filas.append((f"── Pocas analíticas (< {self.min_points} valores) ──", COLOR_GRIS))
             filas.extend(
-                (f"{'⚠ ' if t.get('out_of_range') else ''}{t['raw_name']} (n={t['num_points']})",
-                 COLOR_ALTERADO if t.get("out_of_range") else COLOR_GRIS)
+                (
+                    f"{'⚠ ' if t.get('out_of_range') else ''}{t['raw_name']} (n={t['num_points']})",
+                    COLOR_ALTERADO if t.get("out_of_range") else COLOR_GRIS,
+                )
                 for t in pocos_datos
             )
 
@@ -4082,16 +4816,25 @@ class AnalitixApp(ttk.Window):
         for widget in self.checks_comparativa.winfo_children():
             widget.destroy()
         self._comparativa_vars = []
-        estilos = {COLOR_ALTERADO: "Alterado.TCheckbutton", COLOR_GRIS: "Gris.TCheckbutton", None: "TCheckbutton"}
+        estilos = {
+            COLOR_ALTERADO: "Alterado.TCheckbutton",
+            COLOR_GRIS: "Gris.TCheckbutton",
+            None: "TCheckbutton",
+        }
         for (canonical_id, _label), (texto, color) in zip(self._evolution_tests, filas):
             if canonical_id is None:
-                ttk.Label(self.checks_comparativa, text=texto, foreground=COLOR_GRIS).pack(anchor="w", pady=(6, 2))
+                ttk.Label(self.checks_comparativa, text=texto, foreground=COLOR_GRIS).pack(
+                    anchor="w", pady=(6, 2)
+                )
                 self._comparativa_vars.append(None)
                 continue
             var = tk.BooleanVar(value=False)
             self._comparativa_vars.append(var)
             ttk.Checkbutton(
-                self.checks_comparativa, text=texto, variable=var, style=estilos[color],
+                self.checks_comparativa,
+                text=texto,
+                variable=var,
+                style=estilos[color],
                 command=lambda v=var: self._on_comparativa_check(v),
             ).pack(anchor="w", pady=1)
         self._refresh_resumen_panel()
@@ -4163,11 +4906,17 @@ class AnalitixApp(ttk.Window):
         rcv = None
         if len(series) >= 2:
             rcv = classify_change(
-                canonical_id, series[-2]["value_num"], series[-1]["value_num"],
-                sex, series[-2].get("lab"), series[-1].get("lab"),
+                canonical_id,
+                series[-2]["value_num"],
+                series[-1]["value_num"],
+                sex,
+                series[-2].get("lab"),
+                series[-1].get("lab"),
             )
         personal = (
-            personal_range(canonical_id, series, sex) if with_personal and self.var_personal_range.get() else None
+            personal_range(canonical_id, series, sex)
+            if with_personal and self.var_personal_range.get()
+            else None
         )
         # Deriva lenta (CUSUM con la variación biológica), también contra el
         # rango del laboratorio y antes del objetivo del médico.
@@ -4175,14 +4924,20 @@ class AnalitixApp(ttk.Window):
         # Después del RCV y del rango personal, que se miden contra el rango
         # del laboratorio: el objetivo del médico solo cambia lo que se dibuja.
         if canonical_id:
-            series = apply_target(series, get_target(self.con, self.current_patient_id, canonical_id))
+            series = apply_target(
+                series, get_target(self.con, self.current_patient_id, canonical_id)
+            )
         # Filtrado glomerular (prueba suelta o índice "fg" del panel renal):
         # único umbral de velocidad con respaldo de guía (KDIGO, ver
         # `charts.KDIGO_RAPID_DECLINE_PER_YEAR`).
         if canonical_id in FG_IDS or canonical_id == "fg":
             series = [{**s, "kdigo_fg": True} for s in series]
         return self._mark_window(
-            evolution_figure(series, label, self.min_points, rcv=rcv, personal=personal, note=deriva), hidden)
+            evolution_figure(
+                series, label, self.min_points, rcv=rcv, personal=personal, note=deriva
+            ),
+            hidden,
+        )
 
     def _comparison_figure(self, series_by_test: dict[str, list[dict]]):
         """`charts.comparison_figure` con la misma ventana de años que
@@ -4208,14 +4963,24 @@ class AnalitixApp(ttk.Window):
         (`que`: "analíticas" o, en tensión arterial, "mediciones")."""
         if hidden:
             fig.text(
-                0.99, 0.005, f"Últimos {HISTORY_YEARS} años · {hidden} {que} anteriores ocultas "
-                "(Análisis → Ver todo el histórico)", ha="right", va="bottom", fontsize=7, color="#777777",
+                0.99,
+                0.005,
+                f"Últimos {HISTORY_YEARS} años · {hidden} {que} anteriores ocultas "
+                "(Análisis → Ver todo el histórico)",
+                ha="right",
+                va="bottom",
+                fontsize=7,
+                color="#777777",
             )
         return fig
 
     def _history_menu_label(self) -> str:
         """Texto de la opción del menú Análisis: lo que hará al pulsarla."""
-        return f"Ver solo los últimos {HISTORY_YEARS} años" if self.var_full_history.get() else "Ver todo el histórico"
+        return (
+            f"Ver solo los últimos {HISTORY_YEARS} años"
+            if self.var_full_history.get()
+            else "Ver todo el histórico"
+        )
 
     def _toggle_full_history(self) -> None:
         """Interruptor "Ver todo el histórico" (Evolución y menú Análisis):
@@ -4288,7 +5053,8 @@ class AnalitixApp(ttk.Window):
             width_in = max(scroll.winfo_width(), 1) / dpi
             available_height_in = max(scroll.winfo_height(), 1) / dpi
             height_in = (
-                design_height_in if available_height_in >= design_height_in
+                design_height_in
+                if available_height_in >= design_height_in
                 else max(min_height_in, available_height_in)
             )
             fig.set_size_inches(width_in, height_in)
@@ -4334,14 +5100,22 @@ class AnalitixApp(ttk.Window):
     def _build_tab_exportar(self) -> None:
         frame = self.tab_exportar
         ttk.Label(
-            frame, text="Exporta todos los resultados del paciente seleccionado.", font=("Segoe UI", 11)
+            frame,
+            text="Exporta todos los resultados del paciente seleccionado.",
+            font=("Segoe UI", 11),
         ).pack(anchor="w", padx=PAD, pady=PAD)
         boton_excel = ttk.Button(
-            frame, text="Exportar a Excel...", bootstyle="success", command=lambda: self._export("xlsx")
+            frame,
+            text="Exportar a Excel...",
+            bootstyle="success",
+            command=lambda: self._export("xlsx"),
         )
         boton_excel.pack(anchor="w", padx=PAD, pady=5)
         boton_csv = ttk.Button(
-            frame, text="Exportar a CSV...", bootstyle="success-outline", command=lambda: self._export("csv")
+            frame,
+            text="Exportar a CSV...",
+            bootstyle="success-outline",
+            command=lambda: self._export("csv"),
         )
         boton_csv.pack(anchor="w", padx=PAD, pady=5)
         self._same_width(boton_excel, boton_csv)
@@ -4351,20 +5125,28 @@ class AnalitixApp(ttk.Window):
             "página con los parámetros fuera de rango, otra con el resto, y un gráfico de evolución "
             "por cada parámetro fuera de rango o con cambio brusco (nunca para los normales, ni para "
             "uno con un solo valor registrado).",
-            bootstyle="secondary", wraplength=700, justify="left",
+            bootstyle="secondary",
+            wraplength=700,
+            justify="left",
         ).pack(anchor="w", padx=PAD, pady=(PAD, 0))
         boton_completo = ttk.Button(
-            frame, text="Exportar informe completo (PDF)...", bootstyle="danger",
+            frame,
+            text="Exportar informe completo (PDF)...",
+            bootstyle="danger",
             command=lambda: self._export_pdf("completo"),
         )
         boton_completo.pack(anchor="w", padx=PAD, pady=(5, 0))
         ttk.Label(
             frame,
             text="Todos los parámetros del último informe.",
-            bootstyle="secondary", wraplength=700, justify="left",
+            bootstyle="secondary",
+            wraplength=700,
+            justify="left",
         ).pack(anchor="w", padx=PAD, pady=(0, 5))
         boton_alterados = ttk.Button(
-            frame, text="Exportar informe de alterados (PDF)...", bootstyle="danger-outline",
+            frame,
+            text="Exportar informe de alterados (PDF)...",
+            bootstyle="danger-outline",
             command=lambda: self._export_pdf("alterados"),
         )
         boton_alterados.pack(anchor="w", padx=PAD, pady=(5, 0))
@@ -4373,20 +5155,26 @@ class AnalitixApp(ttk.Window):
             text="Solo los parámetros que alguna vez han estado fuera de rango en todo el histórico "
             "del paciente (aunque en el informe más reciente ya estén normales), con su valor más "
             "reciente.",
-            bootstyle="secondary", wraplength=700, justify="left",
+            bootstyle="secondary",
+            wraplength=700,
+            justify="left",
         ).pack(anchor="w", padx=PAD, pady=(0, 5))
         boton_personalizado = ttk.Button(
-            frame, text="Informe PDF personalizado...", bootstyle="danger-outline",
+            frame,
+            text="Informe PDF personalizado...",
+            bootstyle="danger-outline",
             command=self._export_custom_pdf,
         )
         boton_personalizado.pack(anchor="w", padx=PAD, pady=(5, 0))
         self._same_width(boton_completo, boton_alterados, boton_personalizado)
         ttk.Label(
             frame,
-            text="Eliges qué incluir: la tabla del último informe, \"Qué ha cambiado\", el mapa de "
+            text='Eliges qué incluir: la tabla del último informe, "Qué ha cambiado", el mapa de '
             "calor, la evolución de los parámetros que quieras y los paneles clínicos (su resumen y "
             "sus gráficos). Lo alterado se marca con ⚠ para encontrarlo fácilmente.",
-            bootstyle="secondary", wraplength=700, justify="left",
+            bootstyle="secondary",
+            wraplength=700,
+            justify="left",
         ).pack(anchor="w", padx=PAD, pady=(0, 5))
 
     def _export_pdf(self, modo: str) -> None:
@@ -4403,13 +5191,17 @@ class AnalitixApp(ttk.Window):
         fuera de rango, tabla del resto, gráficos — ver
         `export.export_pdf`."""
         if self.current_patient_id is None:
-            messagebox.showwarning("Sin paciente", "Selecciona antes un paciente en la pestaña Pacientes.", parent=self)
+            messagebox.showwarning(
+                "Sin paciente", "Selecciona antes un paciente en la pestaña Pacientes.", parent=self
+            )
             return
 
         if modo == "completo":
             summary = get_latest_report_summary(self.con, self.current_patient_id)
             if not summary:
-                messagebox.showinfo("Sin datos", "No hay resultados numéricos para exportar.", parent=self)
+                messagebox.showinfo(
+                    "Sin datos", "No hay resultados numéricos para exportar.", parent=self
+                )
                 return
             filas = self._classify_latest_report(summary)
             fecha = summary["fecha"]
@@ -4418,7 +5210,8 @@ class AnalitixApp(ttk.Window):
             filas, fecha = self._build_altered_rows(self.current_patient_id)
             if not filas:
                 messagebox.showinfo(
-                    "Sin datos", "Este paciente no tiene ningún parámetro fuera de rango en su histórico.",
+                    "Sin datos",
+                    "Este paciente no tiene ningún parámetro fuera de rango en su histórico.",
                     parent=self,
                 )
                 return
@@ -4430,7 +5223,9 @@ class AnalitixApp(ttk.Window):
         # rango en todo el histórico) ya es en sí mismo "una alteración importante" para cada fila,
         # esté o no dentro de rango en el snapshot actual. `export_pdf` descarta además cualquier
         # serie de un solo punto (nada que mostrar como evolución).
-        filas_con_grafico = filas if modo == "alterados" else [f for f in filas if f["orden"] in (0, 1)]
+        filas_con_grafico = (
+            filas if modo == "alterados" else [f for f in filas if f["orden"] in (0, 1)]
+        )
         series_by_canonical_id = {
             f["canonical_id"]: get_series(self.con, f["canonical_id"], self.current_patient_id)
             for f in filas_con_grafico
@@ -4439,7 +5234,9 @@ class AnalitixApp(ttk.Window):
         patient = next((p for p in self.patients if p["id"] == self.current_patient_id), None)
         patient_name = patient["full_name"] if patient else "—"
 
-        path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[(".pdf", "*.pdf")], parent=self)
+        path = filedialog.asksaveasfilename(
+            defaultextension=".pdf", filetypes=[(".pdf", "*.pdf")], parent=self
+        )
         if not path:
             return
         filtro = self._lab_filter_text()
@@ -4447,8 +5244,15 @@ class AnalitixApp(ttk.Window):
             tipo_informe = f"{tipo_informe} · {filtro}"  # portada y pie de cada página
         with self._progress("Generando informe PDF") as paso:
             paginas = export_pdf(
-                patient_name, fecha, filas, series_by_canonical_id, labels, CAMBIO_BRUSCO_PCT, Path(path),
-                tipo_informe=tipo_informe, min_points=self.min_points,
+                patient_name,
+                fecha,
+                filas,
+                series_by_canonical_id,
+                labels,
+                CAMBIO_BRUSCO_PCT,
+                Path(path),
+                tipo_informe=tipo_informe,
+                min_points=self.min_points,
                 on_progress=lambda n, t: paso(f"Escribiendo página {n} de {t}...", n, t),
             )
         messagebox.showinfo(
@@ -4464,12 +5268,17 @@ class AnalitixApp(ttk.Window):
         paginas = [text_page(label, getattr(self, f"text_{key}_summary").get("1.0", "end"))]
         series = getattr(self, f"_{key}_series")
         if key in PDF_COMBINED_PANELS:
-            combinadas = {nombre: series[k] for k, nombre in PDF_COMBINED_PANELS[key].items() if series.get(k)}
+            combinadas = {
+                nombre: series[k] for k, nombre in PDF_COMBINED_PANELS[key].items() if series.get(k)
+            }
             if combinadas:
                 paginas.append(self._comparison_figure(combinadas))
             return paginas
         for cid, nombre in getattr(self, f"_{key}_indices"):
-            if cid and data_sufficiency(len(series.get(cid, [])), self.min_points) not in ("sin_datos", "un_punto"):
+            if cid and data_sufficiency(len(series.get(cid, [])), self.min_points) not in (
+                "sin_datos",
+                "un_punto",
+            ):
                 paginas.append(self._evolution_figure(series[cid], nombre, cid))
         return paginas
 
@@ -4482,18 +5291,23 @@ class AnalitixApp(ttk.Window):
         laboratorios, aviso de pocos datos, RCV y rango personal si su
         interruptor está activo."""
         if self.current_patient_id is None:
-            messagebox.showwarning("Sin paciente", "Selecciona antes un paciente en la pestaña Pacientes.", parent=self)
+            messagebox.showwarning(
+                "Sin paciente", "Selecciona antes un paciente en la pestaña Pacientes.", parent=self
+            )
             return
         summary = get_latest_report_summary(self.con, self.current_patient_id)
         if not summary:
-            messagebox.showinfo("Sin datos", "No hay resultados numéricos para exportar.", parent=self)
+            messagebox.showinfo(
+                "Sin datos", "No hay resultados numéricos para exportar.", parent=self
+            )
             return
         dialog, body = self._new_dialog("Informe PDF personalizado", resizable=True)
         ttk.Label(
             body,
             text="Elige qué incluir en el informe. ⚠ = alguna vez fuera de rango (o por encima del umbral "
             "orientativo de un panel). El informe usa los mismos laboratorios y ajustes que la pantalla.",
-            wraplength=560, justify="left",
+            wraplength=560,
+            justify="left",
         ).pack(anchor="w", pady=(0, 6))
 
         secciones = ttk.Labelframe(body, text="Secciones", padding=6)
@@ -4505,46 +5319,62 @@ class AnalitixApp(ttk.Window):
         var_tension = tk.BooleanVar(value=False)
         lecturas_bp = list_bp_readings(self.con, self.current_patient_id)
         for var, texto in (
-            (var_tabla, f"{'⚠ ' if alterado_ahora else ''}Tabla del último informe ({summary['fecha'][:10]})"),
+            (
+                var_tabla,
+                f"{'⚠ ' if alterado_ahora else ''}Tabla del último informe ({summary['fecha'][:10]})",
+            ),
             (var_cambios, "Qué ha cambiado (respecto al informe anterior)"),
         ):
             ttk.Checkbutton(secciones, text=texto, variable=var).pack(anchor="w", padx=8, pady=1)
         # Periodo de la tensión arterial en el informe: por defecto, el
         # último año (los mismos 365 días que el botón "Último año" del panel).
         hoy = dt.date.today()
-        vars_bp_pdf = (tk.StringVar(value=(hoy - dt.timedelta(days=BP_RANGO_DIAS["1a"] - 1)).isoformat()),
-                       tk.StringVar(value=hoy.isoformat()))
+        vars_bp_pdf = (
+            tk.StringVar(value=(hoy - dt.timedelta(days=BP_RANGO_DIAS["1a"] - 1)).isoformat()),
+            tk.StringVar(value=hoy.isoformat()),
+        )
         if lecturas_bp:
             fila_tension = ttk.Frame(secciones)
             fila_tension.pack(anchor="w", padx=8, pady=1)
-            ttk.Checkbutton(fila_tension, text="Tensión arterial (resumen y gráfico):", variable=var_tension).pack(
-                side="left")
+            ttk.Checkbutton(
+                fila_tension, text="Tensión arterial (resumen y gráfico):", variable=var_tension
+            ).pack(side="left")
             for texto, var in (("desde", vars_bp_pdf[0]), ("hasta", vars_bp_pdf[1])):
                 ttk.Label(fila_tension, text=texto).pack(side="left", padx=(8, 4))
                 entrada = ttk.Entry(fila_tension, textvariable=var, width=11)
                 self._restrict(entrada, r"[\d-]{0,10}")
                 entrada.pack(side="left")
-            ttk.Label(secciones, text="Fechas AAAA-MM-DD; en blanco, sin límite.", bootstyle="secondary").pack(
-                anchor="w", padx=32)
+            ttk.Label(
+                secciones, text="Fechas AAAA-MM-DD; en blanco, sin límite.", bootstyle="secondary"
+            ).pack(anchor="w", padx=32)
         fila_mapa = ttk.Frame(secciones)
         fila_mapa.pack(anchor="w", padx=8, pady=1)
         ttk.Checkbutton(fila_mapa, text="Mapa de calor:", variable=var_mapa).pack(side="left")
         var_conjunto_mapa = tk.StringVar(value=HEATMAP_OUT_OF_RANGE)
         ttk.Combobox(
-            fila_mapa, textvariable=var_conjunto_mapa, values=[HEATMAP_OUT_OF_RANGE, HEATMAP_ALL, *HEATMAP_SETS],
-            state="readonly", width=40,
+            fila_mapa,
+            textvariable=var_conjunto_mapa,
+            values=[HEATMAP_OUT_OF_RANGE, HEATMAP_ALL, *HEATMAP_SETS],
+            state="readonly",
+            width=40,
         ).pack(side="left", padx=(6, 0))
 
         parametros = ttk.Labelframe(body, text="Evolución de parámetros", padding=6)
         parametros.pack(fill="both", expand=True, pady=(6, 0))
-        tests = [t for t in list_canonical_tests(self.con, self.current_patient_id) if t["num_points"] >= 2]
+        tests = [
+            t
+            for t in list_canonical_tests(self.con, self.current_patient_id)
+            if t["num_points"] >= 2
+        ]
         lista = self._scrollable_frame(parametros)
         vars_tests = []
         for t in tests:
             var = tk.BooleanVar(value=False)
             vars_tests.append(var)
             ttk.Checkbutton(
-                lista, text=f"{'⚠ ' if t['out_of_range'] else ''}{t['raw_name']} (n={t['num_points']})", variable=var,
+                lista,
+                text=f"{'⚠ ' if t['out_of_range'] else ''}{t['raw_name']} (n={t['num_points']})",
+                variable=var,
             ).pack(anchor="w", padx=8, pady=1)
 
         paneles = ttk.Labelframe(body, text="Paneles clínicos (resumen y gráficos)", padding=6)
@@ -4552,10 +5382,14 @@ class AnalitixApp(ttk.Window):
         vars_paneles = {}
         for i, (key, label) in enumerate(PDF_PANELS):
             series = getattr(self, f"_{key}_series")
-            alterado = any(p.get("flag_calc") in ("alto", "bajo") for s in series.values() for p in s)
+            alterado = any(
+                p.get("flag_calc") in ("alto", "bajo") for s in series.values() for p in s
+            )
             vars_paneles[key] = (tk.BooleanVar(value=False), label, alterado)
             ttk.Checkbutton(
-                paneles, text=f"{'⚠ ' if alterado else ''}{label}", variable=vars_paneles[key][0],
+                paneles,
+                text=f"{'⚠ ' if alterado else ''}{label}",
+                variable=vars_paneles[key][0],
                 state="normal" if series else "disabled",
             ).grid(row=i // 2, column=i % 2, sticky="w", padx=8, pady=1)
 
@@ -4566,9 +5400,13 @@ class AnalitixApp(ttk.Window):
         # evolución (recuadro de notas) no caben más de 2 sin bajar de
         # `export._CHARTS_MIN_SCALE`. `export._flow_pages` sigue admitiéndola;
         # para recuperarla, añadir (3, "Tres por página, en vertical (menos hojas)").
-        for valor, texto in ((1, "Uno por página, en horizontal (más detalle)"),
-                             (2, "Dos por página, en vertical (menos hojas)")):
-            ttk.Radiobutton(graficos, text=texto, variable=var_por_pagina, value=valor).pack(anchor="w", padx=8, pady=1)
+        for valor, texto in (
+            (1, "Uno por página, en horizontal (más detalle)"),
+            (2, "Dos por página, en vertical (menos hojas)"),
+        ):
+            ttk.Radiobutton(graficos, text=texto, variable=var_por_pagina, value=valor).pack(
+                anchor="w", padx=8, pady=1
+            )
 
         def _marcar_alterados() -> None:
             for t, var in zip(tests, vars_tests):
@@ -4577,25 +5415,45 @@ class AnalitixApp(ttk.Window):
                 var.set(alterado)
 
         def _desmarcar() -> None:
-            for var in [var_tabla, var_cambios, var_mapa, var_tension, *vars_tests, *(v for v, _l, _a in vars_paneles.values())]:
+            for var in [
+                var_tabla,
+                var_cambios,
+                var_mapa,
+                var_tension,
+                *vars_tests,
+                *(v for v, _l, _a in vars_paneles.values()),
+            ]:
                 var.set(False)
 
         def _generar() -> None:
             seleccion = [t for t, var in zip(tests, vars_tests) if var.get()]
             elegidos = [(key, label) for key, (var, label, _a) in vars_paneles.items() if var.get()]
-            if not (var_tabla.get() or var_cambios.get() or var_mapa.get() or var_tension.get() or seleccion
-                    or elegidos):
-                messagebox.showwarning("Informe personalizado", "Elige al menos una sección.", parent=dialog)
+            if not (
+                var_tabla.get()
+                or var_cambios.get()
+                or var_mapa.get()
+                or var_tension.get()
+                or seleccion
+                or elegidos
+            ):
+                messagebox.showwarning(
+                    "Informe personalizado", "Elige al menos una sección.", parent=dialog
+                )
                 return
             periodo_bp = None
             if var_tension.get():
                 try:
                     periodo_bp = _check_period(*(v.get() for v in vars_bp_pdf)) or (None, None)
                 except ValueError as exc:
-                    messagebox.showwarning("Fechas no válidas", f"Revisa las fechas de la tensión arterial "
-                                           f"(AAAA-MM-DD): {exc}.", parent=dialog)
+                    messagebox.showwarning(
+                        "Fechas no válidas",
+                        f"Revisa las fechas de la tensión arterial (AAAA-MM-DD): {exc}.",
+                        parent=dialog,
+                    )
                     return
-            path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[(".pdf", "*.pdf")], parent=dialog)
+            path = filedialog.asksaveasfilename(
+                defaultextension=".pdf", filetypes=[(".pdf", "*.pdf")], parent=dialog
+            )
             if not path:
                 return
             tipo_informe = "Informe personalizado"
@@ -4605,8 +5463,14 @@ class AnalitixApp(ttk.Window):
             patient = next((p for p in self.patients if p["id"] == self.current_patient_id), None)
             # Barra de progreso: primero cada sección (gráficos y tablas),
             # después cada página escrita.
-            pasos = (var_tabla.get() + var_cambios.get() + var_mapa.get() + (periodo_bp is not None)
-                     + len(seleccion) + len(elegidos))
+            pasos = (
+                var_tabla.get()
+                + var_cambios.get()
+                + var_mapa.get()
+                + (periodo_bp is not None)
+                + len(seleccion)
+                + len(elegidos)
+            )
             total = 0
             with self._progress("Generando informe PDF", dialog) as paso:
                 hechos = 0
@@ -4619,72 +5483,137 @@ class AnalitixApp(ttk.Window):
                 paginas = []
                 if var_tabla.get():
                     filas = self._classify_latest_report(summary)
-                    paginas.append(table_page(summary["fecha"], [f for f in filas if f["flag_calc"] in ("alto", "bajo")],
-                                              CAMBIO_BRUSCO_PCT, "Parámetros alterados en la última analítica"))
-                    paginas.append(table_page(summary["fecha"], [f for f in filas if f["flag_calc"] not in ("alto", "bajo")],
-                                              CAMBIO_BRUSCO_PCT, "Resto de parámetros"))
+                    paginas.append(
+                        table_page(
+                            summary["fecha"],
+                            [f for f in filas if f["flag_calc"] in ("alto", "bajo")],
+                            CAMBIO_BRUSCO_PCT,
+                            "Parámetros alterados en la última analítica",
+                        )
+                    )
+                    paginas.append(
+                        table_page(
+                            summary["fecha"],
+                            [f for f in filas if f["flag_calc"] not in ("alto", "bajo")],
+                            CAMBIO_BRUSCO_PCT,
+                            "Resto de parámetros",
+                        )
+                    )
                     avanza()
                 if var_cambios.get():
-                    medibles = [f for f in self._changes_rows(summary) if f["previous"] is not None
-                                and (f["ref_low"] is not None or f["ref_high"] is not None)]
+                    medibles = [
+                        f
+                        for f in self._changes_rows(summary)
+                        if f["previous"] is not None
+                        and (f["ref_low"] is not None or f["ref_high"] is not None)
+                    ]
+
                     # Orden global de mayor a menor cambio antes de repartir en
                     # páginas (cada página conserva ese orden).
                     def _magnitud(f):
-                        status = change_status(f["previous"], f["value"], f["ref_low"], f["ref_high"])
+                        status = change_status(
+                            f["previous"], f["value"], f["ref_low"], f["ref_high"]
+                        )
                         return abs(status[0]) if status else 0.0
+
                     medibles.sort(key=_magnitud, reverse=True)
                     titulo = f"Qué ha cambiado — último informe ({summary['fecha'][:10]})"
-                    paginas.extend(_same_size([changes_figure(trozo, titulo + sufijo) for trozo, sufijo in _pages_of(medibles)]))
+                    paginas.extend(
+                        _same_size(
+                            [
+                                changes_figure(trozo, titulo + sufijo)
+                                for trozo, sufijo in _pages_of(medibles)
+                            ]
+                        )
+                    )
                     avanza()
                 if var_mapa.get():
                     conjunto = var_conjunto_mapa.get()
-                    paginas.extend(_same_size([heatmap_figure(trozo, conjunto + sufijo)
-                                               for trozo, sufijo in _pages_of(self._heatmap_rows(conjunto))]))
+                    paginas.extend(
+                        _same_size(
+                            [
+                                heatmap_figure(trozo, conjunto + sufijo)
+                                for trozo, sufijo in _pages_of(self._heatmap_rows(conjunto))
+                            ]
+                        )
+                    )
                     avanza()
                 for t in seleccion:
                     serie = get_series(self.con, t["canonical_id"], self.current_patient_id)
-                    paginas.append(self._evolution_figure(serie, t["raw_name"], t["canonical_id"], with_personal=True))
+                    paginas.append(
+                        self._evolution_figure(
+                            serie, t["raw_name"], t["canonical_id"], with_personal=True
+                        )
+                    )
                     avanza()
                 if periodo_bp is not None:
                     # El periodo elegido manda sobre la ventana de años, como el
                     # intervalo del panel; el gráfico agrupa según su duración.
                     desde, hasta = periodo_bp
-                    lecturas = [r for r in lecturas_bp if (desde is None or r["measured_at"][:10] >= desde)
-                                and (hasta is None or r["measured_at"][:10] <= hasta)]
+                    lecturas = [
+                        r
+                        for r in lecturas_bp
+                        if (desde is None or r["measured_at"][:10] >= desde)
+                        and (hasta is None or r["measured_at"][:10] <= hasta)
+                    ]
                     inicio = dt.date.fromisoformat(desde) if desde else None
                     fin = dt.date.fromisoformat(hasta) if hasta else hoy
                     titulo = f"Tensión arterial · {desde or 'inicio'} a {hasta or 'hoy'}"
                     paginas.append(text_page(titulo, bp_summary_text(lecturas)))
                     if lecturas or inicio is not None:
-                        paginas.append(bp_figure(lecturas, titulo, dias=None if inicio is None else (fin - inicio).days + 1,
-                                                 desde=inicio if inicio is not None and fin >= hoy else None))
+                        paginas.append(
+                            bp_figure(
+                                lecturas,
+                                titulo,
+                                dias=None if inicio is None else (fin - inicio).days + 1,
+                                desde=inicio if inicio is not None and fin >= hoy else None,
+                            )
+                        )
                     avanza()
                 for key, label in elegidos:
                     paginas.extend(self._panel_pdf_pages(key, label))
                     avanza()
                 if paginas:
                     total = export_pages_pdf(
-                        patient["full_name"] if patient else "—", summary["fecha"], paginas, Path(path),
-                        tipo_informe=tipo_informe, graficos_por_pagina=var_por_pagina.get(),
+                        patient["full_name"] if patient else "—",
+                        summary["fecha"],
+                        paginas,
+                        Path(path),
+                        tipo_informe=tipo_informe,
+                        graficos_por_pagina=var_por_pagina.get(),
                         on_progress=lambda n, t: paso(f"Escribiendo página {n} de {t}...", n, t),
                     )
             if not total:
-                messagebox.showinfo("Informe personalizado", "Las secciones elegidas no tienen datos.", parent=dialog)
+                messagebox.showinfo(
+                    "Informe personalizado",
+                    "Las secciones elegidas no tienen datos.",
+                    parent=dialog,
+                )
                 return
             dialog.destroy()
-            messagebox.showinfo("Exportado", f"Informe personalizado de {total} páginas en:\n{path}", parent=self)
+            messagebox.showinfo(
+                "Exportado", f"Informe personalizado de {total} páginas en:\n{path}", parent=self
+            )
 
         botones = ttk.Frame(body)
         botones.pack(fill="x", pady=(PAD, 0))
-        boton_alterados = ttk.Button(botones, text="Marcar alterados", bootstyle="secondary-outline",
-                                     command=_marcar_alterados)
+        boton_alterados = ttk.Button(
+            botones,
+            text="Marcar alterados",
+            bootstyle="secondary-outline",
+            command=_marcar_alterados,
+        )
         boton_alterados.pack(side="left")
-        boton_ninguno = ttk.Button(botones, text="Desmarcar todo", bootstyle="secondary-outline", command=_desmarcar)
+        boton_ninguno = ttk.Button(
+            botones, text="Desmarcar todo", bootstyle="secondary-outline", command=_desmarcar
+        )
         boton_ninguno.pack(side="left", padx=(8, 0))
         self._same_width(boton_alterados, boton_ninguno)
         boton_cancelar = ttk.Button(botones, text="Cancelar", command=dialog.destroy)
         boton_cancelar.pack(side="right")
-        boton_generar = ttk.Button(botones, text="Generar PDF...", bootstyle="primary", command=_generar)
+        boton_generar = ttk.Button(
+            botones, text="Generar PDF...", bootstyle="primary", command=_generar
+        )
         boton_generar.pack(side="right", padx=(0, 8))
         self._same_width(boton_cancelar, boton_generar)
         self._center_dialog(dialog)
@@ -4698,7 +5627,11 @@ class AnalitixApp(ttk.Window):
         necesariamente del informe más reciente del paciente en general:
         puede que ese parámetro concreto no se repitiera en él). Para el
         informe PDF "solo alterados"."""
-        altered_ids = [t["canonical_id"] for t in list_canonical_tests(self.con, patient_id) if t["out_of_range"]]
+        altered_ids = [
+            t["canonical_id"]
+            for t in list_canonical_tests(self.con, patient_id)
+            if t["out_of_range"]
+        ]
         filas = []
         fecha_max = None
         for canonical_id in altered_ids:
@@ -4707,11 +5640,20 @@ class AnalitixApp(ttk.Window):
                 continue
             ultimo = serie[-1]
             valor_anterior = serie[-2]["value_num"] if len(serie) >= 2 else None
-            filas.append(self._enrich_with_variation({
-                "canonical_id": canonical_id, "raw_name": ultimo["raw_name"], "value_num": ultimo["value_num"],
-                "unit": ultimo["unit"], "ref_low": ultimo["ref_low"], "ref_high": ultimo["ref_high"],
-                "flag_calc": ultimo["flag_calc"], "valor_anterior": valor_anterior,
-            }))
+            filas.append(
+                self._enrich_with_variation(
+                    {
+                        "canonical_id": canonical_id,
+                        "raw_name": ultimo["raw_name"],
+                        "value_num": ultimo["value_num"],
+                        "unit": ultimo["unit"],
+                        "ref_low": ultimo["ref_low"],
+                        "ref_high": ultimo["ref_high"],
+                        "flag_calc": ultimo["flag_calc"],
+                        "valor_anterior": valor_anterior,
+                    }
+                )
+            )
             if fecha_max is None or ultimo["fecha"] > fecha_max:
                 fecha_max = ultimo["fecha"]
         filas.sort(key=lambda f: (f["orden"], f["raw_name"] or ""))
@@ -4719,21 +5661,27 @@ class AnalitixApp(ttk.Window):
 
     def _export(self, kind: str) -> None:
         if self.current_patient_id is None:
-            messagebox.showwarning("Sin paciente", "Selecciona antes un paciente en la pestaña Pacientes.", parent=self)
+            messagebox.showwarning(
+                "Sin paciente", "Selecciona antes un paciente en la pestaña Pacientes.", parent=self
+            )
             return
         rows = get_all_results(self.con, self.current_patient_id)
         if not rows:
             messagebox.showinfo("Sin datos", "No hay resultados para exportar.", parent=self)
             return
         ext = ".xlsx" if kind == "xlsx" else ".csv"
-        path = filedialog.asksaveasfilename(defaultextension=ext, filetypes=[(ext, f"*{ext}")], parent=self)
+        path = filedialog.asksaveasfilename(
+            defaultextension=ext, filetypes=[(ext, f"*{ext}")], parent=self
+        )
         if not path:
             return
         if kind == "xlsx":
             export_excel(rows, Path(path))
         else:
             export_csv(rows, Path(path))
-        messagebox.showinfo("Exportado", f"Se han exportado {len(rows)} filas a:\n{path}", parent=self)
+        messagebox.showinfo(
+            "Exportado", f"Se han exportado {len(rows)} filas a:\n{path}", parent=self
+        )
 
     # -- Explorador BD --------------------------------------------------------
     def _build_tab_explorador(self) -> None:
@@ -4743,14 +5691,21 @@ class AnalitixApp(ttk.Window):
         ttk.Label(top, text="Tabla:").pack(side="left")
         self.var_explorer_table = tk.StringVar(value=EXPLORABLE_TABLES[0])
         combo = ttk.Combobox(
-            top, textvariable=self.var_explorer_table, values=list(EXPLORABLE_TABLES),
-            state="readonly", width=20,
+            top,
+            textvariable=self.var_explorer_table,
+            values=list(EXPLORABLE_TABLES),
+            state="readonly",
+            width=20,
         )
         combo.pack(side="left", padx=(6, 0))
         combo.bind("<<ComboboxSelected>>", lambda _e: self._refresh_explorador())
-        ttk.Button(top, text="Actualizar", command=self._refresh_explorador).pack(side="left", padx=(8, 0))
+        ttk.Button(top, text="Actualizar", command=self._refresh_explorador).pack(
+            side="left", padx=(8, 0)
+        )
         self.var_explorer_count = tk.StringVar(value="")
-        ttk.Label(top, textvariable=self.var_explorer_count, bootstyle="secondary").pack(side="right")
+        ttk.Label(top, textvariable=self.var_explorer_count, bootstyle="secondary").pack(
+            side="right"
+        )
 
         ttk.Label(
             frame,
@@ -4797,7 +5752,8 @@ class AnalitixApp(ttk.Window):
             "que sean en realidad la misma determinación y fusiónalas. No se permite fusionar dos "
             "pruebas que aparecen juntas en un mismo informe (el laboratorio las midió a la vez, "
             "p. ej. glucosa en sangre y en orina).",
-            bootstyle="secondary", wraplength=900,
+            bootstyle="secondary",
+            wraplength=900,
         ).pack(anchor="w", padx=PAD, pady=PAD)
 
         top = ttk.Frame(frame)
@@ -4805,7 +5761,10 @@ class AnalitixApp(ttk.Window):
         boton_actualizar = ttk.Button(top, text="Actualizar", command=self._refresh_catalogo)
         boton_actualizar.pack(side="left")
         boton_fusionar = ttk.Button(
-            top, text="Fusionar seleccionadas...", bootstyle="primary", command=self._merge_selected_groups
+            top,
+            text="Fusionar seleccionadas...",
+            bootstyle="primary",
+            command=self._merge_selected_groups,
         )
         boton_fusionar.pack(side="left", padx=(8, 0))
         self._same_width(boton_actualizar, boton_fusionar)
@@ -4819,8 +5778,13 @@ class AnalitixApp(ttk.Window):
         self._checkbox_tree(self.tree_catalogo)
         for col, label, width in zip(
             columns,
-            ("Nombre más frecuente", "Identificador interno", "Nº resultados", "Laboratorios",
-             "Variantes de nombre vistas"),
+            (
+                "Nombre más frecuente",
+                "Identificador interno",
+                "Nº resultados",
+                "Laboratorios",
+                "Variantes de nombre vistas",
+            ),
             (220, 160, 100, 160, 380),
         ):
             self.tree_catalogo.heading(col, text=label)
@@ -4838,11 +5802,21 @@ class AnalitixApp(ttk.Window):
             nombre = g["raw_names"][0][0]
             variantes = ", ".join(f"{name} ({n})" for name, n in g["raw_names"])
             tree.insert(
-                "", "end", iid=g["canonical_id"],
-                values=(nombre, g["canonical_id"], g["num_results"], ", ".join(g["labs"]), variantes),
+                "",
+                "end",
+                iid=g["canonical_id"],
+                values=(
+                    nombre,
+                    g["canonical_id"],
+                    g["num_results"],
+                    ", ".join(g["labs"]),
+                    variantes,
+                ),
             )
             for name, lab, n in g["variants"]:
-                tree.insert(g["canonical_id"], "end", values=(f"    {name}", "", n, lab or LAB_UNKNOWN, ""))
+                tree.insert(
+                    g["canonical_id"], "end", values=(f"    {name}", "", n, lab or LAB_UNKNOWN, "")
+                )
         tree._resort()
         self._sync_checks(tree)
 
@@ -4852,7 +5826,8 @@ class AnalitixApp(ttk.Window):
         selected_ids = list(dict.fromkeys(tree.parent(iid) or iid for iid in tree.selection()))
         if len(selected_ids) < 2:
             messagebox.showwarning(
-                "Selecciona al menos 2", "Marca dos o más filas que sean la misma prueba para fusionarlas.",
+                "Selecciona al menos 2",
+                "Marca dos o más filas que sean la misma prueba para fusionarlas.",
                 parent=self,
             )
             return
@@ -4862,8 +5837,10 @@ class AnalitixApp(ttk.Window):
             return
         if warnings and not messagebox.askyesno(
             "Revisar antes de fusionar",
-            "\n\n".join(warnings) + "\n\nPuede que no sean la misma prueba. ¿Fusionar de todos modos?",
-            icon="warning", parent=self,
+            "\n\n".join(warnings)
+            + "\n\nPuede que no sean la misma prueba. ¿Fusionar de todos modos?",
+            icon="warning",
+            parent=self,
         ):
             return
         selected_groups = [g for g in self._catalog_groups if g["canonical_id"] in selected_ids]
@@ -4871,12 +5848,18 @@ class AnalitixApp(ttk.Window):
         if target_id is None:
             return
         updated = merge_canonical_ids(self.con, list(selected_ids), target_id)
-        logger.info("Fusionadas pruebas %s en %s (%d resultados actualizados)", selected_ids, target_id, updated)
+        logger.info(
+            "Fusionadas pruebas %s en %s (%d resultados actualizados)",
+            selected_ids,
+            target_id,
+            updated,
+        )
         self._refresh_catalogo()
         self._refresh_test_lists()
         self.combo_manual_nombre["values"] = list_known_test_names(self.con)
         messagebox.showinfo(
-            "Analitix", f"Fusionadas {len(selected_ids)} variantes ({updated} resultados actualizados).",
+            "Analitix",
+            f"Fusionadas {len(selected_ids)} variantes ({updated} resultados actualizados).",
             parent=self,
         )
 
@@ -4893,8 +5876,10 @@ class AnalitixApp(ttk.Window):
         for g in groups:
             nombre = g["raw_names"][0][0]
             ttk.Radiobutton(
-                body, text=f"{nombre}  ({g['num_results']} resultados, id: {g['canonical_id']})",
-                variable=choice, value=g["canonical_id"],
+                body,
+                text=f"{nombre}  ({g['num_results']} resultados, id: {g['canonical_id']})",
+                variable=choice,
+                value=g["canonical_id"],
             ).pack(anchor="w", padx=8, pady=2)
         result: dict[str, str | None] = {"value": None}
 
@@ -4960,8 +5945,12 @@ class AnalitixApp(ttk.Window):
         fila_min_puntos = ttk.Frame(graficos)
         fila_min_puntos.pack(anchor="w", pady=(6, 0))
         self.var_min_points = tk.IntVar(value=self.min_points)
-        ttk.Spinbox(fila_min_puntos, from_=2, to=20, textvariable=self.var_min_points, width=5).pack(side="left")
-        ttk.Button(fila_min_puntos, text="Guardar", command=self._change_min_points).pack(side="left", padx=(8, 0))
+        ttk.Spinbox(
+            fila_min_puntos, from_=2, to=20, textvariable=self.var_min_points, width=5
+        ).pack(side="left")
+        ttk.Button(fila_min_puntos, text="Guardar", command=self._change_min_points).pack(
+            side="left", padx=(8, 0)
+        )
 
         actualizaciones = ttk.Labelframe(frame, text="Actualizaciones", padding=PAD)
         actualizaciones.pack(fill="x", padx=PAD, pady=6)
@@ -4977,14 +5966,18 @@ class AnalitixApp(ttk.Window):
             value=get_setting(self.con, "check_updates_on_start", "0") == "1"
         )
         ttk.Checkbutton(
-            fila_actualizaciones, text="Comprobar al iniciar", variable=self.var_check_updates,
+            fila_actualizaciones,
+            text="Comprobar al iniciar",
+            variable=self.var_check_updates,
             bootstyle="round-toggle",
             command=lambda: set_setting(
                 self.con, "check_updates_on_start", "1" if self.var_check_updates.get() else "0"
             ),
         ).pack(side="left")
         ttk.Button(
-            fila_actualizaciones, text="Buscar ahora", command=lambda: self._check_updates(manual=True)
+            fila_actualizaciones,
+            text="Buscar ahora",
+            command=lambda: self._check_updates(manual=True),
         ).pack(side="left", padx=(12, 0))
 
     def _build_subtab_seguridad(self, frame: ttk.Frame) -> None:
@@ -4994,7 +5987,10 @@ class AnalitixApp(ttk.Window):
             seguridad, text="La base de datos está cifrada (SQLCipher) con la contraseña maestra."
         ).pack(anchor="w")
         ttk.Button(
-            seguridad, text="Cambiar contraseña...", bootstyle="warning", command=self._change_password
+            seguridad,
+            text="Cambiar contraseña...",
+            bootstyle="warning",
+            command=self._change_password,
         ).pack(anchor="w", pady=(8, 0))
 
     def _build_subtab_datos(self, frame: ttk.Frame) -> None:
@@ -5007,7 +6003,9 @@ class AnalitixApp(ttk.Window):
             wraplength=700,
         ).pack(anchor="w")
         ttk.Button(
-            datos, text="Vaciar toda la base de datos...", bootstyle="danger",
+            datos,
+            text="Vaciar toda la base de datos...",
+            bootstyle="danger",
             command=self._delete_all_data,
         ).pack(anchor="w", pady=(8, 0))
 
@@ -5022,17 +6020,25 @@ class AnalitixApp(ttk.Window):
         ).pack(anchor="w")
         top_huerfanos = ttk.Frame(huerfanos)
         top_huerfanos.pack(fill="x", pady=(8, 4))
-        boton_actualizar = ttk.Button(top_huerfanos, text="Actualizar", command=self._refresh_orphans)
+        boton_actualizar = ttk.Button(
+            top_huerfanos, text="Actualizar", command=self._refresh_orphans
+        )
         boton_actualizar.pack(side="left")
         boton_eliminar = ttk.Button(
-            top_huerfanos, text="Eliminar seleccionados...", bootstyle="danger-outline",
+            top_huerfanos,
+            text="Eliminar seleccionados...",
+            bootstyle="danger-outline",
             command=self._delete_selected_orphans,
         )
         boton_eliminar.pack(side="left", padx=(8, 0))
         self._same_width(boton_actualizar, boton_eliminar)
         columns = ("full_name", "fecha", "source_file", "num_results", "missing_file")
         self.tree_orphans = ttk.Treeview(
-            huerfanos, columns=columns, show="headings", selectmode="extended", height=6,
+            huerfanos,
+            columns=columns,
+            show="headings",
+            selectmode="extended",
+            height=6,
             bootstyle="primary",
         )
         for col, label, width in zip(
@@ -5053,9 +6059,14 @@ class AnalitixApp(ttk.Window):
         tree.delete(*tree.get_children())
         for r in self._orphan_reports:
             tree.insert(
-                "", "end", iid=str(r["id"]),
+                "",
+                "end",
+                iid=str(r["id"]),
                 values=(
-                    r["full_name"], r["fecha"] or "", r["source_file"], r["num_results"],
+                    r["full_name"],
+                    r["fecha"] or "",
+                    r["source_file"],
+                    r["num_results"],
                     "Sí" if r["missing_file"] else "No",
                 ),
             )
@@ -5092,7 +6103,7 @@ class AnalitixApp(ttk.Window):
         ):
             return
         confirm = simpledialog.askstring(
-            "Confirmación", 'Escribe BORRAR (en mayúsculas) para confirmar:', parent=self
+            "Confirmación", "Escribe BORRAR (en mayúsculas) para confirmar:", parent=self
         )
         if confirm != "BORRAR":
             messagebox.showinfo("Analitix", "Cancelado: no se ha borrado nada.", parent=self)
@@ -5148,12 +6159,16 @@ class AnalitixApp(ttk.Window):
         ttk.Button(buttons, text="Actualizar", command=self._refresh_stats).pack(side="left")
         if sys.platform == "win32":
             ttk.Button(
-                buttons, text="Abrir carpeta de datos", bootstyle="secondary-outline",
+                buttons,
+                text="Abrir carpeta de datos",
+                bootstyle="secondary-outline",
                 command=lambda: os.startfile(PATIENTS_DIR),  # noqa: S606 - carpeta propia de la app
             ).pack(side="left", padx=(8, 0))
         if FROZEN:
             ttk.Button(
-                buttons, text="Cambiar ubicación de los datos...", bootstyle="warning-outline",
+                buttons,
+                text="Cambiar ubicación de los datos...",
+                bootstyle="warning-outline",
                 command=self._change_data_home,
             ).pack(side="left", padx=(8, 0))
         self._same_width(*buttons.winfo_children())
@@ -5165,7 +6180,9 @@ class AnalitixApp(ttk.Window):
         Copia sin borrar el origen, apunta la nueva en el registro (como el
         instalador, `config.set_installed_home_dir`) y reinicia la app."""
         chosen = filedialog.askdirectory(
-            title="Elige dónde guardar la carpeta Analitix", initialdir=str(PROJECT_ROOT.parent), parent=self
+            title="Elige dónde guardar la carpeta Analitix",
+            initialdir=str(PROJECT_ROOT.parent),
+            parent=self,
         )
         if not chosen:
             return
@@ -5199,7 +6216,9 @@ class AnalitixApp(ttk.Window):
             set_installed_home_dir(new_home)
         except OSError as exc:
             logger.exception("No se pudo cambiar la ubicación de los datos")
-            messagebox.showerror("Analitix", f"No se pudo cambiar la ubicación:\n{exc}", parent=self)
+            messagebox.showerror(
+                "Analitix", f"No se pudo cambiar la ubicación:\n{exc}", parent=self
+            )
             return
         logger.info("Ubicación de los datos cambiada a %s", new_home)
         subprocess.Popen([sys.executable])  # noqa: S603 - vuelve a abrir el propio ejecutable
@@ -5233,7 +6252,9 @@ class AnalitixApp(ttk.Window):
             "rechazan como probable error de tecleo o de columna. No son valores normales ni objetivos de "
             "salud: solo cazan errores evidentes (por ejemplo 18 en vez de 180). Cada límite se puede "
             "ajustar dentro del margen permitido que se indica a la derecha.",
-            bootstyle="secondary", wraplength=760, justify="left",
+            bootstyle="secondary",
+            wraplength=760,
+            justify="left",
         ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
         ttk.Label(caja, text="Mínimo").grid(row=1, column=1)
         ttk.Label(caja, text="Máximo").grid(row=1, column=2)
@@ -5242,30 +6263,48 @@ class AnalitixApp(ttk.Window):
         for fila, (clave, (tope_min, tope_max)) in enumerate(BP_ABSOLUTE_LIMITS.items(), start=2):
             unidad = "lpm" if clave == "pulse" else "mmHg"
             ttk.Label(caja, text=f"{BP_LIMIT_NAMES[clave].capitalize()} ({unidad}):").grid(
-                row=fila, column=0, sticky="w", pady=2)
+                row=fila, column=0, sticky="w", pady=2
+            )
             par = (tk.IntVar(value=actuales[clave][0]), tk.IntVar(value=actuales[clave][1]))
             for col, var in enumerate(par, start=1):
                 caja_num = ttk.Spinbox(caja, from_=tope_min, to=tope_max, textvariable=var, width=6)
                 self._restrict(caja_num, r"\d{0,3}")
                 caja_num.grid(row=fila, column=col, padx=6, pady=2)
             ttk.Label(caja, text=f"permitido: {tope_min} – {tope_max}", bootstyle="secondary").grid(
-                row=fila, column=3, sticky="w", padx=(8, 0))
+                row=fila, column=3, sticky="w", padx=(8, 0)
+            )
             self.vars_bp_limits[clave] = par
         botones = ttk.Frame(caja)
-        botones.grid(row=len(BP_ABSOLUTE_LIMITS) + 2, column=0, columnspan=4, sticky="w", pady=(10, 0))
-        guardar = ttk.Button(botones, text="Guardar límites", bootstyle="primary", command=self._save_bp_limits)
+        botones.grid(
+            row=len(BP_ABSOLUTE_LIMITS) + 2, column=0, columnspan=4, sticky="w", pady=(10, 0)
+        )
+        guardar = ttk.Button(
+            botones, text="Guardar límites", bootstyle="primary", command=self._save_bp_limits
+        )
         guardar.pack(side="left")
-        por_defecto = ttk.Button(botones, text="Valores por defecto", bootstyle="secondary-outline",
-                                 command=self._reset_bp_limits)
+        por_defecto = ttk.Button(
+            botones,
+            text="Valores por defecto",
+            bootstyle="secondary-outline",
+            command=self._reset_bp_limits,
+        )
         por_defecto.pack(side="left", padx=(8, 0))
         self._same_width(guardar, por_defecto)
 
     def _save_bp_limits(self) -> None:
         try:
-            limites = check_bp_limits({k: (a.get(), b.get()) for k, (a, b) in self.vars_bp_limits.items()})
+            limites = check_bp_limits(
+                {k: (a.get(), b.get()) for k, (a, b) in self.vars_bp_limits.items()}
+            )
         except (ValueError, tk.TclError) as exc:
-            texto = str(exc) if isinstance(exc, ValueError) else "escribe los límites como números enteros"
-            messagebox.showwarning("Límites no válidos", texto[:1].upper() + texto[1:] + ".", parent=self)
+            texto = (
+                str(exc)
+                if isinstance(exc, ValueError)
+                else "escribe los límites como números enteros"
+            )
+            messagebox.showwarning(
+                "Límites no válidos", texto[:1].upper() + texto[1:] + ".", parent=self
+            )
             return
         set_setting(self.con, "bp_limits", json.dumps({k: list(v) for k, v in limites.items()}))
         messagebox.showinfo("Analitix", "Límites guardados.", parent=self)
@@ -5284,19 +6323,27 @@ class AnalitixApp(ttk.Window):
         messagebox.showinfo("Analitix", "Preferencia guardada.", parent=self)
 
     def _change_password(self) -> None:
-        new_pw = simpledialog.askstring("Cambiar contraseña", "Nueva contraseña:", show="*", parent=self)
+        new_pw = simpledialog.askstring(
+            "Cambiar contraseña", "Nueva contraseña:", show="*", parent=self
+        )
         if not new_pw:
             return
-        confirm = simpledialog.askstring("Cambiar contraseña", "Repite la nueva contraseña:", show="*", parent=self)
+        confirm = simpledialog.askstring(
+            "Cambiar contraseña", "Repite la nueva contraseña:", show="*", parent=self
+        )
         if confirm != new_pw:
-            messagebox.showerror("Analitix", "Las contraseñas no coinciden. No se ha cambiado nada.", parent=self)
+            messagebox.showerror(
+                "Analitix", "Las contraseñas no coinciden. No se ha cambiado nada.", parent=self
+            )
             return
         try:
             rekey(self.con, new_pw)
             self.con.commit()
         except Exception as exc:  # noqa: BLE001 - se informa al usuario tal cual
             logger.exception("Error al cambiar la contraseña")
-            messagebox.showerror("Analitix", f"No se pudo cambiar la contraseña:\n{exc}", parent=self)
+            messagebox.showerror(
+                "Analitix", f"No se pudo cambiar la contraseña:\n{exc}", parent=self
+            )
             return
         logger.info("Contraseña de la base de datos cambiada")
         messagebox.showinfo("Analitix", "Contraseña actualizada correctamente.", parent=self)
@@ -5308,7 +6355,9 @@ class AnalitixApp(ttk.Window):
             var.set(str(value) if value not in (None, "") else "—")
         if self.db_path is not None and self.db_path.exists():
             size_kb = self.db_path.stat().st_size / 1024
-            self.var_db_size.set(f"{size_kb:,.0f} KB" if size_kb < 1024 else f"{size_kb / 1024:,.1f} MB")
+            self.var_db_size.set(
+                f"{size_kb:,.0f} KB" if size_kb < 1024 else f"{size_kb / 1024:,.1f} MB"
+            )
         else:
             self.var_db_size.set("—")
 
@@ -5324,7 +6373,9 @@ class AnalitixApp(ttk.Window):
         """Colorea un widget clásico de Tk (Listbox/Text) acorde al tema ttk activo."""
         colors = self.style.colors
         widget.configure(
-            background=colors.inputbg, foreground=colors.inputfg,
-            selectbackground=colors.primary, selectforeground=colors.selectfg,
+            background=colors.inputbg,
+            foreground=colors.inputfg,
+            selectbackground=colors.primary,
+            selectforeground=colors.selectfg,
             highlightthickness=0,
         )

@@ -13,6 +13,7 @@ capa opcional del usuario (`config.BV_PATH`, mismo formato) cuyas filas
 sustituyen a las de la aplicación. Fuentes, discrepancias y valores
 excluidos: `docs/referencias_medicas/referencias_rcv.md`.
 """
+
 from __future__ import annotations
 
 import csv
@@ -20,7 +21,7 @@ import math
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from analitix.config import BUNDLED_BV_PATH, BV_PATH
 
@@ -42,16 +43,16 @@ CVA_FRACCION_DE_CVI = 0.5
 @dataclass(frozen=True)
 class VariacionBiologica:
     analito: str
-    cvi_pct: Optional[float]
-    cvi_mujer_pct: Optional[float]
-    cvi_hombre_pct: Optional[float]
-    cva_pct: Optional[float]
+    cvi_pct: float | None
+    cvi_mujer_pct: float | None
+    cvi_hombre_pct: float | None
+    cva_pct: float | None
     fuente: str
     doi: str
     tabla: str
     nota: str
 
-    def cvi_para(self, sex: Optional[str]) -> Optional[float]:
+    def cvi_para(self, sex: str | None) -> float | None:
         """CVI aplicable: el común, o el del sexo del paciente si el
         artículo los da por separado; sin sexo conocido, el mayor (umbral
         más prudente)."""
@@ -64,7 +65,7 @@ class VariacionBiologica:
         return max(valores) if valores else None
 
 
-def _num(texto: Optional[str]) -> Optional[float]:
+def _num(texto: str | None) -> float | None:
     texto = (texto or "").strip()
     return float(texto) if texto else None
 
@@ -104,7 +105,9 @@ def load_table() -> dict[str, VariacionBiologica]:
     return tabla
 
 
-def rcv_limits(cvi_pct: float, cva_pct: Optional[float] = None, z: float = Z_95) -> tuple[float, float]:
+def rcv_limits(
+    cvi_pct: float, cva_pct: float | None = None, z: float = Z_95
+) -> tuple[float, float]:
     """Límites (bajada, subida) del RCV en % con el modelo log-normal
     (asimétrico), el que usa el propio estudio EuBIVAS para todos sus RCV:
     σ = √(ln(CVA²+1) + ln(CVI²+1)) con los CV en fracción;
@@ -121,14 +124,14 @@ def rcv_limits(cvi_pct: float, cva_pct: Optional[float] = None, z: float = Z_95)
 
 
 def classify_change(
-    canonical_id: Optional[str],
-    previous: Optional[float],
-    value: Optional[float],
-    sex: Optional[str] = None,
-    lab_previous: Optional[str] = None,
-    lab: Optional[str] = None,
-    table: Optional[dict[str, VariacionBiologica]] = None,
-) -> Optional[dict[str, Any]]:
+    canonical_id: str | None,
+    previous: float | None,
+    value: float | None,
+    sex: str | None = None,
+    lab_previous: str | None = None,
+    lab: str | None = None,
+    table: dict[str, VariacionBiologica] | None = None,
+) -> dict[str, Any] | None:
     """Clasifica el cambio `previous` → `value`. Devuelve `None` si no hay
     variación biológica para el parámetro o los valores no lo permiten
     (≤ 0: el modelo es logarítmico); si no, un dict con `estado`:
@@ -153,8 +156,13 @@ def classify_change(
     else:
         estado = "real" if pct > subida or pct < bajada else "esperable"
     return {
-        "estado": estado, "pct": pct, "rcv_bajada": bajada, "rcv_subida": subida,
-        "analito": bv.analito, "fuente": bv.fuente, "nota": bv.nota,
+        "estado": estado,
+        "pct": pct,
+        "rcv_bajada": bajada,
+        "rcv_subida": subida,
+        "analito": bv.analito,
+        "fuente": bv.fuente,
+        "nota": bv.nota,
     }
 
 
@@ -165,11 +173,11 @@ PERSONAL_MIN_POINTS = 3
 
 
 def personal_range(
-    canonical_id: Optional[str],
+    canonical_id: str | None,
     series: list[dict[str, Any]],
-    sex: Optional[str] = None,
-    table: Optional[dict[str, VariacionBiologica]] = None,
-) -> Optional[dict[str, Any]]:
+    sex: str | None = None,
+    table: dict[str, VariacionBiologica] | None = None,
+) -> dict[str, Any] | None:
     """Rango de referencia personalizado (prRI) a partir del propio
     historial — Coşkun A, Sandberg S, Unsal I, et al. Clin Chem
     2021;67(2):374-384, doi:10.1093/clinchem/hvaa233 (ecuación 4: intervalo
@@ -196,7 +204,8 @@ def personal_range(
     if cvi is None:
         return None
     base = [
-        s for s in series[:-1]
+        s
+        for s in series[:-1]
         if s.get("flag_calc") not in ("alto", "bajo")
         and (s.get("ref_low") is not None or s.get("ref_high") is not None)
         and s.get("value_num") is not None
@@ -206,12 +215,15 @@ def personal_range(
     n = len(base)
     punto = sum(s["value_num"] for s in base) / n
     cva = max(bv.cva_pct or 0.0, CVA_FRACCION_DE_CVI * cvi)
-    semiancho_pct = Z_95 * math.sqrt((n + 1) / n) * math.sqrt(cvi ** 2 + cva ** 2)
+    semiancho_pct = Z_95 * math.sqrt((n + 1) / n) * math.sqrt(cvi**2 + cva**2)
     return {
         "bajo": max(0.0, punto * (1 - semiancho_pct / 100)),
         "alto": punto * (1 + semiancho_pct / 100),
-        "punto": punto, "n": n, "labs": len({s.get("lab") for s in base}),
-        "fuente": bv.fuente, "nota": bv.nota,
+        "punto": punto,
+        "n": n,
+        "labs": len({s.get("lab") for s in base}),
+        "fuente": bv.fuente,
+        "nota": bv.nota,
     }
 
 
@@ -237,11 +249,11 @@ CUSUM_MIN_MONITORED = 3
 
 
 def cusum_drift(
-    canonical_id: Optional[str],
+    canonical_id: str | None,
     series: list[dict[str, Any]],
-    sex: Optional[str] = None,
-    table: Optional[dict[str, VariacionBiologica]] = None,
-) -> Optional[dict[str, Any]]:
+    sex: str | None = None,
+    table: dict[str, VariacionBiologica] | None = None,
+) -> dict[str, Any] | None:
     """Deriva lenta y sostenida respecto al punto de equilibrio propio.
 
     Solo el tramo final de un mismo laboratorio (un cambio de método se
@@ -263,12 +275,15 @@ def cusum_drift(
     while inicio > 0 and series[inicio - 1].get("lab") == lab:
         inicio -= 1
     tramo = [s for s in series[inicio:] if s.get("value_num") and s["value_num"] > 0]
-    base_idx = [i for i, s in enumerate(tramo)
-                if s.get("flag_calc") not in ("alto", "bajo")
-                and (s.get("ref_low") is not None or s.get("ref_high") is not None)][:CUSUM_BASELINE]
+    base_idx = [
+        i
+        for i, s in enumerate(tramo)
+        if s.get("flag_calc") not in ("alto", "bajo")
+        and (s.get("ref_low") is not None or s.get("ref_high") is not None)
+    ][:CUSUM_BASELINE]
     if len(base_idx) < CUSUM_BASELINE:
         return None
-    vigilados = tramo[base_idx[-1] + 1:]
+    vigilados = tramo[base_idx[-1] + 1 :]
     if len(vigilados) < CUSUM_MIN_MONITORED:
         return None
     punto = sum(tramo[i]["value_num"] for i in base_idx) / CUSUM_BASELINE
@@ -286,15 +301,23 @@ def cusum_drift(
         direccion, desde = "sube", desde_alta
     elif s_baja > CUSUM_H:
         direccion, desde = "baja", desde_baja
-    return {"direccion": direccion, "desde": desde, "punto": punto, "n": len(vigilados), "fuente": bv.fuente}
+    return {
+        "direccion": direccion,
+        "desde": desde,
+        "punto": punto,
+        "n": len(vigilados),
+        "fuente": bv.fuente,
+    }
 
 
-def cusum_note(drift: Optional[dict[str, Any]]) -> Optional[str]:
+def cusum_note(drift: dict[str, Any] | None) -> str | None:
     """Frase para el recuadro bajo el gráfico, solo si hay deriva."""
     if not drift or not drift.get("direccion"):
         return None
     lado = "por encima" if drift["direccion"] == "sube" else "por debajo"
-    return (f"Cambio lento: desde {(drift['desde'] or '')[:7]} tus valores han ido quedando {lado} de tu "
-            f"valor habitual ({drift['punto']:.3g}, la media de tus primeras analíticas normales). En cada "
-            "analítica la diferencia es pequeña, pero se repite: puede ser un cambio real y lento. No es un "
-            "diagnóstico; si continúa, coméntalo con tu médico.")
+    return (
+        f"Cambio lento: desde {(drift['desde'] or '')[:7]} tus valores han ido quedando {lado} de tu "
+        f"valor habitual ({drift['punto']:.3g}, la media de tus primeras analíticas normales). En cada "
+        "analítica la diferencia es pequeña, pero se repite: puede ser un cambio real y lento. No es un "
+        "diagnóstico; si continúa, coméntalo con tu médico."
+    )

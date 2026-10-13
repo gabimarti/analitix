@@ -28,11 +28,12 @@ sin motor de parseo todavía, o ninguno reconocido) no pasa por este motor: se
 devuelve sin cabecera ni resultados para que `ingest.py` lo mande a revisión
 manual en vez de arriesgarse a guardar datos mal interpretados.
 """
+
 from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import pdfplumber
 
@@ -178,7 +179,7 @@ def extract_lines(pdf_path: Path, x_tolerance: float = 3) -> list[str]:
 
 
 def _extract_labeled_fields(
-    line: str, labels: list[tuple[str, str]], boundary_re: Optional[re.Pattern] = None
+    line: str, labels: list[tuple[str, str]], boundary_re: re.Pattern | None = None
 ) -> dict[str, str]:
     # Las plantillas no siempre acentúan igual la misma etiqueta (p.ej. "Num."
     # frente a "Núm.", "clínica" frente a "clinica"); se buscan las etiquetas
@@ -209,7 +210,7 @@ def _extract_labeled_fields(
     return fields
 
 
-def _to_float(text: str) -> Optional[float]:
+def _to_float(text: str) -> float | None:
     candidate = text.strip()
     # Convención catalana/española: "." agrupa millares (siempre en grupos
     # de 3 dígitos) y "," es el separador decimal, p. ej. "1.000" = 1000,
@@ -231,8 +232,18 @@ def _to_float(text: str) -> Optional[float]:
 # Con el nombre del mes abreviado a sus 3 primeras letras basta para cubrir
 # tanto la forma abreviada ("nov.") como la completa ("novembre").
 _CATALAN_MONTH_PREFIXES = {
-    "gen": 1, "feb": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
-    "jul": 7, "ago": 8, "set": 9, "oct": 10, "nov": 11, "des": 12,
+    "gen": 1,
+    "feb": 2,
+    "mar": 3,
+    "abr": 4,
+    "mai": 5,
+    "jun": 6,
+    "jul": 7,
+    "ago": 8,
+    "set": 9,
+    "oct": 10,
+    "nov": 11,
+    "des": 12,
 }
 # "de" se eufoniza en "d'" delante de mes que empieza por vocal ("17 d'abr.
 # 2025", visto en un informe real de 2025 con apóstrofo tipográfico ’ —
@@ -244,7 +255,7 @@ _CATALAN_DATE_RE = re.compile(
 )
 
 
-def _parse_date(text: Optional[str]) -> Optional[str]:
+def _parse_date(text: str | None) -> str | None:
     if not text:
         return None
     # Día/mes admiten 1 o 2 dígitos y el año 2 o 4 (la plantilla 2023-2024
@@ -285,7 +296,7 @@ def _normalize_heading(line: str) -> str:
     return strip_accents(text).upper().strip()
 
 
-def _parse_range_bounds(ref_text: Optional[str]) -> tuple[Optional[float], Optional[float]]:
+def _parse_range_bounds(ref_text: str | None) -> tuple[float | None, float | None]:
     if not ref_text:
         return None, None
     mm = re.match(r"(-?[\d.,]+)\s*-\s*(-?[\d.,]+)$", ref_text)
@@ -300,12 +311,21 @@ def _parse_range_bounds(ref_text: Optional[str]) -> tuple[Optional[float], Optio
     return None, None
 
 
-def _extract_range(content: str) -> tuple[str, Optional[str], Optional[float], Optional[float]]:
-    m = PAREN_RANGE_RE.search(content) or BRACKET_RANGE_RE.search(content) or RANGE_RE.search(content)
+def _extract_range(content: str) -> tuple[str, str | None, float | None, float | None]:
+    m = (
+        PAREN_RANGE_RE.search(content)
+        or BRACKET_RANGE_RE.search(content)
+        or RANGE_RE.search(content)
+    )
     if not m:
         m = OPEN_PAREN_RANGE_RE.search(content)
         if m:
-            return content[: m.start()].strip(), f">= {m.group('low')}", _to_float(m.group("low")), None
+            return (
+                content[: m.start()].strip(),
+                f">= {m.group('low')}",
+                _to_float(m.group("low")),
+                None,
+            )
         return content, None, None, None
     ref_text = m.group("range").strip()
     remainder = content[: m.start()].strip()
@@ -370,7 +390,7 @@ def _is_value_token(token: str) -> bool:
 
 def _split_name_rest(
     content: str, known_text_values: list[str], prefer_last_numeric_token: bool = False
-) -> tuple[str, Optional[str], str]:
+) -> tuple[str, str | None, str]:
     """Separa 'Nombre (LOINC) resto' o, si no hay LOINC, 'Nombre resto'.
 
     `prefer_last_numeric_token`: para perfiles `bare_range_is_result` (p.
@@ -411,14 +431,14 @@ def _split_name_rest(
     if value_idx is None:
         for phrase in known_text_values:
             if content.lower().endswith(phrase.lower()):
-                return content[: -len(phrase)].strip(), None, content[-len(phrase):]
+                return content[: -len(phrase)].strip(), None, content[-len(phrase) :]
         return content.strip(), None, ""
     name = " ".join(tokens[:value_idx])
     rest = " ".join(tokens[value_idx:])
     return name.strip(), None, rest
 
 
-def _extract_value_unit(rest: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+def _extract_value_unit(rest: str) -> tuple[str | None, str | None, str | None]:
     rest = rest.strip()
     flag_pdf = None
     if rest.startswith(ARROW_UP):
@@ -436,7 +456,9 @@ def _extract_value_unit(rest: str) -> tuple[Optional[str], Optional[str], Option
     return flag_pdf, value_raw, unit
 
 
-def _bound_is_minimum(name: str, flag_pdf: Optional[str], value_raw: Optional[str], bound: Optional[float]) -> bool:
+def _bound_is_minimum(
+    name: str, flag_pdf: str | None, value_raw: str | None, bound: float | None
+) -> bool:
     """Si un límite de rango suelto (sin "<"/">") es un mínimo. El colesterol
     HDL siempre lo es ("más alto es mejor"); en el resto manda la marca del
     PDF (↓ = el valor está bajo el mínimo) y, sin marca, el valor es normal:
@@ -455,7 +477,9 @@ def parse_result_line(
     content: str, known_text_values: list[str] = (), prefer_last_numeric_token: bool = False
 ) -> dict[str, Any]:
     remainder, ref_text, ref_low, ref_high = _extract_range(content)
-    name, loinc_code, rest = _split_name_rest(remainder, list(known_text_values), prefer_last_numeric_token)
+    name, loinc_code, rest = _split_name_rest(
+        remainder, list(known_text_values), prefer_last_numeric_token
+    )
     # Alguna plantilla antigua marca con "* " las determinaciones calculadas
     # ("* Colesterol LDL"); sin quitarlo, la misma prueba tendría dos ids.
     name = re.sub(r"^\*\s*", "", name)
@@ -505,7 +529,9 @@ def _age_band(m: re.Match) -> tuple[int, int]:
 
 
 def _age_on(birth_date: str, on_date: str) -> int:
-    (y1, m1, d1), (y2, m2, d2) = (tuple(int(x) for x in d[:10].split("-")) for d in (birth_date, on_date))
+    (y1, m1, d1), (y2, m2, d2) = (
+        tuple(int(x) for x in d[:10].split("-")) for d in (birth_date, on_date)
+    )
     return y2 - y1 - ((m2, d2) < (m1, d1))
 
 
@@ -514,7 +540,9 @@ def _set_range(result: dict[str, Any], ref_text: str) -> None:
     result["ref_low"], result["ref_high"] = _parse_range_bounds(ref_text)
 
 
-def apply_age_bands(results: list[dict[str, Any]], birth_date: Optional[str], fallback_date: Optional[str]) -> None:
+def apply_age_bands(
+    results: list[dict[str, Any]], birth_date: str | None, fallback_date: str | None
+) -> None:
     """Resuelve las franjas de referencia por edad (`age_bands`, ver
     `following_range_labels`): elige la de la edad del paciente en la fecha
     de la muestra (o `fallback_date`). Sin fecha de nacimiento la franja se
@@ -532,7 +560,9 @@ def apply_age_bands(results: list[dict[str, Any]], birth_date: Optional[str], fa
             del result["age_bands"]
 
 
-def compute_flag(value_num: Optional[float], ref_low: Optional[float], ref_high: Optional[float]) -> Optional[str]:
+def compute_flag(
+    value_num: float | None, ref_low: float | None, ref_high: float | None
+) -> str | None:
     if value_num is None:
         return None
     if ref_low is not None and value_num < ref_low:
@@ -548,16 +578,16 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
     """Aplica el motor de parseo a `lines` usando las tablas de `profile`."""
     header: dict[str, str] = {}
     results: list[dict[str, Any]] = []
-    current_section: Optional[str] = None
-    current_group: Optional[str] = None
-    current_sample_date: Optional[str] = None
+    current_section: str | None = None
+    current_group: str | None = None
+    current_sample_date: str | None = None
     in_header = True
     expect_name_next = False
-    previous_line: Optional[str] = None
-    pending_interfaced: Optional[dict[str, Any]] = None
+    previous_line: str | None = None
+    pending_interfaced: dict[str, Any] | None = None
     # Último resultado sin rango propio, a la espera de que una línea
     # posterior se lo dé (ver `following_range_labels`).
-    range_target: Optional[dict[str, Any]] = None
+    range_target: dict[str, Any] | None = None
     range_target_idx = 0
     collecting_range = False
 
@@ -570,7 +600,9 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
         # sin este preescaneo, los resultados anteriores a esa línea se
         # guardarían con `sample_date=None` en vez de heredarla.
         for raw_line in lines:
-            fields = _extract_labeled_fields(raw_line.strip(), [profile.sample_date_label], profile.boundary_re)
+            fields = _extract_labeled_fields(
+                raw_line.strip(), [profile.sample_date_label], profile.boundary_re
+            )
             if "sample_date" in fields:
                 current_sample_date = _parse_date(fields["sample_date"])
                 break
@@ -605,7 +637,9 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
         for token in profile.strip_mid_tokens:
             line = re.sub(rf"\s+{re.escape(token)}\s+", " ", line)
 
-        if profile.ignore_line_patterns and any(p.search(line) for p in profile.ignore_line_patterns):
+        if profile.ignore_line_patterns and any(
+            p.search(line) for p in profile.ignore_line_patterns
+        ):
             continue
 
         prev_line, previous_line = previous_line, line
@@ -622,7 +656,9 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
             if collecting_range:
                 band = AGE_BAND_RE.match(line)
                 if band:
-                    range_target.setdefault("age_bands", []).append((*_age_band(band), band.group("range").strip()))
+                    range_target.setdefault("age_bands", []).append(
+                        (*_age_band(band), band.group("range").strip())
+                    )
                     range_target_idx = idx
                     continue
                 bare = LEADING_RANGE_RE.match(line)
@@ -660,7 +696,7 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
 
         if profile.interfaced_result_prefix and line.startswith(profile.interfaced_result_prefix):
             in_header = False
-            content = line[len(profile.interfaced_result_prefix):].strip()
+            content = line[len(profile.interfaced_result_prefix) :].strip()
             pending_interfaced = _parse_interfaced_value_line(content)
             continue
 
@@ -668,14 +704,23 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
         # nombre aparece suelto, en la línea siguiente a un título "Informe".
         if expect_name_next:
             expect_name_next = False
-            if in_header and not header.get("full_name") and "," in line and re.fullmatch(r"[A-Za-zÀ-ÿ'’.\-, ]+", line):
+            if (
+                in_header
+                and not header.get("full_name")
+                and "," in line
+                and re.fullmatch(r"[A-Za-zÀ-ÿ'’.\-, ]+", line)
+            ):
                 header["full_name"] = line
                 continue
 
         if profile.sample_date_label:
-            sample_fields = _extract_labeled_fields(line, [profile.sample_date_label], profile.boundary_re)
+            sample_fields = _extract_labeled_fields(
+                line, [profile.sample_date_label], profile.boundary_re
+            )
             if "sample_date" in sample_fields:
-                current_sample_date = _parse_date(sample_fields["sample_date"]) or current_sample_date
+                current_sample_date = (
+                    _parse_date(sample_fields["sample_date"]) or current_sample_date
+                )
 
         if profile.metadata_row_re:
             m = profile.metadata_row_re.match(line)
@@ -701,7 +746,9 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
         # por un título y cierran el modo cabecera antes de llegar a
         # "Pacient:"/"NIF/DNI:"/etc. `setdefault` evita que una coincidencia
         # tardía o espuria sobrescriba un valor ya capturado antes.
-        for key, value in _extract_labeled_fields(line, profile.header_labels, profile.boundary_re).items():
+        for key, value in _extract_labeled_fields(
+            line, profile.header_labels, profile.boundary_re
+        ).items():
             header.setdefault(key, value)
 
         section_match = SECTION_LINE_RE.match(line)
@@ -725,25 +772,30 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
             if m:
                 in_header = False
                 name = m.group("name").strip()
-                if profile.single_result_name_placeholder and name.upper() == profile.single_result_name_placeholder.upper():
+                if (
+                    profile.single_result_name_placeholder
+                    and name.upper() == profile.single_result_name_placeholder.upper()
+                ):
                     name = current_section or name
                 remainder, ref_text, ref_low, ref_high = _extract_range(m.group("rest"))
                 flag_pdf, value_raw, unit = _extract_value_unit(remainder)
                 if name:
-                    results.append({
-                        "raw_name": name,
-                        "loinc_code": None,
-                        "value_raw": value_raw,
-                        "value_num": _to_float(value_raw) if value_raw else None,
-                        "unit": unit,
-                        "ref_low": ref_low,
-                        "ref_high": ref_high,
-                        "ref_text": ref_text,
-                        "flag_pdf": flag_pdf,
-                        "section": current_section,
-                        "test_group": current_group,
-                        "sample_date": current_sample_date,
-                    })
+                    results.append(
+                        {
+                            "raw_name": name,
+                            "loinc_code": None,
+                            "value_raw": value_raw,
+                            "value_num": _to_float(value_raw) if value_raw else None,
+                            "unit": unit,
+                            "ref_low": ref_low,
+                            "ref_high": ref_high,
+                            "ref_text": ref_text,
+                            "flag_pdf": flag_pdf,
+                            "section": current_section,
+                            "test_group": current_group,
+                            "sample_date": current_sample_date,
+                        }
+                    )
                 continue
 
         if profile.detect_headings and _is_heading(line):
@@ -805,7 +857,12 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
             # marcador "(n)" ni paréntesis que delimiten la fila (a
             # diferencia de los otros casos de arriba), es el único punto
             # donde hace falta esta comprobación extra.
-            if parse_result_line(line, profile.known_text_values, prefer_last_numeric_token=True)["value_raw"] is None:
+            if (
+                parse_result_line(line, profile.known_text_values, prefer_last_numeric_token=True)[
+                    "value_raw"
+                ]
+                is None
+            ):
                 continue
             _add_result(line, prefer_last_numeric_token=True)
             continue
@@ -851,12 +908,18 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
 # (Maresme, Echevarne), "M"/"F" (HUGTIP), "HOMBRE"/"MUJER" (Synlab/SNB),
 # "VARON" (Quirón).
 _SEX_VALUES = {
-    "home": "Hombre", "hombre": "Hombre", "varon": "Hombre", "m": "Hombre", "h": "Hombre",
-    "dona": "Mujer", "mujer": "Mujer", "f": "Mujer",
+    "home": "Hombre",
+    "hombre": "Hombre",
+    "varon": "Hombre",
+    "m": "Hombre",
+    "h": "Hombre",
+    "dona": "Mujer",
+    "mujer": "Mujer",
+    "f": "Mujer",
 }
 
 
-def _parse_sex(text: Optional[str]) -> Optional[str]:
+def _parse_sex(text: str | None) -> str | None:
     words = strip_accents(text or "").lower().split()
     return _SEX_VALUES.get(words[0].strip("/")) if words else None
 
@@ -881,8 +944,13 @@ def parse_report(pdf_path: Path) -> dict[str, Any]:
 
     if profile.manual_review_only:
         header = {
-            "full_name": None, "dni": None, "nhc": None, "report_number": None,
-            "birth_date": None, "request_date": None, "validation_date": None,
+            "full_name": None,
+            "dni": None,
+            "nhc": None,
+            "report_number": None,
+            "birth_date": None,
+            "request_date": None,
+            "validation_date": None,
         }
         results: list[dict[str, Any]] = []
     else:

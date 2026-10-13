@@ -22,9 +22,10 @@ que se ha desarrollado y probado Analitix, ver §1 de
 (p. ej. mmol/L de un laboratorio distinto) se descarta ese punto en vez de
 calcular con cifras que no son comparables — ver `_mg_dl`.
 """
+
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from analitix.pdf_parser import compute_flag
 from analitix.repository import get_merged_series
@@ -87,7 +88,7 @@ ATP3_HIGH = {"total": 200.0, "ldl": 130.0, "tg": 150.0}
 ATP3_LOW = {"hdl": 40.0}
 
 
-def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _mg_dl(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de `row` si su unidad es mg/dL (única unidad que usa
     el laboratorio soportado hoy), `None` en cualquier otro caso — incluido
     `row is None` (el parámetro no está en ese informe)."""
@@ -99,7 +100,7 @@ def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def ldl_friedewald(total: Optional[float], hdl: Optional[float], tg: Optional[float]) -> Optional[float]:
+def ldl_friedewald(total: float | None, hdl: float | None, tg: float | None) -> float | None:
     """LDL estimado (mg/dL) por la fórmula de Friedewald — ver
     `FRIEDEWALD_MAX_TG` para la cita y el límite de validez."""
     if total is None or hdl is None or tg is None or tg >= FRIEDEWALD_MAX_TG:
@@ -107,21 +108,21 @@ def ldl_friedewald(total: Optional[float], hdl: Optional[float], tg: Optional[fl
     return total - hdl - tg / 5.0
 
 
-def castelli_1(total: Optional[float], hdl: Optional[float]) -> Optional[float]:
+def castelli_1(total: float | None, hdl: float | None) -> float | None:
     """Índice aterogénico / Castelli I: colesterol total ÷ HDL."""
     if total is None or hdl is None or hdl == 0:
         return None
     return total / hdl
 
 
-def castelli_2(ldl: Optional[float], hdl: Optional[float]) -> Optional[float]:
+def castelli_2(ldl: float | None, hdl: float | None) -> float | None:
     """Castelli II: LDL ÷ HDL."""
     if ldl is None or hdl is None or hdl == 0:
         return None
     return ldl / hdl
 
 
-def tg_hdl_ratio(tg: Optional[float], hdl: Optional[float]) -> Optional[float]:
+def tg_hdl_ratio(tg: float | None, hdl: float | None) -> float | None:
     """Índice TG/HDL: marcador indirecto de resistencia a la insulina y de
     partículas LDL pequeñas y densas — ver cita de McLaughlin et al. en
     `data/descripciones/idx_tg_hdl.txt`."""
@@ -158,7 +159,10 @@ def get_lipid_index_series(con, patient_id: int) -> dict[str, list[dict[str, Any
     tg_by_date = get_merged_series(con, TG_IDS, patient_id)
 
     series: dict[str, list[dict[str, Any]]] = {
-        "idx_castelli1": [], "idx_castelli2": [], "idx_tg_hdl": [], "idx_ldl_estimado": [],
+        "idx_castelli1": [],
+        "idx_castelli2": [],
+        "idx_tg_hdl": [],
+        "idx_ldl_estimado": [],
     }
     fechas = sorted(set(total_by_date) | set(hdl_by_date) | set(ldl_by_date) | set(tg_by_date))
     for fecha in fechas:
@@ -170,15 +174,21 @@ def get_lipid_index_series(con, patient_id: int) -> dict[str, list[dict[str, Any
 
         c1 = castelli_1(total, hdl)
         if c1 is not None:
-            series["idx_castelli1"].append(_index_point(fecha, c1, CASTELLI_1_HIGH, "Índice aterogénico (Castelli I)"))
+            series["idx_castelli1"].append(
+                _index_point(fecha, c1, CASTELLI_1_HIGH, "Índice aterogénico (Castelli I)")
+            )
         c2 = castelli_2(ldl, hdl)
         if c2 is not None:
-            series["idx_castelli2"].append(_index_point(fecha, c2, CASTELLI_2_HIGH, "Índice LDL/HDL (Castelli II)"))
+            series["idx_castelli2"].append(
+                _index_point(fecha, c2, CASTELLI_2_HIGH, "Índice LDL/HDL (Castelli II)")
+            )
         r = tg_hdl_ratio(tg, hdl)
         if r is not None:
             series["idx_tg_hdl"].append(_index_point(fecha, r, TG_HDL_HIGH, "Índice TG/HDL"))
         if ldl_medido is None and ldl is not None:
-            series["idx_ldl_estimado"].append(_index_point(fecha, ldl, ATP3_HIGH["ldl"], "LDL estimado (Friedewald)"))
+            series["idx_ldl_estimado"].append(
+                _index_point(fecha, ldl, ATP3_HIGH["ldl"], "LDL estimado (Friedewald)")
+            )
 
     return {key: points for key, points in series.items() if points}
 
@@ -196,7 +206,7 @@ INDEX_LABELS = {
 }
 
 
-def get_latest_lipid_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
+def get_latest_lipid_summary(con, patient_id: int) -> dict[str, Any] | None:
     """Último informe con al menos colesterol total y HDL en mg/dL, con
     todos los valores del panel lipídico disponibles ese día (medidos o,
     para el LDL que falte, estimado) y sus índices — para el resumen de
@@ -223,13 +233,17 @@ def get_latest_lipid_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
 
     return {
         "fecha": fecha,
-        "total": total, "total_flag": compute_flag(total, None, ATP3_HIGH["total"]),
-        "hdl": hdl, "hdl_flag": compute_flag(hdl, ATP3_LOW["hdl"], None),
-        "ldl": ldl, "ldl_estimado": ldl_medido is None and ldl is not None,
+        "total": total,
+        "total_flag": compute_flag(total, None, ATP3_HIGH["total"]),
+        "hdl": hdl,
+        "hdl_flag": compute_flag(hdl, ATP3_LOW["hdl"], None),
+        "ldl": ldl,
+        "ldl_estimado": ldl_medido is None and ldl is not None,
         "ldl_flag": compute_flag(ldl, None, ATP3_HIGH["ldl"]),
         "non_hdl": _mg_dl(non_hdl_by_date.get(fecha)),
         "vldl": _mg_dl(vldl_by_date.get(fecha)),
-        "tg": tg, "tg_flag": compute_flag(tg, None, ATP3_HIGH["tg"]),
+        "tg": tg,
+        "tg_flag": compute_flag(tg, None, ATP3_HIGH["tg"]),
         "castelli_1": castelli_1(total, hdl),
         "castelli_2": castelli_2(ldl, hdl),
         "tg_hdl": tg_hdl_ratio(tg, hdl),

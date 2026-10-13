@@ -11,6 +11,7 @@ Falla (código de salida 1) si el repositorio contiene:
 
 Uso: python scripts/check_privacy.py   (desde la raíz del repositorio)
 """
+
 from __future__ import annotations
 
 import re
@@ -19,14 +20,25 @@ import sys
 from pathlib import Path
 
 EXTENSIONES_PROHIBIDAS = {
-    ".pdf", ".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm",
-    ".xlsx", ".xls", ".xlsm", ".ods", ".csv", ".log",
+    ".pdf",
+    ".db",
+    ".sqlite",
+    ".sqlite3",
+    ".db-wal",
+    ".db-shm",
+    ".xlsx",
+    ".xls",
+    ".xlsm",
+    ".ods",
+    ".csv",
+    ".log",
 }
 # Datos de catálogo que sí forman parte del código (sin datos de pacientes)
 # y el informe PDF de ejemplo del manual, generado por
 # `scripts/doc_screenshots.py` con el paciente ficticio (nunca datos reales).
 PERMITIDOS = {
-    "src/analitix/data/test_aliases.csv", "src/analitix/data/biological_variation.csv",
+    "src/analitix/data/test_aliases.csv",
+    "src/analitix/data/biological_variation.csv",
     "docs/ejemplos/informe_alterados_ficticio.pdf",
 }
 

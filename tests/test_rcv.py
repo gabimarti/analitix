@@ -39,8 +39,14 @@ def test_classify_change_states():
     assert classify_change("x", 100, 110, table=table)["estado"] == "esperable"
     assert classify_change("x", 100, 140, table=table)["estado"] == "real"
     assert classify_change("x", 100, 70, table=table)["estado"] == "real"
-    assert classify_change("x", 100, 140, lab_previous="A", lab="B", table=table)["estado"] == "otro_lab"
-    assert classify_change("x", 100, 140, lab_previous=None, lab="B", table=table)["estado"] == "otro_lab"
+    assert (
+        classify_change("x", 100, 140, lab_previous="A", lab="B", table=table)["estado"]
+        == "otro_lab"
+    )
+    assert (
+        classify_change("x", 100, 140, lab_previous=None, lab="B", table=table)["estado"]
+        == "otro_lab"
+    )
     assert classify_change("y", 100, 140, table=table) is None  # sin variación biológica
     assert classify_change("x", 0, 140, table=table) is None  # modelo logarítmico
 
@@ -65,8 +71,10 @@ def test_bundled_table_is_valid_and_cited():
 
 def test_user_layer_overrides_bundled(tmp_path, monkeypatch):
     user = tmp_path / "biological_variation.csv"
-    user.write_text("# comentario\ncanonical_id,analito,cvi_pct,cva_pct,fuente\nglucosa,Glucosa,9.9,,Mi lab\n",
-                    encoding="utf-8")
+    user.write_text(
+        "# comentario\ncanonical_id,analito,cvi_pct,cva_pct,fuente\nglucosa,Glucosa,9.9,,Mi lab\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(rcv, "BV_PATH", user)
     rcv.load_table.cache_clear()
     try:
@@ -84,8 +92,12 @@ def test_personal_range_coskun_formula():
     from analitix.rcv import personal_range
 
     table = {"x": _bv(cvi=10, cva=2)}  # CVA efectivo = máx(2, 0,5·10) = 5
-    serie = [_punto("2024-01-01", 100.0), _punto("2024-02-01", 104.0), _punto("2024-03-01", 96.0),
-             _punto("2024-04-01", 130.0)]  # el último no entra en el cálculo
+    serie = [
+        _punto("2024-01-01", 100.0),
+        _punto("2024-02-01", 104.0),
+        _punto("2024-03-01", 96.0),
+        _punto("2024-04-01", 130.0),
+    ]  # el último no entra en el cálculo
     pr = personal_range("x", serie, table=table)
     semiancho = 1.96 * math.sqrt(4 / 3) * math.sqrt(10**2 + 5**2)  # n = 3
     assert pr["punto"] == pytest.approx(100.0)
@@ -98,10 +110,17 @@ def test_personal_range_uses_only_in_range_values():
     from analitix.rcv import personal_range
 
     table = {"x": _bv(cvi=10, cva=2)}
-    serie = [_punto("2024-01-01", 100.0), _punto("2024-02-01", 300.0, flag="alto"),
-             _punto("2024-03-01", 104.0), _punto("2024-04-01", 96.0), _punto("2024-05-01", 99.0, lab="B")]
+    serie = [
+        _punto("2024-01-01", 100.0),
+        _punto("2024-02-01", 300.0, flag="alto"),
+        _punto("2024-03-01", 104.0),
+        _punto("2024-04-01", 96.0),
+        _punto("2024-05-01", 99.0, lab="B"),
+    ]
     pr = personal_range("x", serie, table=table)
-    assert pr["n"] == 3 and pr["punto"] == pytest.approx(100.0)  # el valor alto no "normaliza" el rango
+    assert pr["n"] == 3 and pr["punto"] == pytest.approx(
+        100.0
+    )  # el valor alto no "normaliza" el rango
     # Con menos de 3 valores dentro de rango (sin contar el último) no hay rango personal.
     assert personal_range("x", serie[:3], table=table) is None
     assert personal_range("y", serie, table=table) is None  # sin variación biológica
@@ -114,8 +133,17 @@ def test_cusum_detects_small_sustained_drift_and_resets_on_lab_change():
 
     def serie(valores, labs=None):
         labs = labs or ["A"] * len(valores)
-        return [{"fecha": f"2020-{i + 1:02d}-01", "value_num": v, "ref_low": 50.0, "ref_high": 150.0,
-                 "flag_calc": "normal", "lab": lab} for i, (v, lab) in enumerate(zip(valores, labs))]
+        return [
+            {
+                "fecha": f"2020-{i + 1:02d}-01",
+                "value_num": v,
+                "ref_low": 50.0,
+                "ref_high": 150.0,
+                "flag_calc": "normal",
+                "lab": lab,
+            }
+            for i, (v, lab) in enumerate(zip(valores, labs))
+        ]
 
     estable = serie([100, 102, 98, 101, 99, 103, 100, 98])
     assert cusum_drift("x", estable, table=tabla)["direccion"] is None
@@ -125,6 +153,9 @@ def test_cusum_detects_small_sustained_drift_and_resets_on_lab_change():
     assert resultado["direccion"] == "sube" and resultado["desde"] == "2020-05-01"
     assert "Cambio lento" in cusum_note(resultado)
     # el cambio de laboratorio reinicia: el tramo nuevo no tiene base suficiente
-    assert cusum_drift("x", serie([100, 101, 99, 100, 120, 121], ["A"] * 4 + ["B"] * 2), table=tabla) is None
+    assert (
+        cusum_drift("x", serie([100, 101, 99, 100, 120, 121], ["A"] * 4 + ["B"] * 2), table=tabla)
+        is None
+    )
     assert cusum_drift("sin_variacion", deriva, table=tabla) is None
     assert cusum_note(None) is None

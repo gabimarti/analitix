@@ -29,9 +29,10 @@ los valores clasificados por separado y una tabla de referencia orientativa
 como texto, dejando la síntesis final al usuario/médico — ver
 `referencias_hierro_glucosa.md` para el detalle de esta decisión.
 """
+
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from analitix.pdf_parser import compute_flag
 from analitix.repository import get_merged_series
@@ -93,7 +94,7 @@ TSAT_HIGH = 50.0
 FERRITINA_LOW = 15.0
 
 
-def _mcg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _mcg_dl(row: dict[str, Any] | None) -> float | None:
     """Valor numérico del hierro sérico si su unidad es µg/dL (extraída
     como "mcg/dl" en los PDF reales del proyecto)."""
     if row is None:
@@ -103,7 +104,7 @@ def _mcg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _ng_ml(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _ng_ml(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de la ferritina si su unidad es ng/mL (numéricamente
     igual a µg/L, la unidad de los umbrales de la OMS)."""
     if row is None:
@@ -114,7 +115,7 @@ def _ng_ml(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _mg_dl(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de la transferrina si su unidad es mg/dL (mismo
     criterio que `lipid_risk._mg_dl`)."""
     if row is None:
@@ -125,7 +126,7 @@ def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _percent(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _percent(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de la saturación de transferrina si su unidad es %."""
     if row is None:
         return None
@@ -135,7 +136,7 @@ def _percent(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def tsat_from_iron_transferrin(ferro: Optional[float], transferrina: Optional[float]) -> Optional[float]:
+def tsat_from_iron_transferrin(ferro: float | None, transferrina: float | None) -> float | None:
     """TSAT (%) = [hierro (µg/dL) ÷ (transferrina (mg/dL) × 1.42)] × 100 —
     solo como relleno cuando el informe no trae ya la saturación de
     transferrina calculada."""
@@ -145,7 +146,7 @@ def tsat_from_iron_transferrin(ferro: Optional[float], transferrina: Optional[fl
 
 
 def _index_point(
-    fecha: str, value: float, ref_low: Optional[float], ref_high: Optional[float], raw_name: str
+    fecha: str, value: float, ref_low: float | None, ref_high: float | None, raw_name: str
 ) -> dict[str, Any]:
     """Fila con la misma forma que `repository.get_series`, para reutilizar
     `charts.evolution_figure`/`comparison_figure` sin cambios."""
@@ -178,7 +179,9 @@ def get_iron_index_series(con, patient_id: int) -> dict[str, list[dict[str, Any]
     for fecha in fechas:
         ferritina = _ng_ml(ferritina_by_date.get(fecha))
         if ferritina is not None:
-            series["idx_ferritina"].append(_index_point(fecha, ferritina, FERRITINA_LOW, None, "Ferritina"))
+            series["idx_ferritina"].append(
+                _index_point(fecha, ferritina, FERRITINA_LOW, None, "Ferritina")
+            )
 
         tsat = _percent(tsat_by_date.get(fecha))
         if tsat is None:
@@ -204,7 +207,7 @@ INDEX_LABELS = {
 }
 
 
-def get_latest_iron_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
+def get_latest_iron_summary(con, patient_id: int) -> dict[str, Any] | None:
     """Último informe con algún dato del metabolismo del hierro disponible
     (hierro, ferritina, transferrina o TSAT), con sus valores y
     clasificaciones. `None` si el paciente no tiene ninguno guardado."""
@@ -215,7 +218,10 @@ def get_latest_iron_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
 
     fechas = sorted(
         f
-        for f in set(ferro_by_date) | set(ferritina_by_date) | set(transferrina_by_date) | set(tsat_by_date)
+        for f in set(ferro_by_date)
+        | set(ferritina_by_date)
+        | set(transferrina_by_date)
+        | set(tsat_by_date)
         if _mcg_dl(ferro_by_date.get(f)) is not None
         or _ng_ml(ferritina_by_date.get(f)) is not None
         or _mg_dl(transferrina_by_date.get(f)) is not None

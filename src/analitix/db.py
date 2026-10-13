@@ -6,6 +6,7 @@
 # Última actualización: 2026-10-09
 # ---------------------------------------------------------------------------
 """Acceso a la base de datos SQLite cifrada (SQLCipher) del proyecto."""
+
 from __future__ import annotations
 
 import datetime as dt
@@ -13,7 +14,6 @@ import re
 from pathlib import Path
 
 from sqlcipher3 import dbapi2 as sqlcipher
-
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS patients (

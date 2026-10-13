@@ -11,6 +11,7 @@ Es la ÚNICA conexión a internet de la aplicación: una petición GET anónima 
 la API pública de GitHub que solo lee el número de la última versión
 publicada. No envía ningún dato del usuario ni de la base de datos.
 """
+
 from __future__ import annotations
 
 import json

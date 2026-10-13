@@ -6,13 +6,15 @@
 # Última actualización: 2026-10-09
 # ---------------------------------------------------------------------------
 """Exportación de resultados a Excel, CSV y PDF."""
+
 from __future__ import annotations
 
 import datetime as dt
 import io
 import textwrap
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import matplotlib.image as mpimg
 import pandas as pd
@@ -21,7 +23,12 @@ from matplotlib.figure import Figure
 
 from analitix import __version__, __version_date__
 from analitix.charts import (
-    COLOR_ALTO, COLOR_BAJO, COLOR_BRUSCO, DEFAULT_MIN_POINTS, data_sufficiency, evolution_figure,
+    COLOR_ALTO,
+    COLOR_BAJO,
+    COLOR_BRUSCO,
+    DEFAULT_MIN_POINTS,
+    data_sufficiency,
+    evolution_figure,
 )
 from analitix.config import LOGO_PATH
 from analitix.pdf_parser import NUMERIC_TOKEN_RE
@@ -180,44 +187,80 @@ def _cover_page(patient_name: str, tipo_informe: str, fecha: str) -> Figure:
     fig.text(0.5, 0.50, tipo_informe, fontsize=14, ha="center", color="#555555")
     fig.text(0.5, 0.44, f"Paciente: {patient_name}", fontsize=12, ha="center")
     fig.text(
-        0.5, 0.40, f"Último informe de laboratorio: {fecha[:10]}  ·  Generado: {dt.date.today().isoformat()}",
-        fontsize=10, ha="center", color="#555555",
+        0.5,
+        0.40,
+        f"Último informe de laboratorio: {fecha[:10]}  ·  Generado: {dt.date.today().isoformat()}",
+        fontsize=10,
+        ha="center",
+        color="#555555",
     )
-    fig.text(0.5, 0.20, f"Generado con {_ANALITIX_VERSION}", fontsize=9, ha="center", color="#555555")
+    fig.text(
+        0.5, 0.20, f"Generado con {_ANALITIX_VERSION}", fontsize=9, ha="center", color="#555555"
+    )
     fig.text(0.5, 0.18, REPO_URL, fontsize=9, ha="center", color="#555555")
-    fig.text(0.5, 0.16, f"Autor: Gabriel Marti · {AUTHOR_URL}", fontsize=9, ha="center", color="#555555")
+    fig.text(
+        0.5, 0.16, f"Autor: Gabriel Marti · {AUTHOR_URL}", fontsize=9, ha="center", color="#555555"
+    )
     fig.text(0.5, 0.1, _PDF_DISCLAIMER, fontsize=8, color="#555555", ha="center", wrap=True)
     return fig
 
 
-def _table_page(fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: float, subtitulo: str) -> Figure:
+def _table_page(
+    fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: float, subtitulo: str
+) -> Figure:
     """Una página A4 con la tabla de `filas` (mismas columnas/colores que
     la pestaña Resumen de `gui.py`)."""
     fig = Figure(figsize=(8.27, 11.69), dpi=100)  # A4 vertical
     fig.text(0.06, 0.95, subtitulo, fontsize=14, weight="bold")
-    fig.text(0.06, 0.925, f"Último informe de laboratorio: {fecha[:10]}", fontsize=9, color="#555555")
+    fig.text(
+        0.06, 0.925, f"Último informe de laboratorio: {fecha[:10]}", fontsize=9, color="#555555"
+    )
 
     ax = fig.add_axes((0.06, 0.08, 0.88, 0.82))
     ax.axis("off")
     if not filas:
-        ax.text(0.5, 0.95, "Sin parámetros en esta categoría.", ha="center", va="top", fontsize=10,
-                 transform=ax.transAxes)
+        ax.text(
+            0.5,
+            0.95,
+            "Sin parámetros en esta categoría.",
+            ha="center",
+            va="top",
+            fontsize=10,
+            transform=ax.transAxes,
+        )
     else:
         columnas = ["Parámetro", "Valor", "Referencia", "Estado", "Variación"]
         filas_texto = []
         for f in filas:
             ref_low, ref_high = f["ref_low"], f["ref_high"]
-            referencia = f"{ref_low:g} - {ref_high:g}" if ref_low is not None and ref_high is not None else "-"
+            referencia = (
+                f"{ref_low:g} - {ref_high:g}"
+                if ref_low is not None and ref_high is not None
+                else "-"
+            )
             estado = _ESTADO_TEXTO.get(f["flag_calc"], "Normal")
-            variacion = "-" if f["pct"] is None else f"{f['pct']:+.1f}%{' (*)' if f['brusco'] else ''}"
+            variacion = (
+                "-" if f["pct"] is None else f"{f['pct']:+.1f}%{' (*)' if f['brusco'] else ''}"
+            )
             nombre = f["raw_name"] or ""
             if len(nombre) > _TABLE_NAME_MAX:
                 nombre = nombre[: _TABLE_NAME_MAX - 1] + "…"
             filas_texto.append(
-                [nombre, f"{f['value_num']:g} {f['unit'] or ''}".strip(), referencia, estado, variacion]
+                [
+                    nombre,
+                    f"{f['value_num']:g} {f['unit'] or ''}".strip(),
+                    referencia,
+                    estado,
+                    variacion,
+                ]
             )
-        tabla = ax.table(cellText=filas_texto, colLabels=columnas, loc="upper center", cellLoc="left",
-                         colWidths=_TABLE_COL_WIDTHS)
+        tabla = ax.table(
+            cellText=filas_texto,
+            colLabels=columnas,
+            loc="upper center",
+            cellLoc="left",
+            colWidths=_TABLE_COL_WIDTHS,
+        )
         tabla.auto_set_font_size(False)
         tabla.set_fontsize(8)
         tabla.scale(1, 1.4)
@@ -228,9 +271,12 @@ def _table_page(fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: floa
                 tabla[(row, 3)].get_text().set_weight("bold")
 
     fig.text(
-        0.06, 0.05, f"(*) cambio de {cambio_brusco_pct:g}% o más respecto al informe anterior, esté o no "
+        0.06,
+        0.05,
+        f"(*) cambio de {cambio_brusco_pct:g}% o más respecto al informe anterior, esté o no "
         "dentro de rango.",
-        fontsize=7, color="#555555",
+        fontsize=7,
+        color="#555555",
     )
     return fig
 
@@ -246,7 +292,7 @@ def export_pdf(
     *,
     tipo_informe: str,
     min_points: int = DEFAULT_MIN_POINTS,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> int:
     """Informe de seguimiento en PDF (ampliado 2026-09-21 en dos pasos:
     primero con dos tipos de informe — "completo"/"de alterados", ver
@@ -284,7 +330,12 @@ def export_pdf(
     with PdfPages(path) as pdf:
         for fig in (
             _cover_page(patient_name, tipo_informe, fecha),
-            _table_page(fecha, fuera_de_rango, cambio_brusco_pct, "Parámetros alterados en la última analítica"),
+            _table_page(
+                fecha,
+                fuera_de_rango,
+                cambio_brusco_pct,
+                "Parámetros alterados en la última analítica",
+            ),
             _table_page(fecha, resto, cambio_brusco_pct, "Resto de parámetros"),
         ):
             _add_footer(fig, tipo_informe, pagina, total)
@@ -308,7 +359,10 @@ def export_pdf(
 # las figuras; aquí solo se monta el documento: portada + páginas en el
 # orden recibido + pie en todas, igual que `export_pdf`.
 
-def table_page(fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: float, subtitulo: str) -> Figure:
+
+def table_page(
+    fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: float, subtitulo: str
+) -> Figure:
     """Página de tabla (la misma de `export_pdf`), para el informe personalizado."""
     return _table_page(fecha, filas, cambio_brusco_pct, subtitulo)
 
@@ -327,7 +381,9 @@ def text_page(titulo: str, texto: str) -> Figure:
     lineas = lineas[:_TEXT_PAGE_MAX_LINES]
     fig.analitix_text = (titulo, lineas)
     fig.text(0.06, 0.95, titulo, fontsize=14, weight="bold")
-    fig.text(0.06, 0.95 - _TEXT_GAP_IN / 11.69, "\n".join(lineas), fontsize=9, va="top", linespacing=1.4)
+    fig.text(
+        0.06, 0.95 - _TEXT_GAP_IN / 11.69, "\n".join(lineas), fontsize=9, va="top", linespacing=1.4
+    )
     return fig
 
 
@@ -356,7 +412,9 @@ def _is_chart(fig: Figure) -> bool:
     return not _is_a4(fig) and getattr(fig, "analitix_tight_rect", None) is None
 
 
-def _flow_pages(paginas: list[Figure], por_pagina: int) -> list[Figure | list[tuple[str, Any, float]]]:
+def _flow_pages(
+    paginas: list[Figure], por_pagina: int
+) -> list[Figure | list[tuple[str, Any, float]]]:
     """Con `por_pagina` 2 o 3, rellena páginas A4 verticales de arriba abajo
     con los textos (`text_page`) y gráficos seguidos de `paginas`: cada
     gráfico a todo el ancho útil y con alto 1/`por_pagina` del útil (sin
@@ -379,7 +437,7 @@ def _flow_pages(paginas: list[Figure], por_pagina: int) -> list[Figure | list[tu
             resultado.append(bloques)
         bloques, libre = [], alto_util
 
-    def bloque_de(fig: Figure) -> Optional[tuple[str, Any, float]]:
+    def bloque_de(fig: Figure) -> tuple[str, Any, float] | None:
         texto = getattr(fig, "analitix_text", None)
         if texto is not None:
             return "texto", texto, _TEXT_GAP_IN + len(texto[1]) * _TEXT_LINE_IN + 0.15
@@ -422,9 +480,21 @@ def _flow_page(bloques: list[tuple[str, Any, float]]) -> Figure:
     for tipo, contenido, alto in bloques:
         if tipo == "texto":
             titulo, lineas = contenido
-            page.text(_CHARTS_MARGIN_IN / ancho_a4, (arriba - 0.2) / alto_a4, titulo, fontsize=14, weight="bold")
-            page.text(_CHARTS_MARGIN_IN / ancho_a4, (arriba - 0.2 - _TEXT_GAP_IN) / alto_a4, "\n".join(lineas),
-                      fontsize=9, va="top", linespacing=1.4)
+            page.text(
+                _CHARTS_MARGIN_IN / ancho_a4,
+                (arriba - 0.2) / alto_a4,
+                titulo,
+                fontsize=14,
+                weight="bold",
+            )
+            page.text(
+                _CHARTS_MARGIN_IN / ancho_a4,
+                (arriba - 0.2 - _TEXT_GAP_IN) / alto_a4,
+                "\n".join(lineas),
+                fontsize=9,
+                va="top",
+                linespacing=1.4,
+            )
         else:
             fig = contenido
             escala = alto / fig.get_size_inches()[1]
@@ -432,17 +502,30 @@ def _flow_page(bloques: list[tuple[str, Any, float]]) -> Figure:
             buf = io.BytesIO()
             fig.savefig(buf, format="png", dpi=_CHARTS_DPI * escala)
             buf.seek(0)
-            ax = page.add_axes((_CHARTS_MARGIN_IN / ancho_a4, (arriba - alto) / alto_a4,
-                                ancho_util / ancho_a4, alto / alto_a4))
+            ax = page.add_axes(
+                (
+                    _CHARTS_MARGIN_IN / ancho_a4,
+                    (arriba - alto) / alto_a4,
+                    ancho_util / ancho_a4,
+                    alto / alto_a4,
+                )
+            )
             ax.imshow(mpimg.imread(buf), interpolation="none")
             ax.axis("off")
         arriba -= alto + _CHARTS_GAP_IN
     return page
 
 
-def export_pages_pdf(patient_name: str, fecha: str, paginas: list[Figure], path: Path, *, tipo_informe: str,
-                     graficos_por_pagina: int = 1,
-                     on_progress: Optional[Callable[[int, int], None]] = None) -> int:
+def export_pages_pdf(
+    patient_name: str,
+    fecha: str,
+    paginas: list[Figure],
+    path: Path,
+    *,
+    tipo_informe: str,
+    graficos_por_pagina: int = 1,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> int:
     """Escribe el informe personalizado: portada (`_cover_page`, con el
     aviso de que no es un diagnóstico) y después `paginas` en ese orden,
     todas con pie (`_add_footer`). Con `graficos_por_pagina` 2 o 3, los
@@ -454,7 +537,9 @@ def export_pages_pdf(patient_name: str, fecha: str, paginas: list[Figure], path:
     paginas = _flow_pages(paginas, graficos_por_pagina)
     total = len(paginas) + 1
     with PdfPages(path) as pdf:
-        for numero, fig in enumerate([_cover_page(patient_name, tipo_informe, fecha), *paginas], start=1):
+        for numero, fig in enumerate(
+            [_cover_page(patient_name, tipo_informe, fecha), *paginas], start=1
+        ):
             if isinstance(fig, list):
                 fig = _flow_page(fig)
             _add_footer(fig, tipo_informe, numero, total)

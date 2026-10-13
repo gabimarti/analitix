@@ -6,6 +6,7 @@
 # Última actualización: 2026-10-09
 # ---------------------------------------------------------------------------
 """Punto de entrada de Analitix."""
+
 from __future__ import annotations
 
 import logging
@@ -18,6 +19,7 @@ from analitix import databases
 from analitix.branding import load_logo_photo, set_app_icon, show_splash
 from analitix.db import WrongPasswordError, connect
 from analitix.logging_setup import configure_logging
+
 # `AnalitixApp` (gui.py) no se importa aquí arriba a propósito: arrastra
 # matplotlib/ttkbootstrap (~2 s de importación) que, importados a nivel de
 # módulo, retrasaban la propia ventana de bienvenida (`show_splash`) esos
@@ -32,13 +34,19 @@ def _ask_new_password(parent: tk.Misc) -> str | None:
     """Contraseña para una base de datos nueva, escrita dos veces."""
     while True:
         password = simpledialog.askstring(
-            "Analitix", "Crea una contraseña para proteger la nueva base de datos:", show="*", parent=parent)
+            "Analitix",
+            "Crea una contraseña para proteger la nueva base de datos:",
+            show="*",
+            parent=parent,
+        )
         if password is None:
             return None
         if not password:
             messagebox.showerror("Analitix", "La contraseña no puede estar vacía.", parent=parent)
             continue
-        confirm = simpledialog.askstring("Analitix", "Repite la contraseña:", show="*", parent=parent)
+        confirm = simpledialog.askstring(
+            "Analitix", "Repite la contraseña:", show="*", parent=parent
+        )
         if confirm != password:
             messagebox.showerror("Analitix", "Las contraseñas no coinciden.", parent=parent)
             continue
@@ -63,23 +71,30 @@ def _create_database(parent: tk.Misc):
     win.resizable(False, False)
     body = ttk.Frame(win, padding=14)
     body.pack(fill="both", expand=True)
-    ttk.Label(body, text=f"Nombre del paciente (para reconocerlo en la lista, máx. {databases.NAME_MAX}):").grid(
-        row=0, column=0, sticky="w")
+    ttk.Label(
+        body, text=f"Nombre del paciente (para reconocerlo en la lista, máx. {databases.NAME_MAX}):"
+    ).grid(row=0, column=0, sticky="w")
     var_nombre = tk.StringVar()
     entry_nombre = ttk.Entry(body, textvariable=var_nombre, width=44)
     entry_nombre.grid(row=1, column=0, sticky="we", pady=(2, 8))
-    ttk.Label(body, text="Nombre de la base de datos (p. ej. nombre + DNI u otro identificador):").grid(
-        row=2, column=0, sticky="w")
+    ttk.Label(
+        body, text="Nombre de la base de datos (p. ej. nombre + DNI u otro identificador):"
+    ).grid(row=2, column=0, sticky="w")
     var_fichero = tk.StringVar()
-    ttk.Entry(body, textvariable=var_fichero, width=44).grid(row=3, column=0, sticky="we", pady=(2, 4))
-    ttk.Label(body, text="La lista de bases de datos no está cifrada: no pongas datos médicos en estos nombres.",
-              foreground="#666666").grid(row=4, column=0, sticky="w", pady=(0, 10))
+    ttk.Entry(body, textvariable=var_fichero, width=44).grid(
+        row=3, column=0, sticky="we", pady=(2, 4)
+    )
+    ttk.Label(
+        body,
+        text="La lista de bases de datos no está cifrada: no pongas datos médicos en estos nombres.",
+        foreground="#666666",
+    ).grid(row=4, column=0, sticky="w", pady=(0, 10))
     sugerido = {"valor": ""}
 
     def _sugerir(*_args) -> None:
         # Propone el nombre del fichero mientras el usuario no lo cambie.
         if var_fichero.get() in ("", sugerido["valor"]):
-            sugerido["valor"] = databases.suggest_filename(var_nombre.get()[:databases.NAME_MAX])
+            sugerido["valor"] = databases.suggest_filename(var_nombre.get()[: databases.NAME_MAX])
             var_fichero.set(sugerido["valor"])
 
     var_nombre.trace_add("write", _sugerir)
@@ -132,10 +147,15 @@ def _choose_database(root: tk.Tk):
     body = ttk.Frame(win, padding=14)
     body.pack(fill="both", expand=True)
     lista = databases.list_databases()
-    texto = ("Elige la base de datos del paciente que quieres abrir:" if lista
-             else "Todavía no hay ninguna base de datos. Crea una para empezar:")
+    texto = (
+        "Elige la base de datos del paciente que quieres abrir:"
+        if lista
+        else "Todavía no hay ninguna base de datos. Crea una para empezar:"
+    )
     ttk.Label(body, text=texto).pack(anchor="w", pady=(0, 6))
-    tree = ttk.Treeview(body, columns=("nombre", "fichero"), show="headings", height=8, selectmode="browse")
+    tree = ttk.Treeview(
+        body, columns=("nombre", "fichero"), show="headings", height=8, selectmode="browse"
+    )
     tree.heading("nombre", text="Paciente")
     tree.heading("fichero", text="Base de datos")
     tree.column("nombre", width=280)
@@ -162,8 +182,12 @@ def _choose_database(root: tk.Tk):
 
     botones = ttk.Frame(body)
     botones.pack(fill="x", pady=(10, 0))
-    ttk.Button(botones, text="Abrir", command=_abrir, state="normal" if lista else "disabled").pack(side="left")
-    ttk.Button(botones, text="Nueva base de datos...", command=_nueva).pack(side="left", padx=(6, 0))
+    ttk.Button(botones, text="Abrir", command=_abrir, state="normal" if lista else "disabled").pack(
+        side="left"
+    )
+    ttk.Button(botones, text="Nueva base de datos...", command=_nueva).pack(
+        side="left", padx=(6, 0)
+    )
     ttk.Button(botones, text="Salir", command=win.destroy).pack(side="right")
     tree.bind("<Double-1>", _abrir)
     win.bind("<Return>", _abrir)
@@ -190,12 +214,19 @@ def _open_database(root: tk.Tk, use_last: bool):
         if con is None:
             path = databases.db_path(entrada["fichero"])
             if not path.exists():  # borrada fuera de la app: `connect` crearía una vacía
-                messagebox.showerror("Analitix", f"No se encuentra el fichero de la base de datos:\n{path}",
-                                     parent=root)
+                messagebox.showerror(
+                    "Analitix",
+                    f"No se encuentra el fichero de la base de datos:\n{path}",
+                    parent=root,
+                )
                 entrada = None
                 continue
             password = simpledialog.askstring(
-                "Analitix", f"Contraseña de la base de datos «{entrada['nombre']}»:", show="*", parent=root)
+                "Analitix",
+                f"Contraseña de la base de datos «{entrada['nombre']}»:",
+                show="*",
+                parent=root,
+            )
             if password is None:
                 entrada = None
                 continue
@@ -229,11 +260,18 @@ def _show_loading(root: tk.Tk) -> tuple[tk.Toplevel, ttk.Progressbar]:
     logo.image = photo  # referencia viva
     logo.pack(pady=(0, 10))
     tk.Label(
-        body, text="Cargando Analitix…", bg="white", fg="#2c3e50", font=("Segoe UI", 18, "bold"),
+        body,
+        text="Cargando Analitix…",
+        bg="white",
+        fg="#2c3e50",
+        font=("Segoe UI", 18, "bold"),
     ).pack()
     tk.Label(
-        body, text="Preparando la interfaz y los gráficos, un momento por favor.",
-        bg="white", fg="#555555", font=("Segoe UI", 10),
+        body,
+        text="Preparando la interfaz y los gráficos, un momento por favor.",
+        bg="white",
+        fg="#555555",
+        font=("Segoe UI", 10),
     ).pack(pady=(4, 14))
     bar = ttk.Progressbar(body, mode="indeterminate", length=380)
     bar.pack()
@@ -259,6 +297,7 @@ def _import_gui_with_loading(root: tk.Tk) -> type:
     def _worker() -> None:
         try:
             from analitix.gui import AnalitixApp
+
             outcome["cls"] = AnalitixApp
         except BaseException as exc:  # noqa: BLE001 - se relanza en el hilo principal
             outcome["error"] = exc

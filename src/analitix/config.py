@@ -70,7 +70,9 @@ def copy_home(old: Path, new: Path) -> None:
     for sub in ("data", "informes_analiticas"):
         (new / sub).mkdir(parents=True, exist_ok=True)
         if (old / sub).is_dir():
-            shutil.copytree(old / sub, new / sub, dirs_exist_ok=True, copy_function=_copy_if_missing)
+            shutil.copytree(
+                old / sub, new / sub, dirs_exist_ok=True, copy_function=_copy_if_missing
+            )
 
 
 if FROZEN:

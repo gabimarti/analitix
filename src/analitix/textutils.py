@@ -6,6 +6,7 @@
 # Última actualización: 2026-09-07
 # ---------------------------------------------------------------------------
 """Utilidades de normalización de texto compartidas."""
+
 from __future__ import annotations
 
 import re
@@ -37,7 +38,13 @@ def unit_key(unit: str | None) -> str:
     (Synlab), "·10³/µl" (Quirón) y "x10^3_u/mcL" (Maresme) empiezan todos
     por "x10^3", y "µg/dL" queda como "mcg/dl"."""
     u = (unit or "").strip().lower().replace(" ", "").replace("_", "")
-    u = u.replace("µ", "mc").replace("μ", "mc").replace("³", "3").replace("⁶", "6").replace("·", "x")
+    u = (
+        u.replace("µ", "mc")
+        .replace("μ", "mc")
+        .replace("³", "3")
+        .replace("⁶", "6")
+        .replace("·", "x")
+    )
     return re.sub(r"^x10\^?", "x10^", u)
 
 

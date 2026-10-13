@@ -37,16 +37,19 @@ referencia que trae su propio informe (`ref_low`/`ref_high`/`flag_calc`
 ya calculados al importar, igual que cualquier otro parámetro de
 Evolución/Comparativa), no contra un umbral fijo inventado por Analitix.
 """
+
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from analitix.repository import get_merged_series
 
 PCR_IDS = (
-    "proteina_c_reactiva_serum", "proteina_c_reactiva",
+    "proteina_c_reactiva_serum",
+    "proteina_c_reactiva",
     # PCR sérica en mg/L (Synlab, HUGTIP): se convierte a mg/dL (÷10, exacto).
-    "proteina_c_reactiva_en_suero", "srm_proteina_c_reactiva_c_massa",
+    "proteina_c_reactiva_en_suero",
+    "srm_proteina_c_reactiva_c_massa",
 )
 # `pla_proteina_c_reactiva_c_massa` (mg/L, visto una sola vez en los 39 PDF
 # reales del proyecto) se deja fuera deliberadamente: es una unidad
@@ -58,7 +61,7 @@ PCR_IDS = (
 VSG_IDS = ("vsg_velocitat_de_sedimentacio_globular", "vsg_velocitat_de_sedimentacio_globular_sang")
 
 
-def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _mg_dl(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de la PCR si su unidad es mg/dL (mismo criterio que
     `lipid_risk._mg_dl`)."""
     if row is None:
@@ -69,7 +72,7 @@ def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _as_mg_dl(row: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+def _as_mg_dl(row: dict[str, Any] | None) -> dict[str, Any] | None:
     """La fila de PCR en mg/dL: tal cual si ya lo está; si viene en mg/L, una
     copia con valor y rango divididos entre 10 (1 mg/dL = 10 mg/L), para no
     mezclar en el mismo gráfico magnitudes de escala distinta. `flag_calc` no
@@ -78,7 +81,9 @@ def _as_mg_dl(row: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
         return None
     if _mg_dl(row) is not None:
         return row
-    if (row.get("unit") or "").strip().lower().replace(" ", "") != "mg/l" or row.get("value_num") is None:
+    if (row.get("unit") or "").strip().lower().replace(" ", "") != "mg/l" or row.get(
+        "value_num"
+    ) is None:
         return None
     converted = dict(row, unit="mg/dL", value_num=row["value_num"] / 10)
     for key in ("ref_low", "ref_high"):
@@ -87,7 +92,7 @@ def _as_mg_dl(row: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
     return converted
 
 
-def _mm_h(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _mm_h(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de la VSG si su unidad es mm/h."""
     if row is None:
         return None
@@ -108,7 +113,8 @@ def get_inflammation_series(con, patient_id: int) -> dict[str, list[dict[str, An
     vsg_by_date = get_merged_series(con, VSG_IDS, patient_id)
 
     pcr = sorted(
-        (row for row in map(_as_mg_dl, pcr_by_date.values()) if row is not None), key=lambda r: r["fecha"]
+        (row for row in map(_as_mg_dl, pcr_by_date.values()) if row is not None),
+        key=lambda r: r["fecha"],
     )
     vsg = sorted(
         (row for row in vsg_by_date.values() if _mm_h(row) is not None), key=lambda r: r["fecha"]
@@ -121,7 +127,7 @@ def get_inflammation_series(con, patient_id: int) -> dict[str, list[dict[str, An
     return series
 
 
-def get_latest_inflammation_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
+def get_latest_inflammation_summary(con, patient_id: int) -> dict[str, Any] | None:
     """Último valor disponible de PCR y de VSG (no necesariamente del mismo
     informe: cada uno puede haberse pedido en fechas distintas), con su
     clasificación ya calculada por el propio informe, y una nota si los dos

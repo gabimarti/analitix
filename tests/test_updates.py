@@ -24,12 +24,14 @@ def _fake_urlopen(payload):
     def fake(req, timeout):
         assert req.full_url == updates.API_URL
         return io.BytesIO(json.dumps(payload).encode())
+
     return fake
 
 
 def test_fetch_latest_release(monkeypatch):
     monkeypatch.setattr(
-        updates.urllib.request, "urlopen",
+        updates.urllib.request,
+        "urlopen",
         _fake_urlopen([{"tag_name": "v0.10.0", "html_url": "https://example.invalid/r"}]),
     )
     assert updates.fetch_latest_release() == ("0.10.0", "https://example.invalid/r")
