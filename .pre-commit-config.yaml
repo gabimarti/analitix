@@ -1,0 +1,22 @@
+# Hooks de pre-commit, con el entorno de pruebas (venv-tests,
+# requirements-dev.txt). Todos los ficheros:
+#   venv-tests\Scripts\python.exe -m pre_commit run --all-files
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.0  # igual que ruff en requirements-dev.txt
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        types_or: [python, pyi]
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=500]

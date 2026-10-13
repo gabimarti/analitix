@@ -1,0 +1,20 @@
+# Configuración de herramientas de desarrollo. La app no se instala como
+# paquete: se ejecuta desde src/ (ver scripts/ y requirements.txt), y pytest
+# se configura en pytest.ini.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = ["venv-tests", "venv-build", "data", "informes_analiticas", "export"]
+
+[tool.ruff.lint]
+# Errores reales (E/F), orden de imports (I) y sintaxis moderna (UP).
+select = ["E", "F", "I", "UP"]
+# E501: las líneas largas que quedan son textos de la interfaz o SQL.
+# E741: variables `l` existentes; renombrarlas sería cambiar código.
+ignore = ["E501", "E741"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["analitix"]
+combine-as-imports = true
