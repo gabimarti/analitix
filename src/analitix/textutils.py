@@ -32,6 +32,13 @@ def normalize_name(raw_name: str) -> str:
     return strip_accents(name).upper().strip()
 
 
+def name_words_key(raw_name: str) -> str:
+    """Las palabras de `normalize_name` ordenadas: igual para "GARCIA LOPEZ
+    JUAN" y "JUAN GARCIA LOPEZ" (mismo nombre en otro orden, sin coma).
+    Solo sirve junto con la fecha de nacimiento (`find_patient`)."""
+    return " ".join(sorted(normalize_name(raw_name).split()))
+
+
 def unit_key(unit: str | None) -> str:
     """Unidad en forma comparable: minúsculas, sin espacios ni "_", "µ" ->
     "mc", superíndices a dígitos y "x10N"/"·10N" -> "x10^N". Así "x10³/mm³"

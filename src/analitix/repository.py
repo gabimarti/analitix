@@ -18,7 +18,7 @@ from sqlcipher3 import dbapi2 as sqlcipher
 from analitix.catalog import add_aliases, canonical_id_for
 from analitix.db import now_iso
 from analitix.pdf_parser import compute_flag
-from analitix.textutils import normalize_name, normalize_test_name, strip_accents
+from analitix.textutils import name_words_key, normalize_name, normalize_test_name, strip_accents
 
 # Fecha efectiva de un resultado: la de recepción/toma de la muestra si el
 # PDF la trae; si no, la de petición (en todas las plantillas conocidas es
@@ -35,6 +35,13 @@ _FECHA_SQL = "COALESCE(r.sample_date, rep.request_date, rep.validation_date)"
 # filtran con la clave "". Las exportaciones Excel/CSV y el Explorador BD no
 # se filtran: son los datos en bruto.
 _LAB_FILTER_SQL = "COALESCE(rep.lab, '') NOT IN (SELECT lab FROM temp.excluded_labs)"
+
+# `processed_files.status` además de "ok"/"review"/"error": un informe cuyos
+# datos no encajan con el paciente de la BD (una BD = un paciente) no se
+# importa y queda pendiente de confirmar ("otro_paciente"); si el usuario
+# dice que no es suyo, queda "descartado".
+STATUS_OTHER_PATIENT = "otro_paciente"
+STATUS_DISCARDED = "descartado"
 
 
 def list_labs(con) -> list[dict[str, Any]]:
@@ -85,6 +92,92 @@ def _remove_alt_value(alt_str: str | None, value: str | None) -> str | None:
     return ", ".join(values) or None
 
 
+def find_patient(
+    con,
+    full_name: str | None,
+    birth_date: str | None,
+    dni: str | None,
+    nhc: str | None,
+    cip: str | None = None,
+) -> tuple[int | None, str | None]:
+    """Busca, sin crear nada, el paciente al que corresponden estos datos de
+    cabecera de un informe. Devuelve `(patient_id, matched_by)` o `(None,
+    None)`. Orden (ver `get_or_create_patient` para el porqué de cada uno):
+
+    1. nombre normalizado + fecha de nacimiento ("name"), del paciente o de
+       una identidad confirmada por el usuario (`patient_aliases`, "alias");
+    2. DNI, CIP, NHC del paciente ("dni"/"cip"/"nhc");
+    3. mismas palabras del nombre en otro orden y misma fecha de nacimiento,
+       con las dos fechas presentes ("name_words"): nunca por nombre
+       parecido sin fecha de nacimiento;
+    4. DNI, CIP o NHC de una identidad confirmada ("alias")."""
+    cur = con.cursor()
+    key = normalize_name(full_name) if full_name else None
+    if key:
+        row = cur.execute(
+            "SELECT id FROM patients WHERE name_key = ? AND IFNULL(birth_date,'') = IFNULL(?, '')",
+            (key, birth_date),
+        ).fetchone()
+        if row:
+            return row[0], "name"
+        row = cur.execute(
+            "SELECT patient_id FROM patient_aliases WHERE name_key = ? "
+            "AND IFNULL(birth_date,'') = IFNULL(?, '')",
+            (key, birth_date),
+        ).fetchone()
+        if row:
+            return row[0], "alias"
+    # El CIP (tarjeta sanitaria autonómica) es personal y estable entre
+    # plantillas, a diferencia del NHC — se prueba antes que este.
+    for campo, valor in (("dni", dni), ("cip", cip), ("nhc", nhc)):
+        if valor:
+            row = cur.execute(f"SELECT id FROM patients WHERE {campo} = ?", (valor,)).fetchone()  # noqa: S608 - campo de la lista fija de arriba
+            if row:
+                return row[0], campo
+    if key and birth_date:
+        words = name_words_key(full_name)
+        for patient_id, otro_key in cur.execute(
+            "SELECT id, name_key FROM patients WHERE birth_date = ?", (birth_date,)
+        ).fetchall():
+            if name_words_key(otro_key) == words:
+                return patient_id, "name_words"
+    for campo, valor in (("dni", dni), ("cip", cip), ("nhc", nhc)):
+        if valor:
+            row = cur.execute(
+                f"SELECT patient_id FROM patient_aliases WHERE {campo} = ?",  # noqa: S608 - campo de la lista fija
+                (valor,),
+            ).fetchone()
+            if row:
+                return row[0], "alias"
+    return None, None
+
+
+def add_patient_alias(
+    con,
+    patient_id: int,
+    full_name: str | None,
+    birth_date: str | None,
+    dni: str | None,
+    nhc: str | None,
+    cip: str | None = None,
+) -> None:
+    """Guarda los datos de cabecera de un informe como identidad alternativa
+    de `patient_id` (el usuario confirmó que era suyo), para que
+    `find_patient` encaje solo el siguiente informe con esos datos."""
+    con.execute(
+        "INSERT INTO patient_aliases (patient_id, name_key, birth_date, dni, cip, nhc) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            patient_id,
+            normalize_name(full_name) if full_name else None,
+            birth_date,
+            dni or None,
+            cip or None,
+            nhc or None,
+        ),
+    )
+
+
 def get_or_create_patient(
     con,
     full_name: str | None,
@@ -111,35 +204,14 @@ def get_or_create_patient(
     identificador de emparejamiento cuando el nombre no se pudo extraer.
 
     Devuelve `(patient_id, matched_by)`, con `matched_by` en
-    `"name" | "dni" | "cip" | "nhc" | "previous" | "new"`, para que quien llama pueda distinguir
+    `"name" | "dni" | "cip" | "nhc" | "name_words" | "alias" | "previous" | "new"`
+    (ver `find_patient`), para que quien llama pueda distinguir
     un emparejamiento por identificador (que sigue mereciendo revisión, ya
     que la plantilla no se reconoció) de uno normal por nombre.
     """
     cur = con.cursor()
-    key = normalize_name(full_name) if full_name else None
-    row = None
-    matched_by: str | None = None
-    if key:
-        row = cur.execute(
-            "SELECT id FROM patients WHERE name_key = ? AND IFNULL(birth_date,'') = IFNULL(?, '')",
-            (key, birth_date),
-        ).fetchone()
-        if row:
-            matched_by = "name"
-    if not row and dni:
-        row = cur.execute("SELECT id FROM patients WHERE dni = ?", (dni,)).fetchone()
-        if row:
-            matched_by = "dni"
-    # El CIP (tarjeta sanitaria autonómica) es personal y estable entre
-    # plantillas, a diferencia del NHC — se prueba antes que este.
-    if not row and cip:
-        row = cur.execute("SELECT id FROM patients WHERE cip = ?", (cip,)).fetchone()
-        if row:
-            matched_by = "cip"
-    if not row and nhc:
-        row = cur.execute("SELECT id FROM patients WHERE nhc = ?", (nhc,)).fetchone()
-        if row:
-            matched_by = "nhc"
+    found_id, matched_by = find_patient(con, full_name, birth_date, dni, nhc, cip)
+    row = (found_id,) if found_id is not None else None
     if not row and previous_patient_id is not None:
         # Reimportación de un PDF que ya estaba asignado a este paciente
         # (p. ej. tras fusionarlo a mano, `merge_patients`): si nada del PDF
@@ -151,6 +223,11 @@ def get_or_create_patient(
             matched_by = "previous"
     if row:
         patient_id = row[0]
+        if matched_by == "alias":
+            # Encaja por una identidad alternativa que el usuario confirmó:
+            # sus datos (otro nombre, otro DNI/NHC...) no sustituyen a los
+            # del paciente, ya están guardados en `patient_aliases`.
+            return patient_id, matched_by
         # full_name/dni/nhc se actualizan con el valor más reciente: el NHC
         # cambia de numeración entre plantillas y el más nuevo es el vigente.
         # Si el NHC nuevo es distinto del que tenía, el antiguo no se pierde:
@@ -347,7 +424,9 @@ def already_processed(con, filename: str, file_hash: str) -> bool:
     row = con.execute(
         "SELECT file_hash, status FROM processed_files WHERE filename = ?", (filename,)
     ).fetchone()
-    return row is not None and row[0] == file_hash and row[1] == "ok"
+    # "descartado": el usuario dijo que el informe no era del paciente de esta
+    # BD ("No es"); no se vuelve a preguntar mientras el fichero no cambie.
+    return row is not None and row[0] == file_hash and row[1] in ("ok", STATUS_DISCARDED)
 
 
 def clear_previous_import(con, filename: str) -> int | None:
@@ -373,8 +452,16 @@ def clear_previous_import(con, filename: str) -> int | None:
             # creado a partir del nombre del fichero porque no se reconoció
             # el nombre real) se queda sin ningún informe, se elimina: era
             # un paciente fantasma del intento anterior, no una persona real.
+            # Solo si no tiene nada más: un paciente con objetivos del médico,
+            # tensión o identidades confirmadas es una persona real cuyo
+            # único informe se está reimportando, y borrarlo perdería esos
+            # datos (o los dejaría huérfanos).
             remaining = con.execute(
-                "SELECT COUNT(*) FROM reports WHERE patient_id = ?", (patient_row[0],)
+                "SELECT (SELECT COUNT(*) FROM reports WHERE patient_id = :p) "
+                "+ (SELECT COUNT(*) FROM targets WHERE patient_id = :p) "
+                "+ (SELECT COUNT(*) FROM bp_readings WHERE patient_id = :p) "
+                "+ (SELECT COUNT(*) FROM patient_aliases WHERE patient_id = :p)",
+                {"p": patient_row[0]},
             ).fetchone()[0]
             if remaining == 0:
                 con.execute("DELETE FROM patients WHERE id = ?", (patient_row[0],))
@@ -630,6 +717,9 @@ def merge_patients(con, source_ids: list[int], target_id: int) -> int:
             (target_id, source_id),
         )
         cur.execute("DELETE FROM bp_readings WHERE patient_id = ?", (source_id,))
+        cur.execute(
+            "UPDATE patient_aliases SET patient_id = ? WHERE patient_id = ?", (target_id, source_id)
+        )
         cur.execute("DELETE FROM patients WHERE id = ?", (source_id,))
     con.commit()
     return moved
@@ -926,6 +1016,29 @@ def set_setting(con, key: str, value: str) -> None:
     con.commit()
 
 
+def list_files_other_patient(con) -> list[dict[str, Any]]:
+    """Informes que no se importaron porque sus datos no encajan con el
+    paciente de esta BD (`STATUS_OTHER_PATIENT`), pendientes de que el
+    usuario diga si son suyos; `error_message` lleva el motivo."""
+    cur = con.execute(
+        "SELECT filename, error_message, processed_at FROM processed_files "
+        "WHERE status = ? ORDER BY filename",
+        (STATUS_OTHER_PATIENT,),
+    )
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def discard_other_patient_file(con, filename: str) -> None:
+    """«No es este paciente»: el informe queda fuera y no se vuelve a
+    preguntar por él mientras el fichero no cambie (`already_processed`)."""
+    con.execute(
+        "UPDATE processed_files SET status = ? WHERE filename = ? AND status = ?",
+        (STATUS_DISCARDED, filename, STATUS_OTHER_PATIENT),
+    )
+    con.commit()
+
+
 def list_files_needing_review(con) -> list[dict[str, Any]]:
     cur = con.execute(
         "SELECT filename, error_message, processed_at FROM processed_files "
@@ -946,6 +1059,7 @@ def delete_patient(con, patient_id: int) -> None:
         con.execute("DELETE FROM reports WHERE id = ?", (report_id,))
     con.execute("DELETE FROM targets WHERE patient_id = ?", (patient_id,))
     con.execute("DELETE FROM bp_readings WHERE patient_id = ?", (patient_id,))
+    con.execute("DELETE FROM patient_aliases WHERE patient_id = ?", (patient_id,))
     con.execute("DELETE FROM patients WHERE id = ?", (patient_id,))
     con.commit()
 
@@ -1125,6 +1239,7 @@ EXPLORABLE_TABLES = (
     "settings",
     "targets",
     "bp_readings",
+    "patient_aliases",
 )
 
 

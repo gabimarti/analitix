@@ -106,13 +106,18 @@ def test_new_patient_without_birth_date_flagged_as_possible_duplicate(db, monkey
     # fecha de nacimiento nunca podrá emparejar por nombre+fecha con ese
     # paciente aunque el nombre coincida, así que crea uno nuevo — debe
     # quedar marcado para revisar como posible duplicado en vez de colarse
-    # en silencio.
+    # en silencio. Es el comportamiento de una BD con varios pacientes
+    # (anterior a «una BD por paciente»); con uno solo, ver
+    # test_one_patient_per_db.py.
     get_or_create_patient(
         db,
         full_name="GARCIA LOPEZ, MARIA",
         birth_date="1980-01-01",
         dni=None,
         nhc=None,
+    )
+    get_or_create_patient(
+        db, full_name="PEREZ RUIZ, ANA", birth_date="1990-02-02", dni=None, nhc=None
     )
     db.commit()
 
@@ -124,7 +129,7 @@ def test_new_patient_without_birth_date_flagged_as_possible_duplicate(db, monkey
 
     assert "posible duplicado" in reason
     assert format_name == "Hospital Universitari Germans Trias i Pujol (HUGTIP)"
-    assert db.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 2
+    assert db.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 3
     assert db.execute("SELECT COUNT(*) FROM results").fetchone()[0] == 1
     row = db.execute(
         "SELECT status FROM processed_files WHERE filename = ?", (pdf_path.name,)

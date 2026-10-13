@@ -87,6 +87,21 @@ CREATE TABLE IF NOT EXISTS settings (
 -- < 100 mg/dL): lo introduce la persona a mano, nunca lo calcula Analitix.
 -- En los gráficos sustituye al rango del laboratorio. Un límite puede faltar
 -- ("< 100" = solo target_high). set_on: "AAAA-MM-DD".
+-- Identidades alternativas confirmadas por el usuario para un paciente: los
+-- datos de cabecera de un informe que no encajaba (nombre en otro orden, otro
+-- NHC, sin DNI...) y que dijo que sí eran de este paciente ("Es este
+-- paciente", `ingest.confirm_same_patient`). `repository.find_patient` las
+-- consulta para que el siguiente informe con esos datos encaje solo.
+CREATE TABLE IF NOT EXISTS patient_aliases (
+    id INTEGER PRIMARY KEY,
+    patient_id INTEGER NOT NULL REFERENCES patients(id),
+    name_key TEXT,
+    birth_date TEXT,
+    dni TEXT,
+    cip TEXT,
+    nhc TEXT
+);
+
 CREATE TABLE IF NOT EXISTS targets (
     patient_id INTEGER NOT NULL REFERENCES patients(id),
     canonical_id TEXT NOT NULL,
