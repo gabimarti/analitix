@@ -14,8 +14,8 @@ if (-not (Test-Path $python)) {
     python -m venv $venv
 }
 
-# Un entorno creado en otro equipo (carpeta compartida) con un Python que
-# aqui no esta instalado no arranca: mejor decirlo que fallar en pip.
+# Un entorno creado con un Python que aqui no esta instalado (p. ej. si se
+# copio la carpeta desde otro equipo) no arranca: mejor decirlo que fallar en pip.
 & $python -c "pass"
 if ($LASTEXITCODE -ne 0) {
     throw "venv-tests no funciona en este equipo (se creo con un Python que aqui no esta instalado). Borra la carpeta venv-tests y vuelve a ejecutar este script."

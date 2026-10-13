@@ -28,8 +28,8 @@ if not exist venv (
 )
 
 :: Sin activate.bat (guarda una ruta absoluta, ver run_windows.bat): siempre
-:: el python del entorno. No se borra un entorno roto automaticamente: puede
-:: ser el de otro equipo que comparte esta carpeta.
+:: el python del entorno. Un entorno roto no se borra automaticamente: se
+:: avisa y se deja la decision al usuario.
 venv\Scripts\python.exe -c "pass" >nul 2>nul
 if errorlevel 1 (
     echo El entorno virtual .\venv no funciona en este equipo: se creo con un
