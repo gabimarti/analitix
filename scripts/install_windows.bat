@@ -3,7 +3,7 @@
 :: Autor: Gabriel Marti
 :: Contacto: https://github.com/gabimarti
 :: Fecha de creación: 2026-09-07
-:: Última actualización: 2026-09-07
+:: Última actualización: 2026-10-13
 :: ---------------------------------------------------------------------------
 @echo off
 setlocal
@@ -20,9 +20,18 @@ if not exist venv (
     python -m venv venv
 )
 
-call venv\Scripts\activate.bat
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+:: Sin activate.bat (guarda una ruta absoluta, ver run_windows.bat): siempre
+:: el python del entorno. No se borra un entorno roto automaticamente: puede
+:: ser el de otro equipo que comparte esta carpeta.
+venv\Scripts\python.exe -c "" >nul 2>nul
+if errorlevel 1 (
+    echo El entorno virtual .\venv no funciona en este equipo: se creo con un
+    echo Python que aqui no esta instalado. Borra la carpeta venv y vuelve a
+    echo ejecutar este script.
+    exit /b 1
+)
+venv\Scripts\python.exe -m pip install --upgrade pip
+venv\Scripts\python.exe -m pip install -r requirements.txt
 
 echo.
 echo Instalacion completada. Ejecuta scripts\run_windows.bat para iniciar Analitix.

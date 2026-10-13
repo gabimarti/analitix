@@ -15,6 +15,10 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 - Una base de datos cifrada por paciente, cada una con su contraseña (en curso): al arrancar se abre la última usada pidiendo su contraseña, o se elige en la lista de bases de datos o se crea una nueva (nombre del paciente y de la base de datos); Archivo → «Cambiar de base de datos...» vuelve a la lista. La base de datos anterior (`data/analitix.db`) ya no se usa: los datos se vuelven a importar desde los PDF.
 - «Acerca de», la portada de los informes PDF, el README y el manual incluyen la página personal del autor, [gabimarti.github.io](https://gabimarti.github.io/).
 
+### Corregido
+
+- Instalación desde el código fuente: si se movía la carpeta del programa, `scripts\run_windows.bat` no arrancaba Analitix y no mostraba ningún aviso. Ahora usa siempre el Python de su entorno y, si ese entorno no funciona en el equipo, explica cómo recrearlo.
+
 ## [0.12.0] - 2026-10-09
 
 ### Añadido
