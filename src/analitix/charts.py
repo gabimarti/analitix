@@ -136,8 +136,11 @@ DEFAULT_MIN_POINTS = 4
 # fijo en píxeles por encima/debajo del punto— no queden pegadas al borde
 # del área de datos ni se solapen con la leyenda.
 Y_MARGIN_RATIO = 0.15
-# Ancho máximo, en caracteres, de cada línea del recuadro bajo el gráfico.
-INFO_BOX_WIDTH = 100
+# Ancho máximo, en caracteres, de cada línea del recuadro bajo el gráfico, y
+# su tamaño de letra: 120 caracteres a 9 puntos caben en la figura de 8
+# pulgadas de `evolution_figure` (la del PDF), con margen.
+INFO_BOX_WIDTH = 120
+INFO_BOX_FONTSIZE = 9
 
 
 # Forma del punto por laboratorio (Evolución, Comparativa y los gráficos de
@@ -548,7 +551,7 @@ def _draw_info_box(
         textcoords="offset points",
         ha="center",
         va="top",
-        fontsize=8,
+        fontsize=INFO_BOX_FONTSIZE,
         color="#333333",
         bbox=dict(boxstyle="round", fc="white", ec="#cccccc", alpha=0.9),
         annotation_clip=False,
@@ -915,7 +918,7 @@ def evolution_figure(
     # se dibujan fuera del área de datos. Con objetivo del médico, tiempo en
     # rango o notas (KDIGO, cambio lento) pueden ser bastantes líneas: la
     # figura crece en altura en vez de aplastar el gráfico.
-    alto_texto = 0.95 + 0.16 * getattr(ax, "analitix_info_lines", 0)  # pulgadas: fechas + recuadro
+    alto_texto = 0.95 + 0.18 * getattr(ax, "analitix_info_lines", 0)  # pulgadas: fechas + recuadro
     fig.set_figheight(max(4.5, 3.0 + alto_texto))
     fig.subplots_adjust(bottom=max(0.34, alto_texto / fig.get_figheight()))
     return fig
