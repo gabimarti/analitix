@@ -329,6 +329,30 @@ mismo/a, incluso sin usar ningún asistente de IA,
     nacimiento coincidentes, esa misma persona ya registrada por otro centro
     puede acabar con dos fichas de paciente — si es así, fusiónalas
     (§2.2, "Fusionar pacientes").
+- **Informes que no encajan con el paciente** (una base de datos = un
+  paciente): el primer informe que importas en una base de datos nueva
+  fija de quién es. A partir de ahí, un informe cuyos datos no coinciden
+  con los de ese paciente **no se importa** sin preguntarte, para no
+  mezclar nunca los resultados de otra persona. Se importan solos los que
+  coinciden en nombre y fecha de nacimiento (aunque el nombre venga en otro
+  orden, p. ej. "GARCIA LOPEZ JUAN" y "JUAN GARCIA LOPEZ"), o en DNI, CIP o
+  NHC. Los demás aparecen al terminar la importación en la ventana
+  **Informes que no encajan**, con el motivo de cada uno (nombre distinto,
+  sin fecha de nacimiento, NHC distinto...):
+  - **Es este paciente**: lo importa y recuerda esos datos (ese nombre,
+    ese NHC...) para que la próxima vez un informe igual se importe solo.
+  - **No es**: lo deja fuera; no se vuelve a preguntar mientras el PDF no
+    cambie. Si es de otra persona, impórtalo en la base de datos de esa
+    persona (Archivo → «Cambiar de base de datos...»).
+  - Si el motivo empieza por **«PROBABLEMENTE OTRA PERSONA»** (fecha de
+    nacimiento, DNI o CIP distintos), compruébalo bien antes de decir que es
+    suyo: aunque algún dato coincida (p. ej. el mismo NHC en otro hospital),
+    lo más probable es que sea de otra persona.
+
+  Puedes volver a abrir esa ventana cuando quieras con el botón **Informes
+  que no encajan...** de esta pantalla. En una base de datos antigua con
+  varios pacientes (de antes de tener una base de datos por paciente), los
+  informes se siguen importando como antes.
 - **Reimportar todo (forzar)**: vuelve a analizar TODOS los PDF de la
   carpeta, incluso los que ya estaban bien importados, sustituyendo sus
   datos por los del nuevo análisis. Útil cuando se actualiza el programa y

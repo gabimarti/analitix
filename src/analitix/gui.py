@@ -118,7 +118,7 @@ from analitix.hepatic_risk import (
     get_latest_hepatic_summary,
 )
 from analitix.inflammation_risk import get_inflammation_series, get_latest_inflammation_summary
-from analitix.ingest import ingest_folder, known_pdf_filenames
+from analitix.ingest import confirm_same_patient, find_pdf, ingest_folder, known_pdf_filenames
 from analitix.iron_risk import (
     INDEX_LABELS as IRON_INDEX_LABELS,
     get_iron_index_series,
@@ -147,6 +147,7 @@ from analitix.repository import (
     delete_patient,
     delete_reports,
     delete_target,
+    discard_other_patient_file,
     get_all_results,
     get_excluded_labs,
     get_latest_report_summary,
@@ -161,6 +162,7 @@ from analitix.repository import (
     list_canonical_groups,
     list_canonical_tests,
     list_files_needing_review,
+    list_files_other_patient,
     list_known_test_names,
     list_labs,
     list_orphan_reports,
@@ -941,6 +943,12 @@ class AnalitixApp(ttk.Window):
             command=self._run_ingest,
         )
         self.btn_import.pack(side="right")
+        ttk.Button(
+            top,
+            text="Informes que no encajan...",
+            bootstyle="secondary-outline",
+            command=self._review_other_patient_reports,
+        ).pack(side="right", padx=(0, 8))
         self._same_width(self.btn_import, self.btn_reimport_forced)
 
         progreso = ttk.Frame(frame)
@@ -1013,6 +1021,10 @@ class AnalitixApp(ttk.Window):
             self._log(f"Errores: {len(result.errors)}")
             for name, err in result.errors:
                 self._log(f"  ! {name}: {err}")
+        if result.other_patient:
+            self._log(f"✋ No encajan con el paciente (sin importar): {len(result.other_patient)}")
+            for name, _reason in result.other_patient:
+                self._log(f"  ✋ {name}")
         self._refresh_patients()
         self._refresh_stats()
         aviso_revision = (
@@ -1021,13 +1033,114 @@ class AnalitixApp(ttk.Window):
             if result.review
             else ""
         )
+        aviso_otro = (
+            f"\n\n✋ {len(result.other_patient)} informe(s) no se han importado porque sus datos "
+            "no encajan con el paciente de esta base de datos. A continuación puedes decir si "
+            "son suyos."
+            if result.other_patient
+            else ""
+        )
         messagebox.showinfo(
             "Importación completada",
             f"Nuevos: {len(result.processed)}\nOmitidos: {len(result.skipped)}\n"
-            f"Errores: {len(result.errors)}{aviso_revision}",
+            f"Errores: {len(result.errors)}{aviso_revision}{aviso_otro}",
             parent=self,
         )
+        if result.other_patient:
+            self._review_other_patient_reports()
         self._prompt_active_patient_if_needed()
+
+    def _review_other_patient_reports(self) -> None:
+        """Informes no importados por no encajar con el paciente de la BD
+        (una BD = un paciente): el usuario dice si son suyos («Es este
+        paciente»: se importan y sus datos quedan como identidad alternativa
+        para la próxima vez) o no («No es»: quedan fuera)."""
+        pacientes = list_patients(self.con)
+        dialog, body = self._new_dialog("Informes que no encajan con el paciente", resizable=True)
+        nombre = pacientes[0]["full_name"] if len(pacientes) == 1 else "—"
+        ttk.Label(
+            body,
+            text=f"Paciente de esta base de datos: {nombre}\n\n"
+            "Estos informes no se han importado porque algún dato no coincide (nombre, fecha de "
+            "nacimiento, NHC, DNI...). Mira el motivo de cada uno: «Es este paciente» lo importa "
+            "y recuerda esos datos para que el siguiente igual se importe solo; «No es» lo deja "
+            "fuera (no se vuelve a preguntar mientras el PDF no cambie). Si el motivo empieza "
+            "por «PROBABLEMENTE OTRA PERSONA», compruébalo bien antes de importarlo.",
+            wraplength=760,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 8))
+        tree = ttk.Treeview(
+            body, columns=("fichero", "motivo"), show="headings", height=10, selectmode="browse"
+        )
+        tree.heading("fichero", text="Fichero")
+        tree.heading("motivo", text="Motivo")
+        tree.column("fichero", width=240, stretch=False)
+        tree.column("motivo", width=620)
+        tree.pack(fill="both", expand=True)
+
+        def _cargar() -> None:
+            tree.delete(*tree.get_children())
+            for item in list_files_other_patient(self.con):
+                tree.insert(
+                    "",
+                    "end",
+                    iid=item["filename"],
+                    values=(item["filename"], item["error_message"]),
+                )
+            hijos = tree.get_children()
+            if hijos:
+                tree.selection_set(hijos[0])
+
+        def _seleccionado() -> str | None:
+            seleccion = tree.selection()
+            return seleccion[0] if seleccion else None
+
+        def _es_este() -> None:
+            fichero = _seleccionado()
+            if fichero is None or len(pacientes) != 1:
+                return
+            ruta = find_pdf(self.reports_dir, fichero)
+            if ruta is None:
+                messagebox.showerror(
+                    "Analitix",
+                    f"No se encuentra el PDF «{fichero}» en la carpeta de informes.",
+                    parent=dialog,
+                )
+                return
+            try:
+                confirm_same_patient(self.con, ruta, pacientes[0]["id"])
+            except Exception as exc:  # noqa: BLE001 - se informa y se sigue con el resto
+                logger.exception("Error importando un informe confirmado")
+                self.con.rollback()
+                messagebox.showerror("Analitix", f"No se pudo importar: {exc}", parent=dialog)
+                return
+            self._log(f"  + {fichero} (confirmado: es este paciente)")
+            _cargar()
+            self._refresh_patients()
+            self._refresh_stats()
+
+        def _no_es() -> None:
+            fichero = _seleccionado()
+            if fichero is None:
+                return
+            discard_other_patient_file(self.con, fichero)
+            self._log(f"  ✋ {fichero} (descartado: no es este paciente)")
+            _cargar()
+
+        botones = ttk.Frame(body)
+        botones.pack(fill="x", pady=(PAD, 0))
+        boton_cerrar = ttk.Button(botones, text="Cerrar", command=dialog.destroy)
+        boton_cerrar.pack(side="right")
+        boton_no = ttk.Button(botones, text="No es", command=_no_es)
+        boton_no.pack(side="right", padx=(0, 8))
+        boton_si = ttk.Button(
+            botones, text="Es este paciente", bootstyle="primary", command=_es_este
+        )
+        boton_si.pack(side="right", padx=(0, 8))
+        self._same_width(boton_cerrar, boton_no, boton_si)
+        _cargar()
+        self._center_dialog(dialog)
+        self.wait_window(dialog)
 
     # -- Pacientes --------------------------------------------------------
     def _build_tab_pacientes(self) -> None:

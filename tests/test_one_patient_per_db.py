@@ -206,6 +206,27 @@ def test_reimporting_the_only_report_keeps_a_patient_with_other_data(db, informe
     assert _count(db, "targets") == 1
 
 
+def test_aliases_follow_merge_and_are_deleted_with_the_patient(db):
+    from analitix.repository import (
+        add_patient_alias,
+        delete_all_data,
+        delete_patient,
+        merge_patients,
+    )
+
+    a, _ = get_or_create_patient(db, "GARCIA LOPEZ, JUAN", "1970-05-20", None, "111")
+    b, _ = get_or_create_patient(db, "PEREZ RUIZ, ANA", "1990-02-02", None, "444")
+    add_patient_alias(db, b, "PEREZ R., ANA", None, None, "555")
+    merge_patients(db, [b], a)
+    assert db.execute("SELECT patient_id FROM patient_aliases").fetchall() == [(a,)]
+    delete_patient(db, a)
+    assert _count(db, "patient_aliases") == 0
+    c, _ = get_or_create_patient(db, "SANZ GIL, LUIS", "1985-03-03", None, None)
+    add_patient_alias(db, c, "SANZ G., LUIS", None, None, "666")
+    delete_all_data(db)
+    assert _count(db, "patient_aliases") == 0
+
+
 def test_legacy_db_with_several_patients_imports_as_before(db, informes):
     get_or_create_patient(db, "PEREZ RUIZ, ANA", "1990-02-02", None, None)
     get_or_create_patient(db, "SANZ GIL, LUIS", "1985-03-03", None, None)

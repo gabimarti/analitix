@@ -1113,6 +1113,7 @@ def delete_reports(con, report_ids: list[int]) -> int:
         if remaining == 0:
             cur.execute("DELETE FROM targets WHERE patient_id = ?", (patient_id,))
             cur.execute("DELETE FROM bp_readings WHERE patient_id = ?", (patient_id,))
+            cur.execute("DELETE FROM patient_aliases WHERE patient_id = ?", (patient_id,))
             cur.execute("DELETE FROM patients WHERE id = ?", (patient_id,))
     con.commit()
     return len(report_ids)
@@ -1121,7 +1122,15 @@ def delete_reports(con, report_ids: list[int]) -> int:
 def delete_all_data(con) -> None:
     """Vacía por completo pacientes/informes/resultados/marcas de
     importación (irreversible). No toca `settings` (preferencias de la app)."""
-    for table in ("results", "processed_files", "reports", "targets", "bp_readings", "patients"):
+    for table in (
+        "results",
+        "processed_files",
+        "reports",
+        "targets",
+        "bp_readings",
+        "patient_aliases",
+        "patients",
+    ):
         con.execute(f"DELETE FROM {table}")
     con.commit()
 

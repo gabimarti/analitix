@@ -18,8 +18,14 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 - Evolución y Comparativa: el recuadro de resumen bajo cada gráfico tiene la letra algo mayor y líneas más anchas.
 - Mapa de calor: con muchos parámetros se reparte en páginas (botones ◀ ▶, como mucho 20 filas por página, todas con las mismas fechas) en vez de mostrarlos todos a la vez, para que las casillas se lean bien.
 
+### Añadido
+
+- Una base de datos, un paciente: al importar, un informe cuyos datos no coinciden con los del paciente de la base de datos (otro nombre, sin fecha de nacimiento, otro NHC, DNI...) ya no se importa sin preguntar. Aparece en la ventana «Informes que no encajan» con el motivo: «Es este paciente» lo importa y recuerda esos datos para que el siguiente igual se importe solo; «No es» lo deja fuera. Se avisa especialmente cuando la fecha de nacimiento, el DNI o el CIP son distintos, aunque coincida algún otro dato.
+- Un informe con el nombre en otro orden (p. ej. «GARCIA LOPEZ JUAN» y «JUAN GARCIA LOPEZ») y la misma fecha de nacimiento se reconoce como el mismo paciente.
+
 ### Corregido
 
+- Reimportar el único informe de un paciente ya no borra la ficha de ese paciente cuando tiene objetivos del médico o mediciones de tensión.
 - Instalación desde el código fuente: si se movía la carpeta del programa, `scripts\run_windows.bat` no arrancaba Analitix y no mostraba ningún aviso. Ahora usa siempre el Python de su entorno y, si ese entorno no funciona en el equipo, explica cómo recrearlo.
 
 ## [0.12.0] - 2026-10-09

@@ -220,6 +220,13 @@ Esquema completo en `db.SCHEMA` (SQLite). Tablas:
   para que una evolución sea representativa: agrupa la lista de
   Evolución/Comparativa y es el umbral del control de pocos datos de todos
   los gráficos de evolución, ver §5, `charts.data_sufficiency`).
+- **`patient_aliases`** — identidades alternativas de un paciente
+  confirmadas por el usuario («Es este paciente» al importar un informe que
+  no encajaba): `patient_id`, `name_key`, `birth_date`, `dni`, `cip`, `nhc`
+  (la cabecera de ese informe). `repository.find_patient` las consulta para
+  que el siguiente informe igual encaje solo. Coherente con
+  `merge_patients`, `delete_patient`, `delete_reports` y `delete_all_data`,
+  y visible en el Explorador BD. Ver `ingest.py` («Una BD = un paciente»).
 - **`bp_readings`** — mediciones de tensión arterial: `patient_id`,
   `measured_at` (`AAAA-MM-DD HH:MM`), `systolic`, `diastolic`, `pulse`
   (opcional), `place` (`casa`/`consulta`), `note`, `source`
@@ -989,6 +996,21 @@ sentencias SQL a mano). Funciones relevantes:
   de texto separada por comas sin duplicarlo (o la deja igual si `value` es
   falsy o ya está). Helper compartido por `get_or_create_patient` y
   `merge_patients` para acumular NHC en `nhc_alt` sin repetir.
+- `find_patient(con, full_name, birth_date, dni, nhc, cip=None) -> (patient_id | None, matched_by | None)`:
+  busca sin crear nada (la usan `get_or_create_patient` y la importación
+  en una BD de un paciente). Orden: `name_key + birth_date` del paciente o
+  de una identidad confirmada (`patient_aliases`, `"alias"`); DNI, CIP,
+  NHC del paciente; mismas palabras del nombre en otro orden
+  (`textutils.name_words_key`) **con la misma fecha de nacimiento, presente
+  en los dos** (`"name_words"`); DNI/CIP/NHC de una identidad confirmada.
+- `add_patient_alias(con, patient_id, full_name, birth_date, dni, nhc, cip=None)`:
+  guarda la cabecera de un informe confirmado («Es este paciente») como
+  identidad alternativa del paciente (tabla `patient_aliases`). `merge_patients`
+  pasa los alias al destino; `delete_patient` los borra.
+- `list_files_other_patient(con)` / `discard_other_patient_file(con, filename)`:
+  informes con `processed_files.status = STATUS_OTHER_PATIENT`
+  (`"otro_paciente"`) y descartarlos (`STATUS_DISCARDED`, `"descartado"`,
+  que `already_processed` salta mientras la huella del fichero no cambie).
 - `get_or_create_patient(con, full_name, birth_date, dni, nhc, fallback_name=None) -> (patient_id, matched_by)`:
   empareja primero por `name_key + birth_date`; si `full_name` viene vacío
   (plantilla no reconocida) pero el DNI o el NHC coinciden con los de un
@@ -1253,6 +1275,24 @@ aparezca un laboratorio nuevo.
   partir del nombre del fichero; `clear_previous_import`, al reintentarlo,
   borra cualquier paciente fantasma que se hubiera quedado sin ningún
   informe (ver su comentario).
+  **Una BD = un paciente:** si la BD tiene exactamente un paciente
+  (`_single_patient`), el informe solo se importa si `find_patient` lo
+  empareja con él **y** no hay una contradicción fuerte
+  (`_strong_mismatches`: fecha de nacimiento, DNI o CIP presentes en los dos
+  y distintos; no se aplica si encaja por una identidad ya confirmada). Si
+  no, se guarda `record_processed_file(status=STATUS_OTHER_PATIENT,
+  error_message=<motivo>)` y se lanza `OtherPatientError(motivo)`
+  (`_other_patient_reason`: señales fuertes primero, con «PROBABLEMENTE OTRA
+  PERSONA»); `ingest_folder` lo recoge en `IngestResult.other_patient` y al
+  log solo va la huella del fichero (el motivo lleva el nombre).
+  `confirm_same_patient(con, pdf_path, patient_id)` («Es este paciente»)
+  guarda la cabecera como alias y reimporta con `confirmed_patient_id`;
+  `find_pdf` localiza el PDF por nombre. Una BD vacía (el primer informe
+  fija el paciente) o una antigua con varios pacientes importan como
+  antes. `clear_previous_import` ya no borra un paciente que, sin informes,
+  aún tiene objetivos, tensión o alias (reimportar su único informe).
+  Interfaz: `gui._review_other_patient_reports` (al terminar de importar y
+  con el botón «Informes que no encajan...» de Importar).
   Si el perfil sí tiene motor de parseo, continúa con `get_or_create_patient`
   (con `full_name=header.get("full_name")`, es decir `None` si no se
   reconoció — no se sustituye ya aquí por el nombre del fichero, para darle
