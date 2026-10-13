@@ -4,6 +4,10 @@
 
 [tool.ruff]
 line-length = 100
+# Analitix necesita Python 3.14 para ejecutarse, pero el código se mantiene
+# compatible con 3.11: con "py314" ruff quitaría los paréntesis de
+# `except (A, B):` (sintaxis solo de 3.14) y scripts/check_privacy.py, que la
+# CI ejecuta con el python3 del sistema, dejaría de funcionar.
 target-version = "py311"
 src = ["src", "tests"]
 extend-exclude = ["venv-tests", "venv-build", "data", "informes_analiticas", "export"]

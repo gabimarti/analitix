@@ -16,6 +16,11 @@ if ! command -v python3 >/dev/null; then
     exit 1
 fi
 
+if ! python3 -c "import sys; sys.exit(sys.version_info < (3, 14))"; then
+    echo "Analitix necesita Python 3.14 o superior; python3 es $(python3 --version)."
+    exit 1
+fi
+
 if ! python3 -c "import tkinter" >/dev/null 2>&1; then
     echo "Falta el módulo tkinter. En Debian/Ubuntu: sudo apt install python3-tk"
     exit 1

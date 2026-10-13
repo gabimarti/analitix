@@ -11,7 +11,14 @@ cd /d "%~dp0\.."
 
 where python >nul 2>nul
 if errorlevel 1 (
-    echo No se encuentra "python" en el PATH. Instala Python 3.11+ desde https://www.python.org/downloads/
+    echo No se encuentra "python" en el PATH. Instala Python 3.14+ desde https://www.python.org/downloads/
+    exit /b 1
+)
+python -c "import sys; sys.exit(sys.version_info < (3, 14))" >nul 2>nul
+if errorlevel 1 (
+    echo Analitix necesita Python 3.14 o superior y el "python" del PATH es otro:
+    python --version
+    echo Instalalo desde https://www.python.org/downloads/
     exit /b 1
 )
 
@@ -23,7 +30,7 @@ if not exist venv (
 :: Sin activate.bat (guarda una ruta absoluta, ver run_windows.bat): siempre
 :: el python del entorno. No se borra un entorno roto automaticamente: puede
 :: ser el de otro equipo que comparte esta carpeta.
-venv\Scripts\python.exe -c "" >nul 2>nul
+venv\Scripts\python.exe -c "pass" >nul 2>nul
 if errorlevel 1 (
     echo El entorno virtual .\venv no funciona en este equipo: se creo con un
     echo Python que aqui no esta instalado. Borra la carpeta venv y vuelve a

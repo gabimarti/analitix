@@ -56,7 +56,7 @@ plantilla de antemano).
 | `tkinter` (stdlib) | Interfaz gráfica. |
 | `sqlite3`/`hashlib`/`csv`/`unicodedata` (stdlib) | Utilidades varias. |
 
-Python 3.11+ (probado en 3.14, Windows, `sqlcipher3` con wheel precompilado
+Python 3.14+ (Windows, `sqlcipher3` con wheel precompilado
 `cp314-win_amd64`). Ver `requirements.txt` para versiones mínimas.
 
 ## 3. Estructura de carpetas
@@ -3009,7 +3009,7 @@ python -m pytest
 
 GitHub Actions ejecuta automáticamente el mismo comando en
 `.github/workflows/tests.yml` para cada `push` y pull request. El workflow
-usa `windows-latest` y Python 3.11, igual que el entorno de desarrollo
+usa `windows-latest` y Python 3.14, igual que el entorno de desarrollo
 principal de Analitix, porque `sqlcipher3` es una dependencia crítica de la
 suite. Después de los tests, `pip-audit` comprueba que ninguna dependencia
 instalada tenga vulnerabilidades conocidas; el workflow se ejecuta además

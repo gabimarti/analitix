@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/gabimarti/analitix/actions/workflows/tests.yml"><img src="https://github.com/gabimarti/analitix/actions/workflows/tests.yml/badge.svg" alt="Estado de los tests"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Versión de Python"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.14%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Versión de Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square" alt="Licencia"></a>
   <img src="https://img.shields.io/badge/plataforma-Windows-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Plataforma">
   <img src="https://img.shields.io/badge/datos-100%25%20locales-2ea44f?style=flat-square" alt="Datos 100% locales">

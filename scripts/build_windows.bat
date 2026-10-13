@@ -16,6 +16,10 @@ setlocal
 cd /d "%~dp0\.."
 
 if not exist venv-build (
+    python -c "import sys; sys.exit(sys.version_info < (3, 14))" || (
+        echo Analitix necesita Python 3.14 o superior y el "python" del PATH es otro.
+        exit /b 1
+    )
     echo Creando entorno de compilacion en .\venv-build ...
     python -m venv venv-build || exit /b 1
 )

@@ -48,7 +48,7 @@ guarda tus datos:
 | | Instalador de Windows (§1.1) | Desde el código fuente (§1.2) |
 |---|---|---|
 | Para quién | cualquier usuario, sin conocimientos técnicos | usuarios técnicos que clonan el repositorio |
-| Necesita Python | no | sí (3.11 o superior) |
+| Necesita Python | no | sí (3.14 o superior) |
 | Cómo se abre | menú Inicio / escritorio → **Analitix** | `scripts\run_windows.bat` |
 | Dónde están tus datos | la carpeta `Analitix` que elijas al instalar | `data\` e `informes_analiticas\` dentro de la carpeta del proyecto |
 | Cambiar la ubicación de los datos | sí, desde **Configuración** (§2.20) | no hace falta: la decide dónde has clonado el proyecto |
@@ -95,8 +95,10 @@ contiene.
 ### 1.2 Desde el código fuente (usuarios técnicos)
 
 Requisitos: Windows (entorno principal; Linux funciona pero no está tan
-probado) y [Python 3.11 o superior](https://www.python.org/downloads/)
+probado) y [Python 3.14 o superior](https://www.python.org/downloads/)
 accesible desde la línea de comandos (`python --version` debe funcionar).
+En Linux, si tu distribución todavía no incluye Python 3.14, tendrás que
+instalarlo aparte (por ejemplo desde python.org).
 
 1. Coloca tus informes de laboratorio en PDF dentro de la carpeta
    `informes_analiticas/` del proyecto (o indica otra carpeta más adelante
