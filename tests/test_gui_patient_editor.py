@@ -26,6 +26,16 @@ def test_pdf_pages_split_and_same_orientation():
     assert tuple(figuras[1].get_size_inches()) == (9, 15)  # misma orientación que la primera
 
 
+def test_heatmap_pages_are_balanced():
+    from analitix.gui import HEATMAP_PAGE_ROWS, _heatmap_pages
+
+    assert _heatmap_pages([]) == []
+    assert _heatmap_pages(list(range(HEATMAP_PAGE_ROWS))) == [(list(range(HEATMAP_PAGE_ROWS)), "")]
+    paginas = _heatmap_pages(list(range(50)))  # 50 filas: 3 páginas parecidas
+    assert [(len(t), s) for t, s in paginas] == [(17, " (1/3)"), (17, " (2/3)"), (16, " (3/3)")]
+    assert sum((t for t, _ in paginas), []) == list(range(50))  # sin perder ni repetir filas
+
+
 def test_history_window_counts_back_from_last_report():
     from types import SimpleNamespace
 

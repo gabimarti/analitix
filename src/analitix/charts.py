@@ -1040,15 +1040,25 @@ def _ink_for(rgba) -> str:
     return "white" if 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.35 else HEATMAP_INK
 
 
-def heatmap_figure(rows: list[tuple[str, list[dict[str, Any]]]], title: str) -> Figure:
+def heatmap_dates(rows: list[tuple[str, list[dict[str, Any]]]]) -> list[str]:
+    """Fechas (AAAA-MM-DD, ordenadas) con algún dato en las filas del mapa."""
+    return sorted({s["fecha"][:10] for _, series in rows for s in series})
+
+
+def heatmap_figure(
+    rows: list[tuple[str, list[dict[str, Any]]]], title: str, dates: list[str] | None = None
+) -> Figure:
     """Mapa de calor del historial: una fila por parámetro, una columna por
     fecha de analítica, color según la posición del valor respecto a su
     rango (`range_position`). `rows` son pares (etiqueta, serie) con la
     forma de `repository.get_series`; si un parámetro tiene dos valores el
     mismo día, cuenta el último. Guarda en `ax.analitix_heatmap` lo que
-    necesita el tooltip de `gui.py` (fila/columna -> punto)."""
+    necesita el tooltip de `gui.py` (fila/columna -> punto). `dates`
+    (opcional, `heatmap_dates`): columnas fijas, para que las páginas de un
+    mismo mapa repartido tengan las mismas fechas; por defecto, las de `rows`."""
     rows = [(label, series) for label, series in rows if series]
-    dates = sorted({s["fecha"][:10] for _, series in rows for s in series})
+    if dates is None:
+        dates = heatmap_dates(rows)
     n_rows, n_cols = max(len(rows), 1), max(len(dates), 1)
     col_of = {d: j for j, d in enumerate(dates)}
 

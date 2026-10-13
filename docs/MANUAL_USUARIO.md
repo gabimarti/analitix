@@ -869,6 +869,11 @@ enseña exactamente los datos con los que calcula ese panel, lo que ayuda a
 ver si le falta algún dato o si alguno no encaja. Pasa el ratón por una
 casilla para ver el valor, la fecha, el rango y el laboratorio.
 
+Si hay muchos parámetros, el mapa se reparte en **páginas** (como mucho 20
+filas cada una) para que las casillas se lean bien: usa los botones **◀** y
+**▶** junto a «Página 1 de 3». Todas las páginas tienen las mismas columnas
+(fechas), así que puedes pasar de una a otra y comparar.
+
 Como el color depende del rango de cada informe, el mapa compara bien
 analíticas de laboratorios distintos aunque usen unidades diferentes.
 Es una ayuda visual de seguimiento, no un diagnóstico: un color intenso no

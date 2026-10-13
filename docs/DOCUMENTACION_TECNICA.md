@@ -2313,9 +2313,15 @@ parámetros excluidos a propósito.
   alguna vez fuera de rango (por defecto), todos, o uno por panel
   (`HEATMAP_SETS`: pares (etiqueta legible, tupla `*_IDS` del panel),
   fusionados con `get_merged_series`, así el mapa enseña exactamente los
-  datos con los que calcula cada panel). Con más de `HEATMAP_SCROLL_ROWS`
-  filas, `fig.analitix_scroll = True` hace que `_embed_figure` use la
-  variante con desplazamiento vertical en vez de comprimir las casillas.
+  datos con los que calcula cada panel). En pantalla el mapa se reparte en
+  páginas equilibradas de como mucho `HEATMAP_PAGE_ROWS` filas
+  (`_heatmap_pages`, sobre `_pages_of`), con botones ◀ ▶ y «Página n de m»;
+  todas las páginas usan las mismas columnas (`heatmap_dates` de todas las
+  filas, pasadas a `heatmap_figure(..., dates)`) para poder compararlas. Si
+  una página tiene más de `HEATMAP_SCROLL_ROWS` filas,
+  `fig.analitix_scroll = True` hace que `_embed_figure` use la variante con
+  desplazamiento vertical en vez de comprimir las casillas. El PDF sigue
+  repartiendo el mapa en páginas de `PDF_ROWS_PER_PAGE`.
 
 `AnalitixApp(ttkbootstrap.Window)`, tema `"flatly"`. **Navegación por menú**,
 no por pestañas: un único `self.content`

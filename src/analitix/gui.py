@@ -74,6 +74,7 @@ from analitix.charts import (
     comparison_figure,
     data_sufficiency,
     evolution_figure,
+    heatmap_dates,
     heatmap_figure,
     position_figure,
     trend_arrow,
@@ -239,6 +240,9 @@ HEATMAP_SETS: dict[str, tuple[tuple[str, tuple[str, ...]], ...]] = {
 # Con más filas que esto el mapa se muestra con barra de desplazamiento en
 # vez de comprimir las casillas al alto de la ventana.
 HEATMAP_SCROLL_ROWS = 16
+# En pantalla, el mapa se reparte en páginas de como mucho estas filas
+# (equilibradas: 50 filas -> 3 páginas de 17) para que se lea bien.
+HEATMAP_PAGE_ROWS = 20
 
 
 def _format_range(item: dict) -> str:
@@ -298,13 +302,21 @@ PDF_COMBINED_PANELS = {
 }
 
 
-def _pages_of(filas: list) -> list[tuple[list, str]]:
-    """Reparte `filas` en trozos de `PDF_ROWS_PER_PAGE` para el PDF, con el
-    sufijo de título de cada uno (" (1/2)"...; vacío si cabe en una)."""
-    trozos = [filas[i : i + PDF_ROWS_PER_PAGE] for i in range(0, len(filas), PDF_ROWS_PER_PAGE)]
+def _pages_of(filas: list, por_pagina: int = PDF_ROWS_PER_PAGE) -> list[tuple[list, str]]:
+    """Reparte `filas` en trozos de `por_pagina` (por defecto los del PDF),
+    con el sufijo de título de cada uno (" (1/2)"...; vacío si cabe en una)."""
+    trozos = [filas[i : i + por_pagina] for i in range(0, len(filas), por_pagina)]
     if len(trozos) <= 1:
         return [(t, "") for t in trozos]
     return [(t, f" ({n}/{len(trozos)})") for n, t in enumerate(trozos, start=1)]
+
+
+def _heatmap_pages(filas: list) -> list[tuple[list, str]]:
+    """Páginas del mapa de calor en pantalla: las mínimas de como mucho
+    `HEATMAP_PAGE_ROWS` filas, con el mismo número de filas en cada una
+    (50 -> 17 + 17 + 16, no 20 + 20 + 10)."""
+    paginas = -(-len(filas) // HEATMAP_PAGE_ROWS) or 1
+    return _pages_of(filas, -(-len(filas) // paginas) or 1)
 
 
 def _check_period(desde: str, hasta: str) -> tuple[str | None, str | None] | None:
@@ -2807,10 +2819,22 @@ class AnalitixApp(ttk.Window):
             values=[HEATMAP_OUT_OF_RANGE, HEATMAP_ALL, *HEATMAP_SETS],
         )
         combo.pack(side="left")
-        combo.bind("<<ComboboxSelected>>", lambda _e: self._show_heatmap())
+        combo.bind("<<ComboboxSelected>>", lambda _e: self._show_heatmap(page=0))
         ttk.Button(top, text="Ver mapa", bootstyle="primary", command=self._show_heatmap).pack(
             side="left", padx=(8, 0)
         )
+        # Páginas (`_heatmap_pages`): solo se activan si el mapa no cabe en una.
+        self._heatmap_page = 0
+        self.btn_heatmap_prev = ttk.Button(
+            top, text="◀", width=3, command=lambda: self._show_heatmap(self._heatmap_page - 1)
+        )
+        self.btn_heatmap_prev.pack(side="left", padx=(24, 0))
+        self.lbl_heatmap_page = ttk.Label(top, text="", width=16, anchor="center")
+        self.lbl_heatmap_page.pack(side="left")
+        self.btn_heatmap_next = ttk.Button(
+            top, text="▶", width=3, command=lambda: self._show_heatmap(self._heatmap_page + 1)
+        )
+        self.btn_heatmap_next.pack(side="left")
         ttk.Label(
             frame,
             text="Cada fila es un parámetro y cada columna una analítica. Azul = por debajo del rango de "
@@ -2840,12 +2864,27 @@ class AnalitixApp(ttk.Window):
         rows = [(t["raw_name"], get_series(self.con, t["canonical_id"], pid)) for t in tests]
         return sorted(rows, key=lambda r: strip_accents(r[0]).casefold())
 
-    def _show_heatmap(self) -> None:
+    def _show_heatmap(self, page: int | None = None) -> None:
+        """Muestra la página `page` del mapa (la actual si es `None`)."""
         if self.current_patient_id is None:
             return
         choice = self.var_mapa_calor_set.get()
         rows = [r for r in self._heatmap_rows(choice) if r[1]]
         container = self.chart_canvas_mapa_calor
+        pages = _heatmap_pages(rows)
+        if page is not None:
+            self._heatmap_page = page
+        self._heatmap_page = max(0, min(self._heatmap_page, len(pages) - 1))
+        varias = len(pages) > 1
+        self.lbl_heatmap_page.configure(
+            text=f"Página {self._heatmap_page + 1} de {len(pages)}" if varias else ""
+        )
+        self.btn_heatmap_prev.configure(
+            state="normal" if varias and self._heatmap_page > 0 else "disabled"
+        )
+        self.btn_heatmap_next.configure(
+            state="normal" if varias and self._heatmap_page < len(pages) - 1 else "disabled"
+        )
         if not rows:
             for child in container.winfo_children():
                 child.destroy()
@@ -2853,8 +2892,10 @@ class AnalitixApp(ttk.Window):
                 anchor="w"
             )
             return
-        fig = heatmap_figure(rows, choice)
-        fig.analitix_scroll = len(rows) > HEATMAP_SCROLL_ROWS
+        trozo, sufijo = pages[self._heatmap_page]
+        # Mismas columnas (fechas) en todas las páginas, para poder compararlas.
+        fig = heatmap_figure(trozo, choice + sufijo, heatmap_dates(rows))
+        fig.analitix_scroll = len(trozo) > HEATMAP_SCROLL_ROWS
         self._embed_figure(fig, container)
         self._attach_heatmap_hover(fig)
 

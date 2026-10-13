@@ -83,6 +83,21 @@ def test_heatmap_figure_cells_and_metadata():
     assert meta["cells"][(0, 1)]["value_num"] == 14.0 and (1, 0) not in meta["cells"]
 
 
+def test_heatmap_figure_fixed_dates_for_pages():
+    # Una página de un mapa repartido usa las columnas de todo el mapa, aunque
+    # sus filas no tengan datos en todas las fechas.
+    from analitix.charts import heatmap_dates, heatmap_figure
+
+    rows = [
+        ("Hemoglobina", [_row("2024-01-01", 11.0, "A")]),
+        ("Ferritina", [_row("2024-06-01 08:00:00", 400.0, "B", 30, 300)]),
+    ]
+    todas = heatmap_dates(rows)
+    assert todas == ["2024-01-01", "2024-06-01"]
+    meta = heatmap_figure(rows[:1], "Prueba (1/2)", todas).axes[0].analitix_heatmap
+    assert meta["dates"] == todas and (0, 0) in meta["cells"]
+
+
 def test_evolution_points_shaped_by_lab():
     from analitix.charts import evolution_figure
 

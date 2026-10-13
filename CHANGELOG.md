@@ -16,6 +16,7 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 - «Acerca de», la portada de los informes PDF, el README y el manual incluyen la página personal del autor, [gabimarti.github.io](https://gabimarti.github.io/).
 - Instalación desde el código fuente: ahora necesita Python 3.14 o superior (antes 3.11), la misma versión con la que se compila el instalador. Los scripts de instalación avisan si el `python` disponible es más antiguo. El instalador de Windows no cambia: lleva su propio Python.
 - Evolución y Comparativa: el recuadro de resumen bajo cada gráfico tiene la letra algo mayor y líneas más anchas.
+- Mapa de calor: con muchos parámetros se reparte en páginas (botones ◀ ▶, como mucho 20 filas por página, todas con las mismas fechas) en vez de mostrarlos todos a la vez, para que las casillas se lean bien.
 
 ### Corregido
 
