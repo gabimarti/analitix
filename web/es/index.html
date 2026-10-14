@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analitix — tus analíticas de laboratorio, en tu ordenador</title>
+  <meta name="description" content="Analitix lee los PDF de tus analíticas de laboratorio y te muestra cómo evolucionan tus valores. Gratuito, de código abierto y sin enviar nada a internet.">
+  <link rel="alternate" hreflang="es" href="https://gabimarti.github.io/analitix/es/">
+  <link rel="alternate" hreflang="ca" href="https://gabimarti.github.io/analitix/ca/">
+  <link rel="icon" type="image/png" href="../assets/img/logo.png">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <nav class="lang" aria-label="Idioma">
+      <a href="../es/" aria-current="true" lang="es">Castellano</a>
+      <a href="../ca/" lang="ca">Català</a>
+    </nav>
+    <img class="logo" src="../assets/img/logo.png" alt="Logo de Analitix">
+    <h1>Analitix</h1>
+    <p class="tagline">Lee los PDF de tus analíticas y te enseña, de un vistazo, cómo evolucionan tus valores con el tiempo.</p>
+    <a class="download" href="{{DOWNLOAD_URL}}">⬇ Descargar para Windows</a>
+    <p class="download-info">Versión {{VERSION}} · {{RELEASE_DATE}} · {{SIZE_MB}} MB · Windows 10 y 11 ·
+      <a href="https://github.com/gabimarti/analitix/releases">otras versiones</a></p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section>
+    <h2>¿Qué hace?</h2>
+    <div class="features">
+      <div class="feature">
+        <h3>📄 Importa tus PDF</h3>
+        <p>Copia los informes de laboratorio en una carpeta y Analitix extrae los resultados solo.</p>
+      </div>
+      <div class="feature">
+        <h3>📈 Evolución en gráficos</h3>
+        <p>Cada prueba en el tiempo, con su rango de referencia y los valores fuera de rango marcados.</p>
+      </div>
+      <div class="feature">
+        <h3>🩺 Paneles clínicos</h3>
+        <p>Riesgo cardiovascular, función renal, hígado, hemograma, hierro, tiroides… con fórmulas y fuentes citadas.</p>
+      </div>
+      <div class="feature">
+        <h3>🔒 Privado</h3>
+        <p>Todo se queda en tu ordenador, en una base de datos cifrada con tu contraseña. No se envía nada a internet.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Capturas</h2>
+    <div class="shots">
+      <figure><img src="../assets/img/resumen_tabla.png" alt="Resumen de la última analítica" loading="lazy">
+        <figcaption>Resumen de la última analítica</figcaption></figure>
+      <figure><img src="../assets/img/evolucion.png" alt="Evolución de una prueba en el tiempo" loading="lazy">
+        <figcaption>Evolución de una prueba</figcaption></figure>
+      <figure><img src="../assets/img/panel_renal.png" alt="Panel de función renal" loading="lazy">
+        <figcaption>Panel de función renal</figcaption></figure>
+      <figure><img src="../assets/img/mapa_calor.png" alt="Mapa de calor de todo el historial" loading="lazy">
+        <figcaption>Mapa de calor de todo el historial</figcaption></figure>
+    </div>
+    <p class="note">Capturas con datos ficticios.</p>
+  </section>
+
+  <section>
+    <h2>Instalar en Windows</h2>
+    <p>No necesitas conocimientos técnicos ni permisos de administrador.</p>
+    <ol class="steps">
+      <li><strong>Descarga el instalador</strong> con el botón verde de arriba. Se guardará en tu carpeta <em>Descargas</em>.</li>
+      <li><strong>Ábrelo con doble clic.</strong> Si Windows muestra un aviso azul, lee el recuadro de abajo.</li>
+      <li><strong>Sigue el asistente.</strong> Te preguntará dónde guardar tus datos (por defecto, en <em>Documentos</em>).</li>
+      <li><strong>Abre Analitix</strong> desde el menú Inicio y <strong>crea tu contraseña</strong>. Guárdala bien: si la olvidas, no hay forma de recuperar los datos.</li>
+      <li><strong>Importa tus analíticas:</strong> copia los PDF en la carpeta <em>informes_analiticas</em> y usa <em>Archivo → Importar</em>.</li>
+    </ol>
+    <div class="smartscreen">
+      <h3>⚠ «Windows protegió su PC»</h3>
+      <p>Al abrir el instalador, Windows puede mostrar este aviso azul. Aparece porque el instalador no tiene una
+        firma digital de pago, <strong>no porque sea peligroso</strong>: Analitix es de código abierto y cualquiera
+        puede revisar su código.</p>
+      <p>Para continuar, pulsa <strong>Más información</strong> y después <strong>Ejecutar de todas formas</strong>.</p>
+      <p class="note">Si quieres comprobar que el fichero no se ha alterado, compara su huella SHA-256 con la de
+        <a href="{{SHA256_URL}}">SHA256SUMS.txt</a>.</p>
+    </div>
+    <p>Para <strong>actualizar</strong>, descarga el instalador nuevo y ejecútalo encima: tus datos se conservan.</p>
+  </section>
+
+  <section>
+    <h2>Documentación</h2>
+    <ul class="links">
+      <li><a href="https://github.com/gabimarti/analitix/blob/main/docs/MANUAL_USUARIO.md">Manual de usuario</a></li>
+      <li><a href="https://github.com/gabimarti/analitix/blob/main/CHANGELOG.md">Novedades de cada versión</a></li>
+      <li><a href="https://github.com/gabimarti/analitix/tree/main/docs/referencias_medicas">Referencias científicas</a></li>
+      <li><a href="https://github.com/gabimarti/analitix/blob/main/docs/DOCUMENTACION_TECNICA.md">Documentación técnica</a></li>
+      <li><a href="https://github.com/gabimarti/analitix">Código fuente en GitHub</a></li>
+      <li><a href="https://github.com/gabimarti/analitix/blob/main/CONTRIBUTING.md">Cómo colaborar</a></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Aviso importante</h2>
+    <p class="disclaimer">Analitix es una herramienta informativa para seguir tus propios resultados. <strong>No hace
+      diagnósticos ni sustituye a tu médico</strong>: comenta siempre tus resultados con un profesional sanitario.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Contacto: <a href="mailto:contact@analitix.slmail.me">contact@analitix.slmail.me</a> ·
+      Autor: <a href="https://gabimarti.github.io/">Gabriel Marti</a></p>
+    <p>Software libre bajo la licencia
+      <a href="https://github.com/gabimarti/analitix/blob/main/LICENSE">GNU GPL-3.0</a>.</p>
+  </div>
+</footer>
+</body>
+</html>

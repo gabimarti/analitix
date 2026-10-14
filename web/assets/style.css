@@ -1,0 +1,95 @@
+/* Web del proyecto Analitix: una página por idioma, sin dependencias. */
+:root {
+  --ink: #1f2933;
+  --muted: #52606d;
+  --brand: #0b6bcb;
+  --navy: #04122e;
+  --soft: #f3f6fa;
+  --warn: #fff6e0;
+  --warn-edge: #e0a800;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--ink);
+  line-height: 1.6;
+  background: #fff;
+}
+
+a { color: var(--brand); }
+
+.wrap { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+
+header.hero {
+  background: var(--navy);
+  color: #fff;
+  padding: 28px 0 48px;
+  text-align: center;
+}
+
+.lang { text-align: right; font-size: 0.95rem; }
+.lang a { color: #9cc9ff; text-decoration: none; margin-left: 10px; }
+.lang a[aria-current="true"] { color: #fff; font-weight: 600; text-decoration: underline; }
+
+.hero img.logo { width: 120px; height: 120px; border-radius: 16px; margin-top: 8px; }
+.hero h1 { font-size: 2.6rem; margin: 12px 0 4px; }
+.hero p.tagline { font-size: 1.25rem; color: #cfe3ff; margin: 0 auto 28px; max-width: 640px; }
+
+.download {
+  display: inline-block;
+  background: #19a35b;
+  color: #fff;
+  font-size: 1.35rem;
+  font-weight: 700;
+  padding: 16px 34px;
+  border-radius: 999px;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+.download:hover, .download:focus { background: #14874b; }
+.download-info { color: #cfe3ff; font-size: 0.95rem; margin-top: 10px; }
+.download-info a { color: #9cc9ff; }
+
+section { padding: 40px 0 8px; }
+h2 { font-size: 1.6rem; margin: 0 0 14px; color: var(--navy); }
+
+.features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.feature { background: var(--soft); border-radius: var(--radius); padding: 16px 18px; }
+.feature h3 { margin: 0 0 6px; font-size: 1.1rem; }
+.feature p { margin: 0; color: var(--muted); }
+
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 18px; }
+.shots figure { margin: 0; }
+.shots img { width: 100%; height: auto; border: 1px solid #d9e2ec; border-radius: 8px; }
+.shots figcaption { color: var(--muted); font-size: 0.95rem; margin-top: 4px; }
+.note { color: var(--muted); font-size: 0.9rem; }
+
+ol.steps { padding-left: 1.3em; }
+ol.steps li { margin-bottom: 10px; }
+
+.smartscreen {
+  background: var(--warn);
+  border-left: 5px solid var(--warn-edge);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+}
+.smartscreen h3 { margin-top: 0; }
+
+.links { columns: 2 260px; padding-left: 1.2em; }
+
+.disclaimer { background: var(--soft); border-radius: var(--radius); padding: 14px 18px; color: var(--muted); }
+
+footer { margin-top: 40px; padding: 24px 0 40px; border-top: 1px solid #d9e2ec; color: var(--muted); font-size: 0.95rem; text-align: center; }
+
+/* Página de elección de idioma */
+.chooser { text-align: center; padding: 80px 20px; }
+.chooser a { display: inline-block; margin: 10px; padding: 12px 28px; border: 2px solid var(--brand); border-radius: 999px; text-decoration: none; font-size: 1.2rem; }
+
+@media (max-width: 520px) {
+  .shots, .features { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 2rem; }
+}

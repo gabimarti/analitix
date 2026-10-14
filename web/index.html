@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analitix</title>
+  <link rel="alternate" hreflang="es" href="https://gabimarti.github.io/analitix/es/">
+  <link rel="alternate" hreflang="ca" href="https://gabimarti.github.io/analitix/ca/">
+  <link rel="alternate" hreflang="x-default" href="https://gabimarti.github.io/analitix/es/">
+  <link rel="icon" type="image/png" href="assets/img/logo.png">
+  <link rel="stylesheet" href="assets/style.css">
+  <script>
+    // Idioma del navegador: catalán si lo prefiere, si no castellano. Para
+    // añadir un idioma: carpeta web/<código>/ y su código en esta lista.
+    (function () {
+      var disponibles = ["es", "ca"];
+      var preferidos = navigator.languages || [navigator.language || "es"];
+      for (var i = 0; i < preferidos.length; i++) {
+        var codigo = String(preferidos[i]).toLowerCase().split("-")[0];
+        if (disponibles.indexOf(codigo) !== -1) { location.replace(codigo + "/"); return; }
+      }
+      location.replace("es/");
+    })();
+  </script>
+</head>
+<body>
+  <div class="chooser">
+    <img src="assets/img/logo.png" alt="Analitix" width="96" height="96">
+    <p>
+      <a href="es/" lang="es">Castellano</a>
+      <a href="ca/" lang="ca">Català</a>
+    </p>
+  </div>
+</body>
+</html>
