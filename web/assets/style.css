@@ -64,7 +64,15 @@ h2 { font-size: 1.6rem; margin: 0 0 14px; color: var(--navy); }
 
 .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 18px; }
 .shots figure { margin: 0; }
-.shots img { width: 100%; height: auto; border: 1px solid #d9e2ec; border-radius: 8px; }
+.shots img { width: 100%; height: auto; border: 1px solid #d9e2ec; border-radius: 8px; cursor: zoom-in; transition: transform 0.15s, box-shadow 0.15s; }
+.shots img:hover, .shots img:focus { transform: scale(1.02); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); outline: none; }
+
+/* Captura ampliada (assets/zoom.js) */
+dialog.zoom { border: 0; padding: 0; background: transparent; max-width: 96vw; max-height: 96vh; overflow: visible; cursor: zoom-out; }
+dialog.zoom::backdrop { background: rgba(4, 18, 46, 0.85); }
+dialog.zoom img { display: block; max-width: 96vw; max-height: 88vh; width: auto; height: auto; border-radius: 8px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+.zoom-caption { color: #fff; text-align: center; margin: 8px 0 0; }
+.zoom-close { position: absolute; top: -14px; right: -14px; width: 36px; height: 36px; border-radius: 50%; border: 0; background: #fff; color: var(--navy); font-size: 1.1rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
 .shots figcaption { color: var(--muted); font-size: 0.95rem; margin-top: 4px; }
 .note { color: var(--muted); font-size: 0.9rem; }
 
