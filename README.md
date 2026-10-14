@@ -24,6 +24,9 @@ cómo evolucionan tus valores en el tiempo frente a sus rangos de referencia.
 > — la versión más reciente es la primera de la lista. Pasos para
 > instalarla en [«Instalar en Windows paso a paso»](#instalar-en-windows-paso-a-paso).
 
+🌐 Web del proyecto: **[gabimarti.github.io/analitix](https://gabimarti.github.io/analitix/)**
+(castellano y català).
+
 ¿Por qué existe? Te lo cuento en [**Por qué nació Analitix**](docs/HISTORIA.md).
 Novedades de cada versión en el [registro de cambios](CHANGELOG.md).
 

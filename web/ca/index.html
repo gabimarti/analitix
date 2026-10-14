@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analitix — les teves analítiques de laboratori, al teu ordinador</title>
+  <meta name="description" content="Analitix llegeix els PDF de les teves analítiques de laboratori i et mostra com evolucionen els teus valors. Gratuït, de codi obert i sense enviar res a internet.">
+  <link rel="alternate" hreflang="es" href="https://gabimarti.github.io/analitix/es/">
+  <link rel="alternate" hreflang="ca" href="https://gabimarti.github.io/analitix/ca/">
+  <link rel="icon" type="image/png" href="../assets/img/logo.png">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <nav class="lang" aria-label="Idioma">
+      <a href="../es/" lang="es">Castellano</a>
+      <a href="../ca/" aria-current="true" lang="ca">Català</a>
+    </nav>
+    <img class="logo" src="../assets/img/logo.png" alt="Logotip d'Analitix">
+    <h1>Analitix</h1>
+    <p class="tagline">Llegeix els PDF de les teves analítiques i t'ensenya, d'un cop d'ull, com evolucionen els teus valors amb el temps.</p>
+    <a class="download" href="{{DOWNLOAD_URL}}">⬇ Descarregar per a Windows</a>
+    <p class="download-info">Versió {{VERSION}} · {{RELEASE_DATE}} · {{SIZE_MB}} MB · Windows 10 i 11 ·
+      <a href="https://github.com/gabimarti/analitix/releases">altres versions</a></p>
+    <p class="download-info">L'aplicació, de moment, només està en castellà; la versió en català arribarà més endavant.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section>
+    <h2>Què fa?</h2>
+    <div class="features">
+      <div class="feature">
+        <h3>📄 Importa els teus PDF</h3>
+        <p>Copia els informes de laboratori en una carpeta i Analitix n'extreu els resultats sol.</p>
+      </div>
+      <div class="feature">
+        <h3>📈 Evolució en gràfics</h3>
+        <p>Cada prova en el temps, amb el seu rang de referència i els valors fora de rang marcats.</p>
+      </div>
+      <div class="feature">
+        <h3>🩺 Panells clínics</h3>
+        <p>Risc cardiovascular, funció renal, fetge, hemograma, ferro, tiroide… amb fórmules i fonts citades.</p>
+      </div>
+      <div class="feature">
+        <h3>🔒 Privat</h3>
+        <p>Tot es queda al teu ordinador, en una base de dades xifrada amb la teva contrasenya. No s'envia res a internet.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Captures</h2>
+    <div class="shots">
+      <figure><img src="../assets/img/resumen_tabla.png" alt="Resum de l'última analítica" loading="lazy">
+        <figcaption>Resum de l'última analítica</figcaption></figure>
+      <figure><img src="../assets/img/evolucion.png" alt="Evolució d'una prova en el temps" loading="lazy">
+        <figcaption>Evolució d'una prova</figcaption></figure>
+      <figure><img src="../assets/img/panel_renal.png" alt="Panell de funció renal" loading="lazy">
+        <figcaption>Panell de funció renal</figcaption></figure>
+      <figure><img src="../assets/img/mapa_calor.png" alt="Mapa de calor de tot l'historial" loading="lazy">
+        <figcaption>Mapa de calor de tot l'historial</figcaption></figure>
+    </div>
+    <p class="note">Captures amb dades fictícies.</p>
+  </section>
+
+  <section>
+    <h2>Instal·lar a Windows</h2>
+    <p>No necessites coneixements tècnics ni permisos d'administrador.</p>
+    <ol class="steps">
+      <li><strong>Descarrega l'instal·lador</strong> amb el botó verd de dalt. Es desarà a la carpeta <em>Baixades</em>.</li>
+      <li><strong>Obre'l amb doble clic.</strong> Si Windows mostra un avís blau, llegeix el requadre de sota.</li>
+      <li><strong>Segueix l'assistent.</strong> Et preguntarà on desar les teves dades (per defecte, a <em>Documents</em>).</li>
+      <li><strong>Obre Analitix</strong> des del menú Inici i <strong>crea la teva contrasenya</strong>. Guarda-la bé: si l'oblides, no hi ha manera de recuperar les dades.</li>
+      <li><strong>Importa les teves analítiques:</strong> copia els PDF a la carpeta <em>informes_analiticas</em> i fes servir <em>Archivo → Importar</em>.</li>
+    </ol>
+    <div class="smartscreen">
+      <h3>⚠ Avís de Windows SmartScreen</h3>
+      <p>En obrir l'instal·lador, Windows pot mostrar un avís blau («Windows protegió su PC» si tens Windows en
+        castellà). Apareix perquè l'instal·lador no té una signatura digital de pagament, <strong>no perquè sigui
+        perillós</strong>: Analitix és de codi obert i qualsevol en pot revisar el codi.</p>
+      <p>Per continuar, prem l'enllaç d'<strong>informació addicional</strong> («Más información») i després el botó
+        per <strong>executar-lo igualment</strong> («Ejecutar de todas formas»).</p>
+      <p class="note">Si vols comprovar que el fitxer no s'ha alterat, compara'n l'empremta SHA-256 amb la de
+        <a href="{{SHA256_URL}}">SHA256SUMS.txt</a>.</p>
+    </div>
+    <p>Per <strong>actualitzar</strong>, descarrega l'instal·lador nou i executa'l a sobre: les teves dades es conserven.</p>
+  </section>
+
+  <section>
+    <h2>Documentació (en castellà)</h2>
+    <ul class="links">
+      <li><a href="https://github.com/gabimarti/analitix/blob/main/docs/MANUAL_USUARIO.md">Manual d'usuari</a></li>
+      <li><a href="https://github.com/gabimarti/analitix/blob/main/CHANGELOG.md">Novetats de cada versió</a></li>
+      <li><a href="https://github.com/gabimarti/analitix/tree/main/docs/referencias_medicas">Referències científiques</a></li>
+      <li><a href="https://github.com/gabimarti/analitix/blob/main/docs/DOCUMENTACION_TECNICA.md">Documentació tècnica</a></li>
+      <li><a href="https://github.com/gabimarti/analitix">Codi font a GitHub</a></li>
+      <li><a href="https://github.com/gabimarti/analitix/blob/main/CONTRIBUTING.md">Com col·laborar</a></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Avís important</h2>
+    <p class="disclaimer">Analitix és una eina informativa per fer el seguiment dels teus propis resultats. <strong>No
+      fa diagnòstics ni substitueix el teu metge</strong>: comenta sempre els teus resultats amb un professional
+      sanitari.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Contacte: <a href="mailto:contact@analitix.slmail.me">contact@analitix.slmail.me</a> ·
+      Autor: <a href="https://gabimarti.github.io/">Gabriel Marti</a></p>
+    <p>Programari lliure sota la llicència
+      <a href="https://github.com/gabimarti/analitix/blob/main/LICENSE">GNU GPL-3.0</a>.</p>
+  </div>
+</footer>
+</body>
+</html>
