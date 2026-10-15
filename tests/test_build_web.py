@@ -9,7 +9,9 @@ _spec.loader.exec_module(build_web)
 
 
 def _release(tag, draft=False, exe=True):
-    assets = [{"name": "SHA256SUMS.txt", "size": 100, "browser_download_url": f"https://x/{tag}/sums"}]
+    assets = [
+        {"name": "SHA256SUMS.txt", "size": 100, "browser_download_url": f"https://x/{tag}/sums"}
+    ]
     if exe:
         assets.append(
             {
@@ -18,11 +20,20 @@ def _release(tag, draft=False, exe=True):
                 "browser_download_url": f"https://x/{tag}/setup.exe",
             }
         )
-    return {"tag_name": tag, "draft": draft, "published_at": "2026-10-09T10:00:00Z", "assets": assets}
+    return {
+        "tag_name": tag,
+        "draft": draft,
+        "published_at": "2026-10-09T10:00:00Z",
+        "assets": assets,
+    }
 
 
 def test_latest_release_skips_drafts_and_releases_without_installer():
-    releases = [_release("v0.14.0", draft=True), _release("v0.13.1", exe=False), _release("v0.13.0")]
+    releases = [
+        _release("v0.14.0", draft=True),
+        _release("v0.13.1", exe=False),
+        _release("v0.13.0"),
+    ]
     valores = build_web.latest_release(releases)
     assert valores == {
         "VERSION": "0.13.0",
