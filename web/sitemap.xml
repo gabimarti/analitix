@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Páginas de la web para los buscadores. Al añadir un idioma (web/<código>/),
+     añadir aquí su URL. Los enlaces entre idiomas van en cada página (hreflang). -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://gabimarti.github.io/analitix/es/</loc></url>
+  <url><loc>https://gabimarti.github.io/analitix/ca/</loc></url>
+</urlset>
