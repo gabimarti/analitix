@@ -68,7 +68,12 @@ def ask_password(
     Devuelve la contraseña o `None` si se cancela."""
     win = tk.Toplevel(parent)
     win.title(titulo)
-    win.transient(parent)
+    # Solo transient de una ventana visible: al arrancar, `parent` es la raíz
+    # oculta (`withdraw`) y en Windows una ventana transient de una oculta
+    # tampoco se muestra (la app se quedaba esperando una contraseña
+    # invisible).
+    if parent.winfo_viewable():
+        win.transient(parent)
     win.resizable(False, False)
     body = ttk.Frame(win, padding=(24, 20))
     body.pack(fill="both", expand=True)
