@@ -18,8 +18,10 @@ usada, para abrirla directamente en el siguiente arranque.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -114,6 +116,12 @@ def add_database(nombre: str, fichero: str) -> None:
     error = validate_new(nombre, fichero)
     if error:
         raise ValueError(error)
+    _register(nombre, fichero)
+
+
+def _register(nombre: str, fichero: str) -> None:
+    """Añade la entrada a la lista sin validar (quien llama ya lo hizo, antes
+    de crear el fichero)."""
     lista = _read_json(config.DB_LIST_PATH, [])
     lista.append({"nombre": nombre.strip(), "fichero": fichero.strip()})
     _write_json(config.DB_LIST_PATH, lista)
@@ -144,3 +152,120 @@ def set_last_database(fichero: str) -> None:
     cfg = load_config()
     cfg["ultima_bd"] = fichero
     save_config(cfg)
+
+
+# -- Gestor de bases de datos ---------------------------------------------
+# Copia de seguridad = el fichero cifrado tal cual (sigue protegido con la
+# misma contraseña). Con la BD abierta basta con hacer `commit` antes: el
+# diario de SQLite es el de por defecto (DELETE), sin ficheros -wal aparte.
+
+REMINDER_DEFAULT_DAYS = 30
+
+
+def backup_suggested_name(fichero: str) -> str:
+    return f"{fichero}_{dt.date.today():%Y%m%d}.db"
+
+
+def backup_database(fichero: str, destino: Path) -> None:
+    """Copia el fichero cifrado de la BD a `destino` y anota la fecha."""
+    if destino.resolve() == db_path(fichero).resolve():
+        raise ValueError("La copia no puede sustituir a la propia base de datos.")
+    shutil.copy2(db_path(fichero), destino)
+    cfg = load_config()
+    cfg.setdefault("copias", {})[fichero] = dt.date.today().isoformat()
+    save_config(cfg)
+
+
+def last_backup(fichero: str) -> dt.date | None:
+    fecha = load_config().get("copias", {}).get(fichero)
+    return dt.date.fromisoformat(fecha) if fecha else None
+
+
+def reminder_days() -> int:
+    """Cada cuántos días recordar la copia de seguridad (0 = nunca)."""
+    return int(load_config().get("recordatorio_copia_dias", REMINDER_DEFAULT_DAYS))
+
+
+def set_reminder_days(dias: int) -> None:
+    if dias < 0:
+        raise ValueError("Los días no pueden ser negativos.")
+    cfg = load_config()
+    cfg["recordatorio_copia_dias"] = dias
+    save_config(cfg)
+
+
+def backup_overdue(fichero: str, hoy: dt.date | None = None) -> int | None:
+    """Días desde la última copia si toca recordarla (`None` si no toca);
+    -1 si nunca se ha hecho ninguna."""
+    dias = reminder_days()
+    if dias <= 0:
+        return None
+    ultima = last_backup(fichero)
+    if ultima is None:
+        return -1
+    transcurridos = ((hoy or dt.date.today()) - ultima).days
+    return transcurridos if transcurridos >= dias else None
+
+
+def add_existing_database(nombre: str, fichero: str, origen: Path) -> None:
+    """Añade a la lista una BD que ya existe (una copia de seguridad, o una
+    traída de otro equipo): la copia a `config.PATIENTS_DIR` con el nombre
+    `fichero` y la registra. El original no se toca. No se comprueba la
+    contraseña aquí: se pide al abrirla."""
+    error = validate_new(nombre, fichero)
+    if error:
+        raise ValueError(error)
+    shutil.copy2(origen, db_path(fichero))
+    _register(nombre, fichero)
+
+
+def delete_database(fichero: str) -> None:
+    """Borra la BD: el fichero, su entrada de la lista y lo que la
+    configuración guarda de ella (irreversible; las copias de seguridad que
+    se hicieran siguen donde se guardaron)."""
+    db_path(fichero).unlink(missing_ok=True)
+    remove_database(fichero)
+    cfg = load_config()
+    cfg.get("copias", {}).pop(fichero, None)
+    if cfg.get("ultima_bd") == fichero:
+        del cfg["ultima_bd"]
+    save_config(cfg)
+
+
+def split_database(origen: Path, password: str, destinos: list[tuple[int, str, str]]) -> None:
+    """Separa una BD antigua con varios pacientes en una BD por paciente.
+    `destinos` = `(patient_id, nombre, fichero)` por cada BD nueva: cada una
+    es una copia cifrada del original (misma contraseña) de la que se borran
+    los demás pacientes con todos sus datos (`repository.delete_patient`).
+    El original no cambia. Si algo falla, se deshace lo que se había
+    creado y se relanza el error."""
+    # Import local: `repository` arrastra `pdf_parser` y este módulo se
+    # importa al arrancar, antes de la ventana de bienvenida.
+    from analitix.db import connect
+    from analitix.repository import delete_patient
+
+    for _pid, nombre, fichero in destinos:
+        error = validate_new(nombre, fichero)
+        if error:
+            raise ValueError(error)
+    creadas: list[str] = []
+    try:
+        for patient_id, nombre, fichero in destinos:
+            shutil.copy2(origen, db_path(fichero))
+            creadas.append(fichero)
+            con = connect(password, db_path(fichero))
+            try:
+                otros = con.execute(
+                    "SELECT id FROM patients WHERE id != ?", (patient_id,)
+                ).fetchall()
+                for (otro,) in otros:
+                    delete_patient(con, otro)
+                con.execute("VACUUM")  # que no queden restos de los demás en el fichero
+            finally:
+                con.close()
+            _register(nombre, fichero)
+    except Exception:
+        for fichero in creadas:
+            db_path(fichero).unlink(missing_ok=True)
+            remove_database(fichero)
+        raise

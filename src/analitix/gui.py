@@ -30,6 +30,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from analitix import (
     __version__,
     calcium_risk as _calcium,
+    databases,
     glycemic_risk as _glycemic,
     hemogram_risk as _hemogram,
     hepatic_risk as _hepatic,
@@ -88,7 +89,7 @@ from analitix.config import (
     copy_home,
     set_installed_home_dir,
 )
-from analitix.db import rekey
+from analitix.db import WrongPasswordError, rekey
 from analitix.export import (
     export_csv,
     export_excel,
@@ -543,6 +544,7 @@ class AnalitixApp(ttk.Window):
         self._build_statusbar()
         self._refresh_patients()
         self.after(100, self._prompt_active_patient_if_needed)
+        self.after(1500, self._backup_reminder)
         if get_setting(self.con, "check_updates_on_start", "0") == "1":
             self.after(1000, lambda: self._check_updates(manual=False))
 
@@ -560,6 +562,7 @@ class AnalitixApp(ttk.Window):
         archivo.add_command(label="Importar", command=lambda: self._show_page("importar"))
         archivo.add_command(label="Exportar", command=lambda: self._show_page("exportar"))
         archivo.add_separator()
+        archivo.add_command(label="Copia de seguridad...", command=self._backup_database)
         archivo.add_command(label="Cambiar de base de datos...", command=self._switch_database)
         archivo.add_separator()
         archivo.add_command(label="Salir", command=self.destroy)
@@ -1320,6 +1323,78 @@ class AnalitixApp(ttk.Window):
             menu.add_command(
                 label="Lista de pacientes", command=lambda: self._show_page("pacientes")
             )
+            menu.add_separator()
+            menu.add_command(
+                label="Separar en una base de datos por paciente...",
+                command=self._split_database,
+            )
+
+    def _split_destinations(self) -> list[tuple[int, str, str]]:
+        """`(patient_id, nombre, fichero)` de la BD nueva de cada paciente:
+        nombre corto = su nombre (recortado al máximo de la lista) y fichero
+        propuesto a partir de él, con un número si ya existe."""
+        destinos: list[tuple[int, str, str]] = []
+        usados: set[str] = set()
+        for p in self.patients:
+            # «Nombre Apellidos» (sin la coma de la forma guardada, que en el
+            # nombre del fichero quedaría como "_").
+            partes = split_full_name(p["full_name"])
+            completo = " ".join(partes) if partes else p["full_name"]
+            base = (completo or f"Paciente {p['id']}")[: databases.NAME_MAX - 4].strip()
+            for n in range(1, 100):
+                nombre = base if n == 1 else f"{base} ({n})"
+                fichero = databases.suggest_filename(nombre)
+                clave = fichero.casefold()
+                if clave not in usados and databases.validate_new(nombre, fichero) is None:
+                    break
+            usados.add(clave)
+            destinos.append((p["id"], nombre, fichero))
+        return destinos
+
+    def _split_database(self) -> None:
+        """BD antigua con varios pacientes → una BD por paciente
+        (`databases.split_database`). La BD abierta no cambia: se puede
+        borrar después desde la lista, cuando se hayan comprobado las nuevas."""
+        if self.db_path is None or len(self.patients) < 2:
+            return
+        destinos = self._split_destinations()
+        lista = "\n".join(f"  • {nombre}  →  {fichero}.db" for _pid, nombre, fichero in destinos)
+        if not messagebox.askyesno(
+            "Separar en una base de datos por paciente",
+            f"Se crearán {len(destinos)} bases de datos, una por paciente, con sus informes, "
+            f"resultados, objetivos y mediciones:\n\n{lista}\n\nTendrán la misma contraseña que "
+            "esta (puedes cambiarla después en cada una). Esta base de datos no se modifica: "
+            "cuando compruebes las nuevas, puedes borrarla desde la lista de bases de datos.\n\n"
+            "¿Continuar?",
+            parent=self,
+        ):
+            return
+        password = ask_password(
+            self, "Escribe la contraseña de esta base de datos para crear las nuevas:"
+        )
+        if password is None:
+            return
+        self.con.commit()
+        try:
+            databases.split_database(self.db_path, password, destinos)
+        except WrongPasswordError:
+            messagebox.showerror(
+                "Analitix", "Contraseña incorrecta. No se ha creado nada.", parent=self
+            )
+            return
+        except (OSError, ValueError) as exc:
+            logger.exception("Error al separar la base de datos")
+            messagebox.showerror(
+                "Analitix", f"No se pudo separar (no se ha creado nada): {exc}", parent=self
+            )
+            return
+        logger.info("Base de datos separada en %d bases de datos", len(destinos))
+        messagebox.showinfo(
+            "Analitix",
+            f"Creadas {len(destinos)} bases de datos. Ábrelas con Archivo → Cambiar de base de "
+            "datos...",
+            parent=self,
+        )
 
     def _edit_active_patient(self) -> None:
         if self.current_patient_id is None:
@@ -6302,7 +6377,8 @@ class AnalitixApp(ttk.Window):
         seguridad = ttk.Labelframe(frame, text="Seguridad", padding=PAD)
         seguridad.pack(fill="x", padx=PAD, pady=(PAD, 6))
         ttk.Label(
-            seguridad, text="La base de datos está cifrada (SQLCipher) con la contraseña maestra."
+            seguridad,
+            text="La base de datos de este paciente está cifrada (SQLCipher) con su contraseña.",
         ).pack(anchor="w")
         ttk.Button(
             seguridad,
@@ -6310,6 +6386,90 @@ class AnalitixApp(ttk.Window):
             bootstyle="warning",
             command=self._change_password,
         ).pack(anchor="w", pady=(8, 0))
+
+        copia = ttk.Labelframe(frame, text="Copia de seguridad", padding=PAD)
+        copia.pack(fill="x", padx=PAD, pady=6)
+        ttk.Label(
+            copia,
+            text="Guarda una copia del fichero de esta base de datos donde elijas (un disco "
+            "externo, otra carpeta...). Sigue cifrada con la misma contraseña. Para recuperarla, "
+            "en la lista de bases de datos (Archivo → Cambiar de base de datos...) usa «Añadir "
+            "existente...».",
+            wraplength=700,
+        ).pack(anchor="w")
+        ttk.Button(copia, text="Hacer copia de seguridad...", command=self._backup_database).pack(
+            anchor="w", pady=(8, 0)
+        )
+        fila = ttk.Frame(copia)
+        fila.pack(anchor="w", pady=(8, 0))
+        ttk.Label(fila, text="Recordármelo cada (días, 0 = nunca):").pack(side="left")
+        self.var_reminder_days = tk.IntVar(value=databases.reminder_days())
+        ttk.Spinbox(fila, from_=0, to=365, textvariable=self.var_reminder_days, width=5).pack(
+            side="left", padx=(8, 0)
+        )
+        ttk.Button(fila, text="Guardar", command=self._change_reminder_days).pack(
+            side="left", padx=(8, 0)
+        )
+
+    def _db_fichero(self) -> str | None:
+        """Nombre en la lista (`databases`) de la BD abierta."""
+        return self.db_path.stem if self.db_path is not None else None
+
+    def _backup_database(self) -> None:
+        fichero = self._db_fichero()
+        if fichero is None:
+            return
+        ruta = filedialog.asksaveasfilename(
+            parent=self,
+            title="Guardar copia de seguridad",
+            initialfile=databases.backup_suggested_name(fichero),
+            defaultextension=".db",
+            filetypes=[("Base de datos de Analitix", "*.db")],
+        )
+        if not ruta:
+            return
+        self.con.commit()  # el fichero queda completo antes de copiarlo
+        try:
+            databases.backup_database(fichero, Path(ruta))
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Analitix", f"No se pudo copiar: {exc}", parent=self)
+            return
+        logger.info("Copia de seguridad de la base de datos abierta")
+        messagebox.showinfo(
+            "Analitix",
+            "Copia guardada. Sigue cifrada con la misma contraseña: guárdala en un lugar seguro.",
+            parent=self,
+        )
+
+    def _change_reminder_days(self) -> None:
+        try:
+            databases.set_reminder_days(int(self.var_reminder_days.get()))
+        except (tk.TclError, ValueError):
+            messagebox.showerror("Analitix", "Escribe un número de días (0 o más).", parent=self)
+            return
+        messagebox.showinfo("Analitix", "Preferencia guardada.", parent=self)
+
+    def _backup_reminder(self) -> None:
+        """Al abrir la BD: si tiene informes y toca (`databases.backup_overdue`),
+        propone hacer la copia de seguridad."""
+        fichero = self._db_fichero()
+        if fichero is None or not self.con.execute("SELECT 1 FROM reports LIMIT 1").fetchone():
+            return
+        dias = databases.backup_overdue(fichero)
+        if dias is None:
+            return
+        texto = (
+            "Todavía no has hecho ninguna copia de seguridad de esta base de datos."
+            if dias < 0
+            else f"Hace {dias} días de la última copia de seguridad de esta base de datos."
+        )
+        if messagebox.askyesno(
+            "Copia de seguridad",
+            f"{texto}\n\n¿Quieres hacerla ahora? (Puedes cambiar cada cuánto se recuerda en "
+            "Configuración → Seguridad.)",
+            parent=self,
+        ):
+            self._backup_database()
 
     def _build_subtab_datos(self, frame: ttk.Frame) -> None:
         datos = ttk.Labelframe(frame, text="Vaciar la base de datos", padding=PAD)

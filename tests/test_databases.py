@@ -73,3 +73,64 @@ def test_validate_new_rejects(carpeta, nombre, fichero, error):
 def test_validate_new_accepts_and_suggests(carpeta):
     assert databases.validate_new("Àngels Puig", "Àngels Puig 0001") is None
     assert databases.suggest_filename("Ana/María: 1234*") == "Ana_María_ 1234_"
+
+
+def test_backup_reminder_and_delete(carpeta):
+    import datetime as dt
+
+    databases.add_database("Paciente A", "paciente_a")
+    connect("clave", databases.db_path("paciente_a")).close()
+    assert databases.backup_overdue("paciente_a") == -1  # nunca se ha hecho
+    destino = carpeta / "copia.db"
+    databases.backup_database("paciente_a", destino)
+    assert destino.read_bytes() == databases.db_path("paciente_a").read_bytes()
+    assert databases.last_backup("paciente_a") == dt.date.today()
+    assert databases.backup_overdue("paciente_a") is None
+    dentro_de = dt.date.today() + dt.timedelta(days=databases.REMINDER_DEFAULT_DAYS)
+    assert databases.backup_overdue("paciente_a", hoy=dentro_de) == databases.REMINDER_DEFAULT_DAYS
+    databases.set_reminder_days(0)
+    assert databases.backup_overdue("paciente_a", hoy=dentro_de) is None
+    with pytest.raises(ValueError):
+        databases.backup_database("paciente_a", databases.db_path("paciente_a"))
+
+    # Restaurar la copia como otra BD de la lista.
+    databases.add_existing_database("Copia A", "copia_a", destino)
+    connect("clave", databases.db_path("copia_a")).close()
+    databases.set_last_database("paciente_a")
+    databases.delete_database("paciente_a")
+    assert not databases.db_path("paciente_a").exists()
+    assert [d["fichero"] for d in databases.list_databases()] == ["copia_a"]
+    assert databases.last_database() is None
+    assert databases.last_backup("paciente_a") is None
+    assert destino.exists()  # las copias no se borran
+
+
+def test_split_database_one_patient_each(carpeta):
+    from analitix.repository import get_or_create_patient
+
+    origen = carpeta / "antigua.db"
+    con = connect("clave", origen)
+    a, _ = get_or_create_patient(con, "Ruiz, Ana", "1980-01-01", None, "1")
+    b, _ = get_or_create_patient(con, "Gil, Luis", "1975-02-02", None, "2")
+    for pid, numero in ((a, "R1"), (b, "R2")):
+        con.execute(
+            "INSERT INTO reports (patient_id, report_number, source_file) VALUES (?, ?, ?)",
+            (pid, numero, f"{numero}.pdf"),
+        )
+    con.commit()
+    con.close()
+
+    with pytest.raises(WrongPasswordError):
+        databases.split_database(origen, "mal", [(a, "Ana", "ana"), (b, "Luis", "luis")])
+    assert databases.list_databases() == []  # sin restos del intento fallido
+    assert not databases.db_path("ana").exists()
+
+    databases.split_database(origen, "clave", [(a, "Ana", "ana"), (b, "Luis", "luis")])
+    for fichero, nombre, informe in (("ana", "Ruiz, Ana", "R1"), ("luis", "Gil, Luis", "R2")):
+        nueva = connect("clave", databases.db_path(fichero))
+        assert nueva.execute("SELECT full_name FROM patients").fetchall() == [(nombre,)]
+        assert nueva.execute("SELECT report_number FROM reports").fetchall() == [(informe,)]
+        nueva.close()
+    original = connect("clave", origen)
+    assert original.execute("SELECT COUNT(*) FROM patients").fetchone() == (2,)  # intacta
+    original.close()

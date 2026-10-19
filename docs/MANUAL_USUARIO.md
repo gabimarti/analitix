@@ -178,11 +178,32 @@ necesitan un paciente quedan deshabilitadas hasta que lo elijas.
 
 ### 1.4 Copia de seguridad
 
-Todos tus datos están en un único fichero, `analitix.db`, en tu carpeta de
-datos (Configuración → **Abrir carpeta de datos**). Cierra Analitix y
-cópialo a otro sitio (otro disco, una nube, un pendrive): va cifrado con tu
-contraseña, así que sin ella ese fichero no sirve de nada a quien lo abra.
-Conviene guardar también tus PDF originales.
+Cada paciente tiene su base de datos en un fichero propio (carpeta
+`pacientes` de tu carpeta de datos), cifrado con su contraseña: sin ella
+ese fichero no sirve de nada a quien lo abra. Conviene guardar también tus
+PDF originales.
+
+- **Hacer una copia**: con la base de datos abierta, **Archivo → Copia de
+  seguridad...** (o Configuración → Seguridad); o, en la lista de bases de
+  datos, selecciona una y pulsa **Copia de seguridad...**. Elige dónde
+  guardarla (otro disco, una nube, un pendrive). La lista muestra la fecha
+  de la **última copia** de cada una.
+- **Recordatorio**: al abrir una base de datos con informes, si hace más de
+  30 días de la última copia (o no hay ninguna), Analitix te propone
+  hacerla. Cambia los días (o 0 para no recordarlo) en Configuración →
+  Seguridad.
+- **Recuperar una copia** (o traer una base de datos de otro equipo): en la
+  lista de bases de datos, **Añadir existente...**, elige el fichero y
+  ponle un nombre. Se copia a tu carpeta de datos; el fichero elegido no se
+  toca. Se abre con la contraseña que tenía.
+- **Borrar una base de datos**: en la lista, **Borrar...** (pide escribir
+  su nombre para confirmar). Borra el fichero del equipo y no se puede
+  deshacer; tus copias de seguridad no se tocan.
+- **Bases de datos antiguas con varios pacientes**: Pacientes → **Separar
+  en una base de datos por paciente...** crea una por paciente, con sus
+  informes, resultados, objetivos y mediciones, y la misma contraseña (la
+  puedes cambiar después en cada una). La original no se modifica:
+  bórrala desde la lista cuando hayas comprobado las nuevas.
 
 ### 1.5 Diagnóstico de problemas
 
@@ -1809,9 +1830,7 @@ desplazamiento.
   con y sin error, y el tamaño del fichero de la base de datos. Pulsa
   **Actualizar** para refrescar tras una importación.
 - **Ubicación de la base de datos** y botón **Abrir carpeta de datos**: la
-  carpeta donde está guardada. Para hacer una copia de seguridad, cierra
-  Analitix y copia el fichero `analitix.db` a otro sitio (va cifrado con tu
-  contraseña; sin ella no se puede abrir).
+  carpeta donde está guardada. Para hacer una copia de seguridad, ver §1.4.
 - **Cambiar ubicación de los datos...** (solo en la versión instalada): lleva
   tu carpeta `Analitix` (base de datos, alias y PDF) a otra ubicación. Si en
   la nueva ya hay datos de Analitix, se usan esos; si no, se **copian** los

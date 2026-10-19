@@ -14,7 +14,8 @@ import logging
 import sys
 import threading
 import tkinter as tk
-from tkinter import messagebox, ttk
+from pathlib import Path
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from analitix import databases
 from analitix.branding import ask_password, load_logo_photo, set_app_icon, show_splash
@@ -164,42 +165,110 @@ def _create_database(parent: tk.Misc):
     return resultado.get("valor")
 
 
+def _ask_name_and_file(parent: tk.Misc, titulo: str, fichero_inicial: str):
+    """Nombre corto del paciente y nombre de la BD para añadir a la lista una
+    BD que ya existe (`databases.add_existing_database`). Devuelve
+    `(nombre, fichero)` válidos o `None` si se cancela."""
+    win = tk.Toplevel(parent)
+    win.title(titulo)
+    win.transient(parent)
+    win.resizable(False, False)
+    body = ttk.Frame(win, padding=14)
+    body.pack(fill="both", expand=True)
+    ttk.Label(
+        body, text=f"Nombre del paciente (para reconocerlo en la lista, máx. {databases.NAME_MAX}):"
+    ).grid(row=0, column=0, sticky="w")
+    var_nombre = tk.StringVar()
+    entry_nombre = ttk.Entry(body, textvariable=var_nombre, width=44)
+    entry_nombre.grid(row=1, column=0, sticky="we", pady=(2, 8))
+    ttk.Label(body, text="Nombre de la base de datos:").grid(row=2, column=0, sticky="w")
+    var_fichero = tk.StringVar(value=fichero_inicial)
+    ttk.Entry(body, textvariable=var_fichero, width=44).grid(
+        row=3, column=0, sticky="we", pady=(2, 10)
+    )
+    resultado: dict = {}
+
+    def _aceptar(_event=None) -> None:
+        nombre, fichero = var_nombre.get().strip(), var_fichero.get().strip()
+        error = databases.validate_new(nombre, fichero)
+        if error:
+            messagebox.showerror("Analitix", error, parent=win)
+            return
+        resultado["valor"] = (nombre, fichero)
+        win.destroy()
+
+    botones = ttk.Frame(body)
+    botones.grid(row=4, column=0, sticky="e")
+    ttk.Button(botones, text="Añadir", command=_aceptar).pack(side="left", padx=(0, 6))
+    ttk.Button(botones, text="Cancelar", command=win.destroy).pack(side="left")
+    win.bind("<Return>", _aceptar)
+    win.bind("<Escape>", lambda _e: win.destroy())
+    _center(win)
+    entry_nombre.focus_set()
+    win.grab_set()
+    parent.wait_window(win)
+    return resultado.get("valor")
+
+
 def _choose_database(root: tk.Tk):
-    """Lista de bases de datos para elegir cuál abrir, o crear una nueva.
-    Devuelve `(entrada, None)` para abrir una existente (se pide después su
-    contraseña), `(entrada, con)` si se acaba de crear, o `None` para salir."""
+    """Lista de bases de datos (gestor): abrir, crear, añadir una existente
+    (copia de seguridad o de otro equipo), hacer copia de seguridad y
+    borrar. Devuelve `(entrada, None)` para abrir una existente (se pide
+    después su contraseña), `(entrada, con)` si se acaba de crear, o `None`
+    para salir."""
     win = tk.Toplevel(root)
     win.title("Analitix — Bases de datos")
     win.resizable(False, False)
     set_app_icon(win)
     body = ttk.Frame(win, padding=14)
     body.pack(fill="both", expand=True)
-    lista = databases.list_databases()
-    texto = (
-        "Elige la base de datos del paciente que quieres abrir:"
-        if lista
-        else "Todavía no hay ninguna base de datos. Crea una para empezar:"
-    )
-    ttk.Label(body, text=texto).pack(anchor="w", pady=(0, 6))
+    var_texto = tk.StringVar()
+    ttk.Label(body, textvariable=var_texto).pack(anchor="w", pady=(0, 6))
     tree = ttk.Treeview(
-        body, columns=("nombre", "fichero"), show="headings", height=8, selectmode="browse"
+        body, columns=("nombre", "fichero", "copia"), show="headings", height=8, selectmode="browse"
     )
-    tree.heading("nombre", text="Paciente")
-    tree.heading("fichero", text="Base de datos")
-    tree.column("nombre", width=280)
-    tree.column("fichero", width=240)
-    for d in lista:
-        tree.insert("", "end", iid=d["fichero"], values=(d["nombre"], d["fichero"]))
-    if lista:
-        tree.selection_set(lista[0]["fichero"])
-        tree.focus(lista[0]["fichero"])
+    for col, texto, ancho in (
+        ("nombre", "Paciente", 260),
+        ("fichero", "Base de datos", 220),
+        ("copia", "Última copia", 110),
+    ):
+        tree.heading(col, text=texto)
+        tree.column(col, width=ancho)
     tree.pack(fill="both", expand=True)
     resultado: dict = {}
+    botones_con_seleccion: list[ttk.Button] = []
+
+    def _cargar(seleccionar: str | None = None) -> None:
+        tree.delete(*tree.get_children())
+        lista = databases.list_databases()
+        for d in lista:
+            copia = databases.last_backup(d["fichero"])
+            tree.insert(
+                "",
+                "end",
+                iid=d["fichero"],
+                values=(d["nombre"], d["fichero"], copia.isoformat() if copia else "nunca"),
+            )
+        if lista:
+            iid = seleccionar if seleccionar in tree.get_children() else lista[0]["fichero"]
+            tree.selection_set(iid)
+            tree.focus(iid)
+        var_texto.set(
+            "Elige la base de datos del paciente que quieres abrir:"
+            if lista
+            else "Todavía no hay ninguna base de datos. Crea una para empezar:"
+        )
+        for boton in botones_con_seleccion:
+            boton.configure(state="normal" if lista else "disabled")
+
+    def _seleccionada() -> str | None:
+        seleccion = tree.selection()
+        return seleccion[0] if seleccion else None
 
     def _abrir(_event=None) -> None:
-        seleccion = tree.selection()
-        if seleccion:
-            resultado["valor"] = (databases.find_database(seleccion[0]), None)
+        fichero = _seleccionada()
+        if fichero:
+            resultado["valor"] = (databases.find_database(fichero), None)
             win.destroy()
 
     def _nueva() -> None:
@@ -208,15 +277,101 @@ def _choose_database(root: tk.Tk):
             resultado["valor"] = creada
             win.destroy()
 
+    def _anadir() -> None:
+        ruta = filedialog.askopenfilename(
+            parent=win,
+            title="Añadir una base de datos existente",
+            filetypes=[("Base de datos de Analitix", "*.db"), ("Todos los ficheros", "*.*")],
+        )
+        if not ruta:
+            return
+        origen = Path(ruta)
+        datos = _ask_name_and_file(
+            win, "Analitix — Añadir base de datos", databases.suggest_filename(origen.stem)
+        )
+        if datos is None:
+            return
+        try:
+            databases.add_existing_database(*datos, origen)
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Analitix", f"No se pudo añadir: {exc}", parent=win)
+            return
+        logger.info("Base de datos existente añadida a la lista")
+        _cargar(datos[1])
+
+    def _copia() -> None:
+        fichero = _seleccionada()
+        if not fichero:
+            return
+        ruta = filedialog.asksaveasfilename(
+            parent=win,
+            title="Guardar copia de seguridad",
+            initialfile=databases.backup_suggested_name(fichero),
+            defaultextension=".db",
+            filetypes=[("Base de datos de Analitix", "*.db")],
+        )
+        if not ruta:
+            return
+        try:
+            databases.backup_database(fichero, Path(ruta))
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Analitix", f"No se pudo copiar: {exc}", parent=win)
+            return
+        logger.info("Copia de seguridad hecha desde la lista de bases de datos")
+        messagebox.showinfo(
+            "Analitix",
+            "Copia guardada. Sigue cifrada con la misma contraseña: guárdala en un lugar seguro.",
+            parent=win,
+        )
+        _cargar(fichero)
+
+    def _borrar() -> None:
+        fichero = _seleccionada()
+        if not fichero:
+            return
+        nombre = databases.find_database(fichero)["nombre"]
+        if not messagebox.askyesno(
+            "Borrar base de datos",
+            f"¿Borrar la base de datos «{fichero}» ({nombre}) con TODOS sus datos?\n\n"
+            "Se borra el fichero del equipo y no se puede deshacer. Las copias de seguridad "
+            "que hayas hecho no se tocan.",
+            icon="warning",
+            parent=win,
+        ):
+            return
+        confirmacion = simpledialog.askstring(
+            "Borrar base de datos",
+            f"Escribe el nombre de la base de datos ({fichero}) para confirmar:",
+            parent=win,
+        )
+        if confirmacion is None or confirmacion.strip() != fichero:
+            messagebox.showinfo("Analitix", "Cancelado: no se ha borrado nada.", parent=win)
+            return
+        try:
+            databases.delete_database(fichero)
+        except OSError as exc:
+            messagebox.showerror("Analitix", f"No se pudo borrar: {exc}", parent=win)
+            return
+        logger.warning("Base de datos de paciente borrada desde la lista")
+        _cargar()
+
     botones = ttk.Frame(body)
     botones.pack(fill="x", pady=(10, 0))
-    ttk.Button(botones, text="Abrir", command=_abrir, state="normal" if lista else "disabled").pack(
-        side="left"
-    )
+    boton_abrir = ttk.Button(botones, text="Abrir", command=_abrir)
+    boton_abrir.pack(side="left")
     ttk.Button(botones, text="Nueva base de datos...", command=_nueva).pack(
         side="left", padx=(6, 0)
     )
+    ttk.Button(botones, text="Añadir existente...", command=_anadir).pack(side="left", padx=(6, 0))
     ttk.Button(botones, text="Salir", command=win.destroy).pack(side="right")
+    gestion = ttk.Frame(body)
+    gestion.pack(fill="x", pady=(6, 0))
+    boton_copia = ttk.Button(gestion, text="Copia de seguridad...", command=_copia)
+    boton_copia.pack(side="left")
+    boton_borrar = ttk.Button(gestion, text="Borrar...", command=_borrar)
+    boton_borrar.pack(side="left", padx=(6, 0))
+    botones_con_seleccion.extend((boton_abrir, boton_copia, boton_borrar))
+    _cargar()
     tree.bind("<Double-1>", _abrir)
     win.bind("<Return>", _abrir)
     win.bind("<Escape>", lambda _e: win.destroy())
