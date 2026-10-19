@@ -124,7 +124,7 @@ def test_report_without_birth_date_waits_for_confirmation(db, informes):
 def test_different_dni_or_birth_date_is_flagged_as_probably_another_person(db, informes):
     _importar(db, informes("a.pdf", "1", dni="00000000T"))
     with pytest.raises(ingest.OtherPatientError, match="PROBABLEMENTE OTRA PERSONA.*DNI distinto"):
-        _importar(db, informes("b.pdf", "2", full_name="ANA PEREZ RUIZ", dni="11111111H"))
+        _importar(db, informes("b.pdf", "2", full_name="ANA PEREZ RUIZ", dni="11111111A"))
     with pytest.raises(ingest.OtherPatientError, match="PROBABLEMENTE OTRA PERSONA: fecha"):
         _importar(db, informes("c.pdf", "3", birth_date="1971-05-20"))
 
@@ -171,7 +171,7 @@ def test_patient_data_typed_on_creation_is_matched_and_kept(db, informes):
 def test_patient_created_without_name_takes_it_from_the_first_report(db, informes):
     create_patient(db, {"dni": "00000000T"})
     with pytest.raises(ingest.OtherPatientError, match="DNI distinto"):
-        _importar(db, informes("a.pdf", "1", dni="11111111H"))
+        _importar(db, informes("a.pdf", "1", dni="11111111A"))
     _importar(db, informes("b.pdf", "2"))
     assert db.execute("SELECT full_name, name_key, dni FROM patients").fetchall() == [
         ("GARCIA LOPEZ, JUAN", "JUAN GARCIA LOPEZ", "00000000T")
