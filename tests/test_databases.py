@@ -134,3 +134,15 @@ def test_split_database_one_patient_each(carpeta):
     original = connect("clave", origen)
     assert original.execute("SELECT COUNT(*) FROM patients").fetchone() == (2,)  # intacta
     original.close()
+
+
+def test_backup_dir_defaults_to_home_and_is_configurable(carpeta):
+    from pathlib import Path
+
+    assert databases.backup_dir() == Path.home()
+    destino = carpeta / "copias"
+    destino.mkdir()
+    databases.set_backup_dir(destino)
+    assert databases.backup_dir() == destino
+    destino.rmdir()  # carpeta borrada (p. ej. disco externo desconectado)
+    assert databases.backup_dir() == Path.home()

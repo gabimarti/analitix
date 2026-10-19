@@ -186,8 +186,10 @@ PDF originales.
 - **Hacer una copia**: con la base de datos abierta, **Archivo → Copia de
   seguridad...** (o Configuración → Seguridad); o, en la lista de bases de
   datos, selecciona una y pulsa **Copia de seguridad...**. Elige dónde
-  guardarla (otro disco, una nube, un pendrive). La lista muestra la fecha
-  de la **última copia** de cada una.
+  guardarla (otro disco, una nube, un pendrive). Se propone la **carpeta
+  por defecto** que elijas en Configuración → Seguridad (si no hay
+  ninguna, tu carpeta personal). La lista muestra la fecha de la **última
+  copia** de cada una.
 - **Recordatorio**: al abrir una base de datos con informes, si hace más de
   30 días de la última copia (o no hay ninguna), Analitix te propone
   hacerla. Cambia los días (o 0 para no recordarlo) en Configuración →

@@ -6397,6 +6397,16 @@ class AnalitixApp(ttk.Window):
             "existente...».",
             wraplength=700,
         ).pack(anchor="w")
+        carpeta_copias = ttk.Frame(copia)
+        carpeta_copias.pack(fill="x", pady=(8, 0))
+        ttk.Label(carpeta_copias, text="Carpeta por defecto:").pack(side="left")
+        self.var_backup_dir = tk.StringVar(value=str(databases.backup_dir()))
+        ttk.Entry(carpeta_copias, textvariable=self.var_backup_dir, state="readonly").pack(
+            side="left", fill="x", expand=True, padx=(8, 0)
+        )
+        ttk.Button(carpeta_copias, text="Cambiar carpeta...", command=self._change_backup_dir).pack(
+            side="left", padx=(8, 0)
+        )
         ttk.Button(copia, text="Hacer copia de seguridad...", command=self._backup_database).pack(
             anchor="w", pady=(8, 0)
         )
@@ -6423,6 +6433,7 @@ class AnalitixApp(ttk.Window):
             parent=self,
             title="Guardar copia de seguridad",
             initialfile=databases.backup_suggested_name(fichero),
+            initialdir=str(databases.backup_dir()),
             defaultextension=".db",
             filetypes=[("Base de datos de Analitix", "*.db")],
         )
@@ -6440,6 +6451,17 @@ class AnalitixApp(ttk.Window):
             "Copia guardada. Sigue cifrada con la misma contraseña: guárdala en un lugar seguro.",
             parent=self,
         )
+
+    def _change_backup_dir(self) -> None:
+        carpeta = filedialog.askdirectory(
+            parent=self,
+            title="Carpeta por defecto para las copias de seguridad",
+            initialdir=self.var_backup_dir.get(),
+        )
+        if not carpeta:
+            return
+        databases.set_backup_dir(Path(carpeta))
+        self.var_backup_dir.set(str(databases.backup_dir()))
 
     def _change_reminder_days(self) -> None:
         try:

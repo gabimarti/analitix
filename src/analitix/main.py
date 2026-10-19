@@ -307,6 +307,7 @@ def _choose_database(root: tk.Tk):
             parent=win,
             title="Guardar copia de seguridad",
             initialfile=databases.backup_suggested_name(fichero),
+            initialdir=str(databases.backup_dir()),
             defaultextension=".db",
             filetypes=[("Base de datos de Analitix", "*.db")],
         )

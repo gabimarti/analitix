@@ -166,6 +166,21 @@ def backup_suggested_name(fichero: str) -> str:
     return f"{fichero}_{dt.date.today():%Y%m%d}.db"
 
 
+def backup_dir() -> Path:
+    """Carpeta que se propone al guardar una copia de seguridad: la elegida
+    en Configuración → Seguridad o, si no hay (o ya no existe), la carpeta
+    personal del usuario (no la de importación, que es la que recordaba el
+    diálogo de Windows)."""
+    carpeta = load_config().get("carpeta_copias")
+    return Path(carpeta) if carpeta and Path(carpeta).is_dir() else Path.home()
+
+
+def set_backup_dir(carpeta: Path) -> None:
+    cfg = load_config()
+    cfg["carpeta_copias"] = str(carpeta)
+    save_config(cfg)
+
+
 def backup_database(fichero: str, destino: Path) -> None:
     """Copia el fichero cifrado de la BD a `destino` y anota la fecha."""
     if destino.resolve() == db_path(fichero).resolve():
