@@ -53,7 +53,7 @@ from analitix.blood_pressure import (
     read_csv as read_bp_csv,
     validate_reading,
 )
-from analitix.branding import load_logo_photo, set_app_icon
+from analitix.branding import ask_password, load_logo_photo, set_app_icon
 from analitix.calcium_risk import (
     INDEX_LABELS as CALCIUM_INDEX_LABELS,
     get_calcium_index_series,
@@ -129,6 +129,7 @@ from analitix.lipid_risk import (
     get_latest_lipid_summary,
     get_lipid_index_series,
 )
+from analitix.pdf_parser import parse_report
 from analitix.rcv import classify_change, cusum_drift, cusum_note, personal_range
 from analitix.renal_risk import (
     FG_IDS,
@@ -564,12 +565,11 @@ class AnalitixApp(ttk.Window):
         archivo.add_command(label="Salir", command=self.destroy)
         menubar.add_cascade(label="Archivo", menu=archivo)
 
-        pacientes_menu = tk.Menu(menubar, tearoff=0)
-        pacientes_menu.add_command(
-            label="Cambiar paciente activo...", command=self._choose_active_patient
-        )
-        pacientes_menu.add_command(label="Pacientes", command=lambda: self._show_page("pacientes"))
-        menubar.add_cascade(label="Pacientes", menu=pacientes_menu)
+        # Contenido según la BD (`_sync_patients_menu`): con un paciente, solo
+        # su ficha; con varios (BD de antes de una BD por paciente), también
+        # cambiar el activo y la lista para fusionar.
+        self.pacientes_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Pacientes", menu=self.pacientes_menu)
 
         # Datos que introduce la persona a mano (siempre para el paciente
         # activo), separados de Pacientes.
@@ -1086,6 +1086,64 @@ class AnalitixApp(ttk.Window):
         tree.column("motivo", width=620)
         tree.pack(fill="both", expand=True)
 
+        # Datos leídos del PDF seleccionado frente a los de la ficha: así se
+        # ve si es otra persona o si el perfil del laboratorio no ha leído
+        # bien la cabecera.
+        comparar = ttk.Labelframe(
+            body, text="Datos del informe seleccionado frente a la ficha", padding=6
+        )
+        comparar.pack(fill="x", pady=(PAD, 0))
+        tabla = ttk.Treeview(
+            comparar, columns=("campo", "ficha", "informe"), show="headings", height=6
+        )
+        for col, texto, ancho in (
+            ("campo", "Dato", 140),
+            ("ficha", "Ficha del paciente", 330),
+            ("informe", "Leído del informe", 330),
+        ):
+            tabla.heading(col, text=texto)
+            tabla.column(col, width=ancho, stretch=col != "campo")
+        tabla.tag_configure("distinto", foreground="#b00020")
+        tabla.tag_configure("falta", foreground="#888888")
+        tabla.pack(fill="x")
+        cabeceras: dict[str, dict] = {}
+
+        def _comparar(_event=None) -> None:
+            tabla.delete(*tabla.get_children())
+            fichero = _seleccionado()
+            if fichero is None or len(pacientes) != 1:
+                return
+            if fichero not in cabeceras:
+                ruta = find_pdf(self.reports_dir, fichero)
+                cabeceras[fichero] = parse_report(ruta)["header"] if ruta else {}
+            header = cabeceras[fichero]
+            ficha = next(p for p in list_patients(self.con) if p["id"] == pacientes[0]["id"])
+            nhc_ficha = ", ".join(v for v in (ficha["nhc"], ficha["nhc_alt"]) if v)
+            for campo, propio, leido in (
+                ("Nombre", ficha["full_name"], header.get("full_name")),
+                ("Fecha nacimiento", ficha["birth_date"], header.get("birth_date")),
+                ("DNI", ficha["dni"], header.get("dni")),
+                ("CIP", ficha["cip"], header.get("cip")),
+                ("NHC", nhc_ficha, header.get("nhc")),
+                ("Sexo", ficha["sex"], header.get("sex")),
+            ):
+                if not propio or not leido:
+                    tag = "falta"
+                elif campo == "Nombre":
+                    tag = "" if normalize_name(propio) == normalize_name(leido) else "distinto"
+                elif campo == "NHC":
+                    tag = "" if leido in nhc_ficha.split(", ") else "distinto"
+                else:
+                    tag = "" if propio == leido else "distinto"
+                tabla.insert(
+                    "",
+                    "end",
+                    values=(campo, propio or "—", leido or "— (no se ha leído)"),
+                    tags=(tag,),
+                )
+
+        tree.bind("<<TreeviewSelect>>", _comparar)
+
         def _cargar() -> None:
             tree.delete(*tree.get_children())
             for item in list_files_other_patient(self.con):
@@ -1098,6 +1156,7 @@ class AnalitixApp(ttk.Window):
             hijos = tree.get_children()
             if hijos:
                 tree.selection_set(hijos[0])
+            _comparar()
 
         def _seleccionado() -> str | None:
             seleccion = tree.selection()
@@ -1245,6 +1304,35 @@ class AnalitixApp(ttk.Window):
         )
         boton_fusionar.pack(side="left", padx=(8, 0))
         self._same_width(boton_editar, boton_eliminar, boton_fusionar)
+
+    def _sync_patients_menu(self) -> None:
+        """Una BD = un paciente: cambiar de paciente es cambiar de base de
+        datos (Archivo), así que «Cambiar paciente activo» y la lista solo
+        aparecen si la BD tiene varios (BD antiguas)."""
+        menu = self.pacientes_menu
+        menu.delete(0, "end")
+        menu.add_command(label="Ficha del paciente...", command=self._edit_active_patient)
+        if len(self.patients) > 1:
+            menu.add_separator()
+            menu.add_command(
+                label="Cambiar paciente activo...", command=self._choose_active_patient
+            )
+            menu.add_command(
+                label="Lista de pacientes", command=lambda: self._show_page("pacientes")
+            )
+
+    def _edit_active_patient(self) -> None:
+        if self.current_patient_id is None:
+            messagebox.showinfo(
+                "Analitix",
+                "Todavía no hay ficha del paciente: importa algún informe."
+                if not self.patients
+                else "Elige antes el paciente activo.",
+                parent=self,
+            )
+            return
+        self.tree_patients.selection_set(str(self.current_patient_id))
+        self._edit_selected_patient()
 
     def _selected_patient(self) -> dict | None:
         """Ficha de la fila seleccionada en la tabla Pacientes (la primera si hay varias)."""
@@ -1810,6 +1898,7 @@ class AnalitixApp(ttk.Window):
         if self.current_patient_id is not None:
             self.tree_patients.selection_set(str(self.current_patient_id))
         self._sync_checks(self.tree_patients)
+        self._sync_patients_menu()
         self._refresh_test_lists()
         self._update_status_patient()
         self._update_patient_dependent_tabs()
@@ -1910,7 +1999,7 @@ class AnalitixApp(ttk.Window):
             frame,
             text="Para analíticas cuyo PDF no se ha podido interpretar (o que no vienen en PDF): "
             "añade una fila por cada determinación y guarda. Los datos se guardan siempre para "
-            "el paciente activo — cámbialo con Pacientes → Cambiar paciente activo... si es otra persona.",
+            "el paciente de esta base de datos (si es otra persona, Archivo → «Cambiar de base de datos...»).",
             bootstyle="secondary",
             wraplength=900,
         ).pack(anchor="w", padx=PAD, pady=(0, 6))
@@ -2102,8 +2191,8 @@ class AnalitixApp(ttk.Window):
         if self.current_patient_id is None:
             messagebox.showwarning(
                 "Sin paciente activo",
-                "No hay ningún paciente activo. Elígelo con Pacientes → Cambiar paciente "
-                "activo... antes de guardar.",
+                "No hay ningún paciente activo: importa antes algún informe o, en una base de datos "
+                "con varios pacientes, elígelo con Pacientes → Cambiar paciente activo...",
                 parent=self,
             )
             return
@@ -2168,8 +2257,8 @@ class AnalitixApp(ttk.Window):
         ).pack(anchor="w", padx=PAD, pady=(6, 4))
         ttk.Label(
             frame,
-            text="Cada medición se guarda para el paciente activo (cámbialo con Pacientes → Cambiar paciente "
-            "activo...). «Lugar» indica si la tomaste en casa o en la consulta: las guías usan umbrales "
+            text="Cada medición se guarda para el paciente de esta base de datos (si es otra persona, "
+            "Archivo → «Cambiar de base de datos...»). «Lugar» indica si la tomaste en casa o en la consulta: las guías usan umbrales "
             "distintos para cada caso. Para importar un CSV, guarda antes la plantilla para ver el formato "
             "(también se aceptan las exportaciones de Omron Connect y Withings).",
             bootstyle="secondary",
@@ -5415,7 +5504,9 @@ class AnalitixApp(ttk.Window):
         `export.export_pdf`."""
         if self.current_patient_id is None:
             messagebox.showwarning(
-                "Sin paciente", "Selecciona antes un paciente en la pestaña Pacientes.", parent=self
+                "Sin paciente",
+                "No hay ningún paciente activo: importa antes algún informe.",
+                parent=self,
             )
             return
 
@@ -5515,7 +5606,9 @@ class AnalitixApp(ttk.Window):
         interruptor está activo."""
         if self.current_patient_id is None:
             messagebox.showwarning(
-                "Sin paciente", "Selecciona antes un paciente en la pestaña Pacientes.", parent=self
+                "Sin paciente",
+                "No hay ningún paciente activo: importa antes algún informe.",
+                parent=self,
             )
             return
         summary = get_latest_report_summary(self.con, self.current_patient_id)
@@ -5885,7 +5978,9 @@ class AnalitixApp(ttk.Window):
     def _export(self, kind: str) -> None:
         if self.current_patient_id is None:
             messagebox.showwarning(
-                "Sin paciente", "Selecciona antes un paciente en la pestaña Pacientes.", parent=self
+                "Sin paciente",
+                "No hay ningún paciente activo: importa antes algún informe.",
+                parent=self,
             )
             return
         rows = get_all_results(self.con, self.current_patient_id)
@@ -6546,18 +6641,10 @@ class AnalitixApp(ttk.Window):
         messagebox.showinfo("Analitix", "Preferencia guardada.", parent=self)
 
     def _change_password(self) -> None:
-        new_pw = simpledialog.askstring(
-            "Cambiar contraseña", "Nueva contraseña:", show="*", parent=self
+        new_pw = ask_password(
+            self, "Nueva contraseña de la base de datos:", repetir=True, titulo="Cambiar contraseña"
         )
         if not new_pw:
-            return
-        confirm = simpledialog.askstring(
-            "Cambiar contraseña", "Repite la nueva contraseña:", show="*", parent=self
-        )
-        if confirm != new_pw:
-            messagebox.showerror(
-                "Analitix", "Las contraseñas no coinciden. No se ha cambiado nada.", parent=self
-            )
             return
         try:
             rekey(self.con, new_pw)

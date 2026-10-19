@@ -178,6 +178,21 @@ def test_patient_created_without_name_takes_it_from_the_first_report(db, informe
     ]
 
 
+def test_same_name_with_birth_date_completes_a_patient_without_it(db, informes):
+    # Ficha creada solo con el nombre: el informe con el mismo nombre y
+    # fecha de nacimiento es suyo (antes pedía confirmación sin motivo).
+    create_patient(db, {"full_name": "García López, Juan"})
+    _importar(db, informes("a.pdf", "1", cip="CIPX"))
+    assert db.execute("SELECT full_name, birth_date, cip FROM patients").fetchall() == [
+        ("García López, Juan", "1970-05-20", "CIPX")
+    ]
+    # Otro nombre sigue pidiendo confirmación.
+    with pytest.raises(ingest.OtherPatientError):
+        _importar(
+            db, informes("b.pdf", "2", full_name="PEREZ RUIZ, ANA", birth_date=None, nhc="999")
+        )
+
+
 def test_create_patient_validates_without_leaving_a_row(db):
     with pytest.raises(ValueError, match="Fecha de nacimiento"):
         create_patient(db, {"full_name": "Ruiz, Ana", "birth_date": "20-05-1970"})

@@ -161,6 +161,11 @@ Después, cada día solo hace falta abrir Analitix e introducir tu contraseña.
   <img src="images/inicio.png" width="80%" alt="Ventana principal de Analitix al abrirla">
 </p>
 
+Cada base de datos es de **un solo paciente**: para trabajar con otra
+persona, cambia de base de datos (**Archivo → Cambiar de base de
+datos...**). Lo que sigue solo se aplica a bases de datos antiguas, de
+antes de tener una por paciente, que pueden tener varios.
+
 Si en la base de datos hay **varios pacientes**, al abrir la aplicación se
 muestra una ventana **Seleccionar paciente activo** con solo el nombre
 completo de cada uno: elige con quién vas a trabajar (doble clic o
@@ -197,8 +202,9 @@ Al arrancar y escribir tu contraseña, se abre la ventana principal con una
 **barra de menú** arriba (no pestañas): mientras no elijas ninguna opción,
 se ve el logo de Analitix como pantalla de bienvenida. Los menús son:
 
-- **Archivo**: Importar, Exportar, Salir.
-- **Pacientes**: Cambiar paciente activo..., Pacientes.
+- **Archivo**: Importar, Exportar, Cambiar de base de datos..., Salir.
+- **Pacientes**: Ficha del paciente... (y, solo en bases de datos antiguas
+  con varios pacientes, Cambiar paciente activo... y Lista de pacientes).
 - **Entrada manual**: Analíticas..., Tensión arterial... (siempre para el paciente activo).
 - **Análisis**: Evolución, Comparativa, Resumen, Mapa de calor — gráficos a la carta de uno o dos
   parámetros elegidos por ti — y Resumen, una tabla tipo "semáforo" con
@@ -342,7 +348,10 @@ mismo/a, incluso sin usar ningún asistente de IA,
   orden, p. ej. "GARCIA LOPEZ JUAN" y "JUAN GARCIA LOPEZ"), o en DNI, CIP o
   NHC. Los demás aparecen al terminar la importación en la ventana
   **Informes que no encajan**, con el motivo de cada uno (nombre distinto,
-  sin fecha de nacimiento, NHC distinto...):
+  sin fecha de nacimiento, NHC distinto...). Al seleccionar uno, debajo se
+  ven los datos leídos del PDF junto a los de la ficha (en rojo los
+  distintos, en gris los que faltan), para ver si es otra persona o si el
+  informe no se ha leído bien:
   - **Es este paciente**: lo importa y recuerda esos datos (ese nombre,
     ese NHC...) para que la próxima vez un informe igual se importe solo.
   - **No es**: lo deja fuera; no se vuelve a preguntar mientras el PDF no

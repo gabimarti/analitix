@@ -12,7 +12,8 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ### Cambiado
 
-- Una base de datos cifrada por paciente, cada una con su contraseña (en curso): al arrancar se abre la última usada pidiendo su contraseña, o se elige en la lista de bases de datos o se crea una nueva (nombre del paciente y de la base de datos); Archivo → «Cambiar de base de datos...» vuelve a la lista. La base de datos anterior (`data/analitix.db`) ya no se usa: los datos se vuelven a importar desde los PDF.
+- Una base de datos cifrada por paciente, cada una con su contraseña (en curso): al arrancar se abre la última usada pidiendo su contraseña, o se elige en la lista de bases de datos o se crea una nueva (nombre del paciente y de la base de datos); Archivo → «Cambiar de base de datos...» vuelve a la lista. La base de datos anterior (`data/analitix.db`) ya no se usa: los datos se vuelven a importar desde los PDF. El menú Pacientes queda en «Ficha del paciente...»; «Cambiar paciente activo...» y la lista de pacientes solo aparecen en bases de datos antiguas con varios.
+- Ventana de contraseña más amplia, con el texto en varias líneas; al crear una contraseña (base de datos nueva o «Cambiar contraseña...») se escribe dos veces en la misma ventana.
 - «Acerca de», la portada de los informes PDF, el README y el manual incluyen la página personal del autor, [gabimarti.github.io](https://gabimarti.github.io/).
 - Instalación desde el código fuente: ahora necesita Python 3.14 o superior (antes 3.11), la misma versión con la que se compila el instalador. Los scripts de instalación avisan si el `python` disponible es más antiguo. El instalador de Windows no cambia: lleva su propio Python.
 - Evolución y Comparativa: el recuadro de resumen bajo cada gráfico tiene la letra algo mayor y líneas más anchas.
@@ -23,6 +24,7 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 - Una base de datos, un paciente: al importar, un informe cuyos datos no coinciden con los del paciente de la base de datos (otro nombre, sin fecha de nacimiento, otro NHC, DNI...) ya no se importa sin preguntar. Aparece en la ventana «Informes que no encajan» con el motivo: «Es este paciente» lo importa y recuerda esos datos para que el siguiente igual se importe solo; «No es» lo deja fuera. Se avisa especialmente cuando la fecha de nacimiento, el DNI o el CIP son distintos, aunque coincida algún otro dato.
 - Un informe con el nombre en otro orden (p. ej. «GARCIA LOPEZ JUAN» y «JUAN GARCIA LOPEZ») y la misma fecha de nacimiento se reconoce como el mismo paciente.
 - Al crear una base de datos se pueden escribir, opcionalmente, el nombre, los apellidos, la fecha de nacimiento y el DNI del paciente: los informes se comparan con ellos desde el primero y no los sustituyen (solo completan los datos que falten, como el CIP o el NHC).
+- «Informes que no encajan»: al seleccionar un informe se ven los datos leídos del PDF (nombre, fecha de nacimiento, DNI, CIP, NHC, sexo) junto a los de la ficha, marcando los distintos y los que faltan.
 - La ficha del paciente separa el nombre y los apellidos. Si un informe trae el nombre sin coma («NOMBRE APELLIDOS»), al terminar la importación se pregunta una vez qué parte es el nombre (puede ser compuesto).
 
 ### Corregido

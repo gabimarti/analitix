@@ -310,12 +310,16 @@ def _ingest_one(
             header.get("nhc") or None,
             header.get("cip"),
         )
-        # Ficha creada con la BD sin nombre (solo DNI o fecha de nacimiento):
-        # si nada la contradice, el informe es suyo y le pone el nombre.
-        (owner_name,) = con.execute(
-            "SELECT full_name FROM patients WHERE id = ?", (owner,)
+        # Ficha sin nombre (BD creada solo con DNI o fecha de nacimiento), o
+        # con el mismo nombre pero aún sin fecha de nacimiento (`find_patient`
+        # exige que las dos coincidan, también vacías): si nada la
+        # contradice, el informe es suyo y completa la ficha.
+        owner_key, owner_birth = con.execute(
+            "SELECT name_key, birth_date FROM patients WHERE id = ?", (owner,)
         ).fetchone()
-        if found_id is None and not owner_name:
+        nombre = header.get("full_name")
+        mismo_nombre = bool(nombre) and normalize_name(nombre) == owner_key
+        if found_id is None and (not owner_key or (mismo_nombre and not owner_birth)):
             found_id = previous_patient_id = owner
         # Aunque encaje por algún dato (NHC, nombre en otro orden), una
         # contradicción fuerte también pide confirmación; una identidad que

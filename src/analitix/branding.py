@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+from tkinter import ttk
 
 from PIL import Image, ImageTk
 
@@ -54,6 +55,80 @@ def set_app_icon(window: tk.Misc) -> None:
     ]
     window.iconphoto(True, *photos)
     window._analitix_icon_refs = photos  # type: ignore[attr-defined]
+
+
+def ask_password(
+    parent: tk.Misc, texto: str, repetir: bool = False, titulo: str = "Analitix"
+) -> str | None:
+    """Pide una contraseña en un diálogo modal propio (el de `simpledialog`
+    era muy estrecho y cortaba nombres largos de base de datos): texto en
+    varias líneas, márgenes amplios y, con `repetir`, las dos casillas en la
+    misma ventana (antes eran dos diálogos y el segundo perdía el foco).
+    Los errores (vacía, no coinciden) se muestran en la propia ventana.
+    Devuelve la contraseña o `None` si se cancela."""
+    win = tk.Toplevel(parent)
+    win.title(titulo)
+    win.transient(parent)
+    win.resizable(False, False)
+    body = ttk.Frame(win, padding=(24, 20))
+    body.pack(fill="both", expand=True)
+    ttk.Label(body, text=texto, wraplength=380, justify="left").grid(
+        row=0, column=0, columnspan=2, sticky="w", pady=(0, 12)
+    )
+    campos = [("Contraseña", tk.StringVar())]
+    if repetir:
+        campos.append(("Repítela", tk.StringVar()))
+    entries = []
+    for fila, (etiqueta, var) in enumerate(campos, start=1):
+        ttk.Label(body, text=etiqueta).grid(row=fila, column=0, sticky="w", pady=3)
+        entry = ttk.Entry(body, textvariable=var, show="*", width=32)
+        entry.grid(row=fila, column=1, sticky="we", padx=(10, 0), pady=3)
+        entries.append(entry)
+    error = ttk.Label(body, text="", foreground="#b00020", wraplength=380)
+    error.grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 0))
+    resultado: dict = {}
+
+    def _aceptar(_event=None) -> None:
+        valores = [var.get() for _etiqueta, var in campos]
+        if not valores[0]:
+            error.configure(text="La contraseña no puede estar vacía.")
+        elif repetir and valores[0] != valores[1]:
+            error.configure(text="Las contraseñas no coinciden.")
+            entries[1].delete(0, "end")
+            entries[1].focus_set()
+        else:
+            resultado["valor"] = valores[0]
+            win.destroy()
+
+    def _intro(event) -> None:
+        # Intro en la primera casilla pasa a la segunda en vez de aceptar.
+        if repetir and event.widget is entries[0]:
+            entries[1].focus_set()
+        else:
+            _aceptar()
+
+    botones = ttk.Frame(body)
+    botones.grid(row=4, column=0, columnspan=2, sticky="e", pady=(14, 0))
+    ttk.Button(botones, text="Aceptar", command=_aceptar).pack(side="left", padx=(0, 6))
+    ttk.Button(botones, text="Cancelar", command=win.destroy).pack(side="left")
+    win.bind("<Return>", _intro)
+    win.bind("<Escape>", lambda _e: win.destroy())
+    win.update_idletasks()
+    x = parent.winfo_rootx() + (parent.winfo_width() - win.winfo_reqwidth()) // 2
+    y = parent.winfo_rooty() + (parent.winfo_height() - win.winfo_reqheight()) // 3
+    if parent.winfo_viewable():
+        win.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+    else:  # ventana raíz oculta (al arrancar): centrada en la pantalla
+        win.geometry(
+            f"+{(win.winfo_screenwidth() - win.winfo_reqwidth()) // 2}"
+            f"+{(win.winfo_screenheight() - win.winfo_reqheight()) // 3}"
+        )
+    win.lift()
+    win.focus_force()
+    entries[0].focus_set()
+    win.grab_set()
+    parent.wait_window(win)
+    return resultado.get("valor")
 
 
 def load_logo_photo(max_size: int) -> ImageTk.PhotoImage:

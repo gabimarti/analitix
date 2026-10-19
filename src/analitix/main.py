@@ -14,10 +14,10 @@ import logging
 import sys
 import threading
 import tkinter as tk
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import messagebox, ttk
 
 from analitix import databases
-from analitix.branding import load_logo_photo, set_app_icon, show_splash
+from analitix.branding import ask_password, load_logo_photo, set_app_icon, show_splash
 from analitix.db import WrongPasswordError, connect
 from analitix.logging_setup import configure_logging
 
@@ -33,25 +33,9 @@ logger = logging.getLogger("analitix.main")
 
 def _ask_new_password(parent: tk.Misc) -> str | None:
     """Contraseña para una base de datos nueva, escrita dos veces."""
-    while True:
-        password = simpledialog.askstring(
-            "Analitix",
-            "Crea una contraseña para proteger la nueva base de datos:",
-            show="*",
-            parent=parent,
-        )
-        if password is None:
-            return None
-        if not password:
-            messagebox.showerror("Analitix", "La contraseña no puede estar vacía.", parent=parent)
-            continue
-        confirm = simpledialog.askstring(
-            "Analitix", "Repite la contraseña:", show="*", parent=parent
-        )
-        if confirm != password:
-            messagebox.showerror("Analitix", "Las contraseñas no coinciden.", parent=parent)
-            continue
-        return password
+    return ask_password(
+        parent, "Crea una contraseña para proteger la nueva base de datos:", repetir=True
+    )
 
 
 def _center(win: tk.Toplevel) -> None:
@@ -265,12 +249,7 @@ def _open_database(root: tk.Tk, use_last: bool):
                 )
                 entrada = None
                 continue
-            password = simpledialog.askstring(
-                "Analitix",
-                f"Contraseña de la base de datos «{entrada['nombre']}»:",
-                show="*",
-                parent=root,
-            )
+            password = ask_password(root, f"Contraseña de la base de datos «{entrada['nombre']}»:")
             if password is None:
                 entrada = None
                 continue
