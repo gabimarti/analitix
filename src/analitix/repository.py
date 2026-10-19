@@ -226,7 +226,14 @@ def get_or_create_patient(
         if matched_by == "alias":
             # Encaja por una identidad alternativa que el usuario confirmó:
             # sus datos (otro nombre, otro DNI/NHC...) no sustituyen a los
-            # del paciente, ya están guardados en `patient_aliases`.
+            # del paciente, ya están guardados en `patient_aliases`; solo
+            # rellenan los que la ficha tenga vacíos (p. ej. el CIP o el NHC
+            # que el primer informe no traía).
+            cur.execute(
+                "UPDATE patients SET birth_date = COALESCE(birth_date, ?), dni = COALESCE(dni, ?), "
+                "nhc = COALESCE(nhc, ?), sex = COALESCE(sex, ?), cip = COALESCE(cip, ?) WHERE id = ?",
+                (birth_date, dni, nhc, sex, cip, patient_id),
+            )
             return patient_id, matched_by
         # full_name/dni/nhc se actualizan con el valor más reciente: el NHC
         # cambia de numeración entre plantillas y el más nuevo es el vigente.

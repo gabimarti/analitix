@@ -152,6 +152,24 @@ def test_confirm_same_patient_imports_and_next_similar_report_matches(db, inform
     assert find_patient(db, "GARCIA LOPEZ, J.", None, None, "333") == (owner, "alias")
 
 
+def test_confirmed_identity_fills_empty_patient_fields(db, informes):
+    # El primer informe no trae NHC ni CIP; los del informe confirmado
+    # rellenan la ficha (sin sustituir lo que ya tenía).
+    _importar(db, informes("a.pdf", "1", nhc=None, dni="00000000T"))
+    (owner,) = db.execute("SELECT id FROM patients").fetchone()
+    otro = {"birth_date": None, "full_name": "GARCIA LOPEZ, J.", "nhc": "333", "cip": "CIPX"}
+    b = informes("b.pdf", "2", **otro)
+    with pytest.raises(ingest.OtherPatientError):
+        _importar(db, b)
+    ingest.confirm_same_patient(db, b, owner)
+    assert db.execute("SELECT full_name, dni, nhc, cip FROM patients").fetchone() == (
+        "GARCIA LOPEZ, JUAN",
+        "00000000T",
+        "333",
+        "CIPX",
+    )
+
+
 def test_confirmed_identity_with_conflicting_birth_date_is_not_asked_again(db, informes):
     # P. ej. un laboratorio con la fecha de nacimiento mal escrita: el
     # usuario confirma una vez y los siguientes informes iguales encajan.
