@@ -32,6 +32,34 @@ def normalize_name(raw_name: str) -> str:
     return strip_accents(name).upper().strip()
 
 
+def split_full_name(full_name: str | None) -> tuple[str, str] | None:
+    """`(nombre, apellidos)` de un nombre guardado como "Apellidos, Nombre";
+    `None` si no lleva coma (no se sabe qué parte es el nombre)."""
+    if not full_name or "," not in full_name:
+        return None
+    apellidos, nombre = full_name.split(",", 1)
+    return nombre.strip(), apellidos.strip()
+
+
+def join_full_name(nombre: str, apellidos: str) -> str:
+    """Forma guardada del nombre, "Apellidos, Nombre" (la coma separa las
+    dos partes; `normalize_name` la entiende). Sin una de las dos partes,
+    solo la otra, sin coma."""
+    nombre, apellidos = nombre.strip(), apellidos.strip()
+    return f"{apellidos}, {nombre}" if nombre and apellidos else nombre or apellidos
+
+
+def name_splits(full_name: str) -> list[tuple[str, str]]:
+    """Posibles `(nombre, apellidos)` de un nombre sin coma, para que el
+    usuario elija: primero las de "NOMBRE APELLIDOS" (lo habitual sin coma)
+    y después las de "APELLIDOS NOMBRE"."""
+    words = full_name.split()
+    cuts = range(1, len(words))
+    return [(" ".join(words[:i]), " ".join(words[i:])) for i in cuts] + [
+        (" ".join(words[i:]), " ".join(words[:i])) for i in reversed(cuts)
+    ]
+
+
 def name_words_key(raw_name: str) -> str:
     """Las palabras de `normalize_name` ordenadas: igual para "GARCIA LOPEZ
     JUAN" y "JUAN GARCIA LOPEZ" (mismo nombre en otro orden, sin coma).

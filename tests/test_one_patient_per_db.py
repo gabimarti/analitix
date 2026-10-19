@@ -10,6 +10,7 @@ from analitix import ingest
 from analitix.repository import (
     STATUS_DISCARDED,
     STATUS_OTHER_PATIENT,
+    create_patient,
     discard_other_patient_file,
     find_patient,
     get_or_create_patient,
@@ -150,6 +151,37 @@ def test_confirm_same_patient_imports_and_next_similar_report_matches(db, inform
     _importar(db, informes("c.pdf", "3", **sin_fecha))
     assert _count(db, "reports") == 3
     assert find_patient(db, "GARCIA LOPEZ, J.", None, None, "333") == (owner, "alias")
+
+
+def test_patient_data_typed_on_creation_is_matched_and_kept(db, informes):
+    create_patient(db, {"full_name": "García López, Juan", "birth_date": "1970-05-20"})
+    # Sin coma ("NOMBRE APELLIDOS") encaja; el nombre de la ficha no cambia.
+    _importar(db, informes("a.pdf", "1", full_name="JUAN GARCIA LOPEZ"))
+    _importar(db, informes("b.pdf", "2", full_name="GARCIA LOPEZ, JUAN"))
+    assert _count(db, "patients") == 1
+    assert _count(db, "reports") == 2
+    assert db.execute("SELECT full_name, nhc FROM patients").fetchone() == (
+        "García López, Juan",
+        "111",
+    )
+    with pytest.raises(ingest.OtherPatientError, match="PROBABLEMENTE OTRA PERSONA: fecha"):
+        _importar(db, informes("c.pdf", "3", birth_date="1980-01-01"))
+
+
+def test_patient_created_without_name_takes_it_from_the_first_report(db, informes):
+    create_patient(db, {"dni": "00000000T"})
+    with pytest.raises(ingest.OtherPatientError, match="DNI distinto"):
+        _importar(db, informes("a.pdf", "1", dni="11111111H"))
+    _importar(db, informes("b.pdf", "2"))
+    assert db.execute("SELECT full_name, name_key, dni FROM patients").fetchall() == [
+        ("GARCIA LOPEZ, JUAN", "JUAN GARCIA LOPEZ", "00000000T")
+    ]
+
+
+def test_create_patient_validates_without_leaving_a_row(db):
+    with pytest.raises(ValueError, match="Fecha de nacimiento"):
+        create_patient(db, {"full_name": "Ruiz, Ana", "birth_date": "20-05-1970"})
+    assert _count(db, "patients") == 0
 
 
 def test_confirmed_identity_fills_empty_patient_fields(db, informes):

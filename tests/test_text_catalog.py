@@ -3,13 +3,35 @@ from pathlib import Path
 import pytest
 
 import analitix.catalog as catalog
-from analitix.textutils import normalize_name, normalize_test_name, strip_accents
+from analitix.textutils import (
+    join_full_name,
+    name_splits,
+    normalize_name,
+    normalize_test_name,
+    split_full_name,
+    strip_accents,
+)
 
 
 def test_text_normalization():
     assert strip_accents("Árbol Ñandú") == "Arbol Nandu"
     assert normalize_name("  García, María-José ") == "MARIA JOSE GARCIA"
     assert normalize_test_name("Colesterol HDL (sèrum)!") == "colesterol hdl serum"
+
+
+def test_full_name_split_and_join():
+    assert split_full_name("García López, María José") == ("María José", "García López")
+    assert split_full_name("MARIA JOSE GARCIA LOPEZ") is None
+    assert join_full_name(" María José ", "García López") == "García López, María José"
+    assert join_full_name("", "García López") == "García López"
+    # La forma guardada empareja con el nombre sin coma de los informes.
+    assert normalize_name(join_full_name("Ana", "Ruiz Gil")) == normalize_name("ANA RUIZ GIL")
+    assert name_splits("ANA RUIZ GIL") == [
+        ("ANA", "RUIZ GIL"),
+        ("ANA RUIZ", "GIL"),
+        ("GIL", "ANA RUIZ"),
+        ("RUIZ GIL", "ANA"),
+    ]
 
 
 def test_catalog_aliases_and_description(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import sys
 import threading
@@ -89,6 +90,29 @@ def _create_database(parent: tk.Misc):
         text="La lista de bases de datos no está cifrada: no pongas datos médicos en estos nombres.",
         foreground="#666666",
     ).grid(row=4, column=0, sticky="w", pady=(0, 10))
+    # Datos opcionales de la ficha (van dentro de la BD cifrada): si se
+    # rellenan, los informes se cotejan con ellos desde el primero.
+    ficha = ttk.Labelframe(body, text="Datos del paciente (opcional)", padding=8)
+    ficha.grid(row=5, column=0, sticky="we", pady=(0, 10))
+    vars_ficha = {}
+    for fila, (clave, texto) in enumerate(
+        (
+            ("nombre", "Nombre"),
+            ("apellidos", "Apellidos"),
+            ("birth_date", "Fecha de nacimiento (AAAA-MM-DD)"),
+            ("dni", "DNI"),
+        )
+    ):
+        ttk.Label(ficha, text=texto).grid(row=fila, column=0, sticky="w", pady=2)
+        vars_ficha[clave] = tk.StringVar()
+        ttk.Entry(ficha, textvariable=vars_ficha[clave], width=26).grid(
+            row=fila, column=1, sticky="we", padx=(8, 0), pady=2
+        )
+    ttk.Label(
+        ficha,
+        text="Sirven para reconocer sus informes; se guardan cifrados en la base de datos.",
+        foreground="#666666",
+    ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
     sugerido = {"valor": ""}
 
     def _sugerir(*_args) -> None:
@@ -103,6 +127,12 @@ def _create_database(parent: tk.Misc):
     def _crear() -> None:
         nombre, fichero = var_nombre.get().strip(), var_fichero.get().strip()
         error = databases.validate_new(nombre, fichero)
+        datos = {clave: var.get().strip() for clave, var in vars_ficha.items()}
+        if not error and datos["birth_date"]:
+            try:
+                dt.date.fromisoformat(datos["birth_date"])
+            except ValueError:
+                error = "Fecha de nacimiento no válida (formato AAAA-MM-DD)."
         if error:
             messagebox.showerror("Analitix", error, parent=win)
             return
@@ -121,11 +151,25 @@ def _create_database(parent: tk.Misc):
             messagebox.showerror("Analitix", str(exc), parent=win)
             return
         logger.info("Base de datos de paciente creada")
+        if any(datos.values()):
+            # Import local: `repository` arrastra `pdf_parser` (ver nota de
+            # cabecera sobre no retrasar la ventana de bienvenida).
+            from analitix.repository import create_patient
+            from analitix.textutils import join_full_name
+
+            create_patient(
+                con,
+                {
+                    "full_name": join_full_name(datos["nombre"], datos["apellidos"]),
+                    "birth_date": datos["birth_date"],
+                    "dni": datos["dni"],
+                },
+            )
         resultado["valor"] = ({"nombre": nombre, "fichero": fichero}, con)
         win.destroy()
 
     botones = ttk.Frame(body)
-    botones.grid(row=5, column=0, sticky="e")
+    botones.grid(row=6, column=0, sticky="e")
     ttk.Button(botones, text="Crear", command=_crear).pack(side="left", padx=(0, 6))
     ttk.Button(botones, text="Cancelar", command=win.destroy).pack(side="left")
     win.bind("<Escape>", lambda _e: win.destroy())

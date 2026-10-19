@@ -141,6 +141,7 @@ from analitix.repository import (
     EXPLORABLE_TABLES,
     SEX_OPTIONS,
     add_bp_reading,
+    add_patient_alias,
     create_manual_report,
     delete_all_data,
     delete_bp_readings,
@@ -176,7 +177,13 @@ from analitix.repository import (
     set_target,
     update_patient,
 )
-from analitix.textutils import strip_accents
+from analitix.textutils import (
+    join_full_name,
+    name_splits,
+    normalize_name,
+    split_full_name,
+    strip_accents,
+)
 from analitix.thyroid_risk import get_latest_thyroid_summary, get_thyroid_series
 from analitix.tyg_risk import INDEX_LABELS as TYG_INDEX_LABELS, get_tyg_series
 from analitix.updates import AUTHOR_URL, RELEASES_URL, REPO_URL, fetch_latest_release, is_newer
@@ -1048,6 +1055,7 @@ class AnalitixApp(ttk.Window):
         )
         if result.other_patient:
             self._review_other_patient_reports()
+        self._ask_name_split_if_needed()
         self._prompt_active_patient_if_needed()
 
     def _review_other_patient_reports(self) -> None:
@@ -1514,8 +1522,13 @@ class AnalitixApp(ttk.Window):
         form.pack(fill="both", expand=True)
 
         yes_no = {None: "", 1: "Sí", 0: "No"}
+        # El nombre se guarda como "Apellidos, Nombre"; sin coma no se sabe
+        # qué parte es el nombre y va entero a Apellidos hasta que se separe.
+        nombre, apellidos = split_full_name(patient["full_name"]) or ("", patient["full_name"])
+        patient = {**patient, "nombre": nombre, "apellidos": apellidos}
         text_fields = (
-            ("full_name", "Nombre"),
+            ("nombre", "Nombre"),
+            ("apellidos", "Apellidos"),
             ("birth_date", "Fecha nacimiento (AAAA-MM-DD)"),
             ("dni", "DNI"),
             ("cip", "CIP"),
@@ -1584,6 +1597,7 @@ class AnalitixApp(ttk.Window):
         def _save() -> None:
             from_yes_no = {"": None, "Sí": 1, "No": 0}
             fields = {key: var.get() for key, var in vars_.items()}
+            fields["full_name"] = join_full_name(fields.pop("nombre"), fields.pop("apellidos"))
             for key in ("smoker_current", "smoker_former"):
                 fields[key] = from_yes_no[fields[key]]
             try:
@@ -1704,6 +1718,61 @@ class AnalitixApp(ttk.Window):
         self._center_dialog(dialog)
         self.wait_window(dialog)
         return result["value"]
+
+    def _ask_name_split_if_needed(self) -> None:
+        """Si el nombre del paciente de la BD vino de un informe sin coma
+        ("NOMBRE APELLIDOS"), no se sabe dónde acaba el nombre de pila (puede
+        ser compuesto): se pregunta una vez y se guarda como "Apellidos,
+        Nombre". «Más tarde» lo deja como está (se puede separar en la ficha)."""
+        if len(self.patients) != 1:
+            return
+        patient = self.patients[0]
+        opciones = name_splits(patient["full_name"])
+        if split_full_name(patient["full_name"]) or not opciones:
+            return
+        dialog, body = self._new_dialog("Nombre y apellidos")
+        ttk.Label(
+            body,
+            text=f"El informe trae el nombre «{patient['full_name']}» sin separar. "
+            "¿Qué parte es el nombre y cuál los apellidos?",
+            wraplength=520,
+        ).pack(anchor="w", pady=(0, 6))
+        choice = tk.IntVar(value=0)
+        for i, (nombre, apellidos) in enumerate(opciones):
+            ttk.Radiobutton(
+                body,
+                text=f"Nombre: {nombre}    Apellidos: {apellidos}",
+                variable=choice,
+                value=i,
+            ).pack(anchor="w", padx=8, pady=2)
+
+        def _confirm() -> None:
+            nuevo = join_full_name(*opciones[choice.get()])
+            if normalize_name(nuevo) != patient["name_key"]:
+                # Orden "APELLIDOS NOMBRE": la clave cambia; el nombre tal
+                # como viene en el informe queda como identidad confirmada
+                # para que los siguientes informes iguales encajen solos.
+                add_patient_alias(
+                    self.con, patient["id"], patient["full_name"], patient["birth_date"], None, None
+                )
+            try:
+                update_patient(self.con, patient["id"], {"full_name": nuevo})
+            except ValueError as exc:
+                messagebox.showerror("No se puede guardar", str(exc), parent=dialog)
+                return
+            logger.info("Nombre del paciente separado id=%s", patient["id"])
+            dialog.destroy()
+            self._refresh_patients()
+
+        botones = ttk.Frame(body)
+        botones.pack(fill="x", pady=(PAD, 0))
+        boton_cancelar = ttk.Button(botones, text="Más tarde", command=dialog.destroy)
+        boton_cancelar.pack(side="right")
+        boton_ok = ttk.Button(botones, text="Guardar", bootstyle="primary", command=_confirm)
+        boton_ok.pack(side="right", padx=(0, 8))
+        self._same_width(boton_cancelar, boton_ok)
+        self._center_dialog(dialog)
+        self.wait_window(dialog)
 
     def _refresh_patients(self) -> None:
         self.patients = list_patients(self.con)

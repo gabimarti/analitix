@@ -18,7 +18,13 @@ from sqlcipher3 import dbapi2 as sqlcipher
 from analitix.catalog import add_aliases, canonical_id_for
 from analitix.db import now_iso
 from analitix.pdf_parser import compute_flag
-from analitix.textutils import name_words_key, normalize_name, normalize_test_name, strip_accents
+from analitix.textutils import (
+    name_words_key,
+    normalize_name,
+    normalize_test_name,
+    split_full_name,
+    strip_accents,
+)
 
 # Fecha efectiva de un resultado: la de recepción/toma de la muestra si el
 # PDF la trae; si no, la de petición (en todas las plantillas conocidas es
@@ -242,12 +248,14 @@ def get_or_create_patient(
         # se refresca si el emparejamiento ha sido por nombre: por DNI/CIP/
         # NHC o asignación previa se conserva el que ya tenía (p. ej. el que
         # el usuario eligió al fusionar), en vez del de cada PDF reimportado.
-        if matched_by != "name":
-            full_name = None
-        current_nhc = cur.execute(
-            "SELECT nhc, nhc_alt FROM patients WHERE id = ?", (patient_id,)
+        # Tampoco si ya está separado en "Apellidos, Nombre" (lo escribió el
+        # usuario o lo eligió, `split_full_name`): manda la ficha. Una ficha
+        # sin nombre (BD creada solo con DNI o fecha) toma el del informe.
+        current_name, current_nhc_value, current_nhc_alt = cur.execute(
+            "SELECT full_name, nhc, nhc_alt FROM patients WHERE id = ?", (patient_id,)
         ).fetchone()
-        current_nhc_value, current_nhc_alt = current_nhc
+        if current_name and (matched_by != "name" or split_full_name(current_name)):
+            full_name = None
         if nhc and current_nhc_value and nhc != current_nhc_value:
             new_nhc_alt = _add_alt_value(current_nhc_alt, current_nhc_value)
         else:
@@ -256,10 +264,20 @@ def get_or_create_patient(
         # como secundario (pasaba al volver a un NHC ya visto antes).
         new_nhc_alt = _remove_alt_value(new_nhc_alt, nhc)
         cur.execute(
-            "UPDATE patients SET full_name = COALESCE(?, full_name), birth_date = COALESCE(birth_date, ?), "
-            "dni = COALESCE(?, dni), nhc = COALESCE(?, nhc), nhc_alt = ?, sex = COALESCE(?, sex), "
-            "cip = COALESCE(?, cip) WHERE id = ?",
-            (full_name, birth_date, dni, nhc, new_nhc_alt, sex, cip, patient_id),
+            "UPDATE patients SET full_name = COALESCE(?, full_name), name_key = COALESCE(?, name_key), "
+            "birth_date = COALESCE(birth_date, ?), dni = COALESCE(?, dni), nhc = COALESCE(?, nhc), "
+            "nhc_alt = ?, sex = COALESCE(?, sex), cip = COALESCE(?, cip) WHERE id = ?",
+            (
+                full_name,
+                normalize_name(full_name) if full_name else None,
+                birth_date,
+                dni,
+                nhc,
+                new_nhc_alt,
+                sex,
+                cip,
+                patient_id,
+            ),
         )
         return patient_id, matched_by
     name_for_new = full_name or fallback_name or "Desconocido"
@@ -604,6 +622,23 @@ def update_patient(con, patient_id: int, fields: dict[str, Any]) -> None:
             "si es la misma persona, usa «Fusionar seleccionados»."
         ) from None
     con.commit()
+
+
+def create_patient(con, fields: dict[str, Any]) -> int:
+    """Ficha inicial de una BD nueva con los datos opcionales que el
+    usuario escribió al crearla (`EDITABLE_PATIENT_FIELDS`, validados como
+    en `update_patient`). El nombre puede quedar vacío: lo pone el primer
+    informe (`get_or_create_patient`). Lanza `ValueError` si algo no es
+    válido, sin dejar la ficha a medias."""
+    patient_id = con.execute("INSERT INTO patients (full_name, name_key) VALUES ('', '')").lastrowid
+    fields = {k: v for k, v in fields.items() if k != "full_name" or (v or "").strip()}
+    try:
+        update_patient(con, patient_id, fields)
+    except ValueError:
+        con.rollback()
+        raise
+    con.commit()
+    return patient_id
 
 
 def get_patient_birth_date(con, patient_id: int) -> str | None:

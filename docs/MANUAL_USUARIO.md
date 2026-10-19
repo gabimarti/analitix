@@ -330,7 +330,11 @@ mismo/a, incluso sin usar ningún asistente de IA,
     puede acabar con dos fichas de paciente — si es así, fusiónalas
     (§2.2, "Fusionar pacientes").
 - **Informes que no encajan con el paciente** (una base de datos = un
-  paciente): el primer informe que importas en una base de datos nueva
+  paciente): al crear la base de datos puedes escribir, si quieres, el
+  nombre, los apellidos, la fecha de nacimiento y el DNI del paciente; los
+  informes se comparan con esos datos desde el primero, y tus datos no se
+  sustituyen por los de los informes (solo se completan los que falten,
+  como el CIP o el NHC). Si no los escribes, el primer informe que importas
   fija de quién es. A partir de ahí, un informe cuyos datos no coinciden
   con los de ese paciente **no se importa** sin preguntarte, para no
   mezclar nunca los resultados de otra persona. Se importan solos los que
@@ -353,6 +357,12 @@ mismo/a, incluso sin usar ningún asistente de IA,
   que no encajan...** de esta pantalla. En una base de datos antigua con
   varios pacientes (de antes de tener una base de datos por paciente), los
   informes se siguen importando como antes.
+- **Nombre y apellidos**: si el informe trae el nombre como «Apellidos,
+  Nombre» (con coma), se separa solo. Si lo trae sin coma ("NOMBRE
+  APELLIDOS") y no lo escribiste al crear la base de datos, al terminar la
+  importación se te pregunta una vez qué parte es el nombre (puede ser
+  compuesto, p. ej. "JUAN CARLOS"). Con «Más tarde» puedes separarlo
+  después en la ficha del paciente.
 - **Reimportar todo (forzar)**: vuelve a analizar TODOS los PDF de la
   carpeta, incluso los que ya estaban bien importados, sustituyendo sus
   datos por los del nuevo análisis. Útil cuando se actualiza el programa y
@@ -394,8 +404,9 @@ informes.
 
 > Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
-Ficha del paciente (**Editar ficha...**), con los datos editables, el
-tabaquismo y la lista de informes importados:
+Ficha del paciente (**Editar ficha...**), con los datos editables (el
+nombre y los apellidos en campos separados), el tabaquismo y la lista de
+informes importados:
 
 <p align="center">
   <img src="images/ficha_paciente.png" width="65%" alt="Ficha editable del paciente con tabaquismo e informes importados">

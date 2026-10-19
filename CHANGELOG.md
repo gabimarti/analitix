@@ -22,6 +22,8 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 - Una base de datos, un paciente: al importar, un informe cuyos datos no coinciden con los del paciente de la base de datos (otro nombre, sin fecha de nacimiento, otro NHC, DNI...) ya no se importa sin preguntar. Aparece en la ventana «Informes que no encajan» con el motivo: «Es este paciente» lo importa y recuerda esos datos para que el siguiente igual se importe solo; «No es» lo deja fuera. Se avisa especialmente cuando la fecha de nacimiento, el DNI o el CIP son distintos, aunque coincida algún otro dato.
 - Un informe con el nombre en otro orden (p. ej. «GARCIA LOPEZ JUAN» y «JUAN GARCIA LOPEZ») y la misma fecha de nacimiento se reconoce como el mismo paciente.
+- Al crear una base de datos se pueden escribir, opcionalmente, el nombre, los apellidos, la fecha de nacimiento y el DNI del paciente: los informes se comparan con ellos desde el primero y no los sustituyen (solo completan los datos que falten, como el CIP o el NHC).
+- La ficha del paciente separa el nombre y los apellidos. Si un informe trae el nombre sin coma («NOMBRE APELLIDOS»), al terminar la importación se pregunta una vez qué parte es el nombre (puede ser compuesto).
 
 ### Corregido
 

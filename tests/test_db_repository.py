@@ -116,7 +116,9 @@ def test_patient_report_result_and_processed_file_lifecycle(db):
         ],
     )
     assert get_series(db, "glucosa", patient_id)[0]["value_num"] == 110
-    assert get_all_results(db, patient_id)[0]["paciente"] == "Ada Lovelace"
+    # El nombre ya separado en "Apellidos, Nombre" no lo sustituye el del
+    # segundo informe, sin coma.
+    assert get_all_results(db, patient_id)[0]["paciente"] == "Lovelace, Ada"
 
     record_processed_file(db, "synthetic.pdf", "hash", "ok", report_id)
     db.commit()
