@@ -17,7 +17,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from analitix import databases
+from analitix import databases, demo
 from analitix.branding import ask_password, load_logo_photo, set_app_icon, show_splash
 from analitix.db import WrongPasswordError, connect
 from analitix.logging_setup import configure_logging
@@ -299,6 +299,24 @@ def _choose_database(root: tk.Tk):
         logger.info("Base de datos existente añadida a la lista")
         _cargar(datos[1])
 
+    def _ejemplo() -> None:
+        try:
+            creada = demo.create_demo_database()
+        except Exception as exc:  # disco, permisos o SQLCipher: se avisa y no queda nada a medias
+            logger.exception("No se pudo crear la base de datos de ejemplo")
+            messagebox.showerror("Analitix", f"No se pudo crear: {exc}", parent=win)
+            return
+        if creada:
+            logger.info("Base de datos de ejemplo creada")
+        _cargar(demo.DEMO_FILE)
+        messagebox.showinfo(
+            "Base de datos de ejemplo",
+            ("Creada" if creada else "Ya está en la lista")
+            + f": «{demo.DEMO_NAME}». Solo contiene datos ficticios, para probar la "
+            f"aplicación sin usar los tuyos.\n\nSu contraseña es: {demo.DEMO_PASSWORD}",
+            parent=win,
+        )
+
     def _copia() -> None:
         fichero = _seleccionada()
         if not fichero:
@@ -364,6 +382,9 @@ def _choose_database(root: tk.Tk):
         side="left", padx=(6, 0)
     )
     ttk.Button(botones, text="Añadir existente...", command=_anadir).pack(side="left", padx=(6, 0))
+    ttk.Button(botones, text="Base de datos de ejemplo...", command=_ejemplo).pack(
+        side="left", padx=(6, 0)
+    )
     ttk.Button(botones, text="Salir", command=win.destroy).pack(side="right")
     gestion = ttk.Frame(body)
     gestion.pack(fill="x", pady=(6, 0))
