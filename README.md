@@ -159,9 +159,11 @@ Autor: Gabriel Marti — [gabimarti.github.io](https://gabimarti.github.io/).
 ## Apoya el proyecto
 
 Analitix es y seguirá siendo gratuito y de código abierto. Si te resulta
-útil y quieres apoyarlo, puedes invitarme a un café en
-[☕ Ko-fi](https://ko-fi.com/gabimarti). Es totalmente voluntario y no da
-acceso a nada extra: solo ayuda a dedicarle más horas.
+útil y quieres apoyarlo, puedes invitarme a un café en Ko-fi. Es
+totalmente voluntario y no da acceso a nada extra: solo ayuda a dedicarle
+más horas.
+
+[![Invítame a un café en Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/gabimarti)
 
 ## Formatos de informe soportados
 
