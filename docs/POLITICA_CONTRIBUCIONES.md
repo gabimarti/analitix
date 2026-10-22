@@ -109,6 +109,19 @@ informar de una vulnerabilidad: los complementa.
     mantenida.
   - Las GitHub Actions se fijan por hash de commit, y solo se permiten las
     de GitHub, las de creadores verificados y las de la lista explícita.
+- **Las actualizaciones de seguridad tienen prioridad** sobre cualquier
+  otro trabajo, y siempre se comprueban antes de aplicarlas:
+  - Se lee el aviso oficial: qué está afectado, qué versión lo corrige y si
+    alcanza al código de Analitix.
+  - Se verifica lo que se descarga (huella SHA-256 del aviso o de PyPI)
+    cuando el problema afecta a las herramientas de instalación, como pip o
+    los certificados.
+  - La versión corregida pasa los tests y la aplicación arranca antes de
+    integrarla.
+  - No se publica ninguna versión con vulnerabilidades conocidas en sus
+    dependencias. Tampoco se silencian los avisos de `pip-audit` ni se
+    fuerzan versiones que otra dependencia no admite: si la corrección
+    depende de un tercero, se espera a ella y se deja constancia.
 - **Las vulnerabilidades se notifican en privado**, nunca en una issue
   pública (ver [`SECURITY.md`](../SECURITY.md)).
 
@@ -241,5 +254,8 @@ limpiará también del historial del repositorio.
 - Responder a los avisos de seguridad en un plazo razonable (ver
   [`SECURITY.md`](../SECURITY.md)) y reconocer la aportación si quien
   informa lo desea.
+- Aplicar con prioridad las actualizaciones de seguridad de las
+  dependencias y del entorno de desarrollo y publicación, comprobándolas
+  como indica la sección 2.
 - Mantener esta política al día y explicar cualquier excepción en la
   propia pull request.
