@@ -154,6 +154,15 @@ de seguridad, privacidad e integridad que debe cumplir toda aportación.
 Para cualquier consulta sobre la aplicación, escribe a
 [contact@analitix.slmail.me](mailto:contact@analitix.slmail.me).
 
+## Apoya el proyecto
+
+Analitix es y seguirá siendo gratuito y de código abierto. Si te resulta
+útil y quieres apoyarlo, puedes invitarme a un café en Ko-fi. Es
+totalmente voluntario y no da acceso a nada extra: solo ayuda a dedicarle
+más horas.
+
+[![Invítame a un café en Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/gabimarti)
+
 ## Formatos de informe soportados
 
 El reconocimiento de cada centro/laboratorio (etiquetas de cabecera,
