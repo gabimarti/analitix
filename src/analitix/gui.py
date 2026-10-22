@@ -83,6 +83,7 @@ from analitix.charts import (
 from analitix.config import (
     DB_LIST_PATH,
     FROZEN,
+    KOFI_CUP_PATH,
     PATIENTS_DIR,
     PROJECT_ROOT,
     REPORTS_DIR,
@@ -188,7 +189,14 @@ from analitix.textutils import (
 )
 from analitix.thyroid_risk import get_latest_thyroid_summary, get_thyroid_series
 from analitix.tyg_risk import INDEX_LABELS as TYG_INDEX_LABELS, get_tyg_series
-from analitix.updates import AUTHOR_URL, RELEASES_URL, REPO_URL, fetch_latest_release, is_newer
+from analitix.updates import (
+    AUTHOR_URL,
+    KOFI_URL,
+    RELEASES_URL,
+    REPO_URL,
+    fetch_latest_release,
+    is_newer,
+)
 from analitix.uric_acid_risk import (
     INDEX_LABELS as URIC_ACID_INDEX_LABELS,
     URATE_LOWERING_TARGET,
@@ -667,6 +675,9 @@ class AnalitixApp(ttk.Window):
         ayuda_menu.add_command(
             label="Buscar actualizaciones...", command=lambda: self._check_updates(manual=True)
         )
+        ayuda_menu.add_command(
+            label="Apoyar el proyecto (Ko-fi)...", command=lambda: webbrowser.open(KOFI_URL)
+        )
         ayuda_menu.add_command(label="Acerca de...", command=self._show_about)
         menubar.add_cascade(label="Ayuda", menu=ayuda_menu)
 
@@ -734,6 +745,26 @@ class AnalitixApp(ttk.Window):
         )
         web.pack(pady=(0, PAD))
         web.bind("<Button-1>", lambda _e: webbrowser.open(AUTHOR_URL))
+
+        # Donación voluntaria, como en la web: Analitix es y seguirá siendo
+        # gratuito; donar no da acceso a nada extra.
+        ttk.Label(
+            body,
+            text="Analitix es gratuito y de código abierto.\nSi te resulta útil, puedes apoyarlo:",
+            bootstyle="secondary",
+            justify="center",
+        ).pack(pady=(PAD, 4))
+        cup = tk.PhotoImage(file=str(KOFI_CUP_PATH)).subsample(14)  # 285x229 → 20x16
+        kofi = ttk.Button(
+            body,
+            text=" Invítame a un café en Ko-fi",
+            image=cup,
+            compound="left",
+            bootstyle="info",
+            command=lambda: webbrowser.open(KOFI_URL),
+        )
+        kofi.image = cup
+        kofi.pack(pady=(0, PAD * 2))
 
         ttk.Button(body, text="Cerrar", command=dialog.destroy).pack(pady=(0, PAD * 2))
         dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)

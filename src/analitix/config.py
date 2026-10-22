@@ -114,6 +114,7 @@ PARSER_PROFILES_DIR = PACKAGE_DIR / "data" / "parser_profiles"
 RES_DIR = PACKAGE_DIR / "res"
 ICON_PATH = RES_DIR / "analitix_icon.png"
 LOGO_PATH = RES_DIR / "analitix_logo.png"
+KOFI_CUP_PATH = RES_DIR / "kofi_cup.png"  # icono del botón de Ko-fi ("Acerca de")
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 PATIENTS_DIR.mkdir(parents=True, exist_ok=True)
