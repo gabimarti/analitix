@@ -89,6 +89,11 @@ ol.steps li { margin-bottom: 10px; }
 
 .links { columns: 2 260px; padding-left: 1.2em; }
 
+/* Enlace a Ko-fi con el aspecto de su botón oficial, pero sin cargar su script (sin peticiones a terceros) */
+.support { display: inline-block; background: #72a4f2; color: var(--navy); padding: 9px 20px; border-radius: 7px; text-decoration: none; font-weight: 700; box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.2); }
+.support:hover, .support:focus { opacity: 0.85; }
+.kofi-cup { width: 20px; height: 16px; vertical-align: middle; margin: 0 6px 3px 0; }
+
 .disclaimer { background: var(--soft); border-radius: var(--radius); padding: 14px 18px; color: var(--muted); }
 
 footer { margin-top: 40px; padding: 24px 0 40px; border-top: 1px solid #d9e2ec; color: var(--muted); font-size: 0.95rem; text-align: center; }
