@@ -89,6 +89,10 @@ ol.steps li { margin-bottom: 10px; }
 
 .links { columns: 2 260px; padding-left: 1.2em; }
 
+/* Enlace a Ko-fi: enlace normal, sin scripts ni imágenes de terceros */
+.support { display: inline-block; padding: 10px 24px; border: 2px solid var(--brand); border-radius: 999px; text-decoration: none; font-weight: 600; }
+.support:hover, .support:focus { background: var(--brand); color: #fff; }
+
 .disclaimer { background: var(--soft); border-radius: var(--radius); padding: 14px 18px; color: var(--muted); }
 
 footer { margin-top: 40px; padding: 24px 0 40px; border-top: 1px solid #d9e2ec; color: var(--muted); font-size: 0.95rem; text-align: center; }
