@@ -141,21 +141,44 @@ en cada arranque.
   <img src="images/cargando.png" width="45%" alt="Ventana de carga de Analitix">
 </p>
 
-La primera vez, la app te pedirá **crear una contraseña maestra**. Esa
-contraseña cifra toda tu base de datos (`analitix.db`):
+Cada paciente tiene **su propia base de datos**, cifrada con su
+contraseña. La primera vez se abre la **lista de bases de datos**, todavía
+vacía:
+
+<p align="center">
+  <img src="images/bases_de_datos.png" width="60%" alt="Lista de bases de datos con la de ejemplo y otra de prueba">
+</p>
+
+- **Nueva base de datos...**: escribe un nombre corto del paciente (para
+  reconocerlo en la lista) y el nombre de la base de datos (se propone a
+  partir del nombre). La lista no está cifrada: no pongas datos médicos en
+  esos nombres. Opcionalmente puedes rellenar ya el nombre, los apellidos,
+  la fecha de nacimiento y el DNI del paciente: los informes se comparan
+  con ellos desde el primero.
+
+  <p align="center">
+    <img src="images/nueva_base_datos.png" width="50%" alt="Ventana Nueva base de datos con los datos opcionales del paciente">
+  </p>
+
+- **Base de datos de ejemplo...**: crea una con un paciente ficticio y
+  varios años de analíticas inventadas, para probar la aplicación sin usar
+  tus datos. Su contraseña es `analitix-demo`. Si la borras, la puedes
+  volver a crear.
+- **Añadir existente...**, **Copia de seguridad...** y **Borrar...**: ver
+  [1.4 Copia de seguridad](#14-copia-de-seguridad).
+
+Al crear una base de datos nueva se pide su **contraseña**, dos veces. Esa
+contraseña cifra todos los datos de ese paciente:
 - Guárdala en un lugar seguro. **No hay forma de recuperarla si la
   olvidas**; sin ella, los datos ya importados quedan inaccesibles.
 - No la compartas ni la envíes a nadie.
 
 <p align="center">
-  <img src="images/contrasena_crear.png" width="45%" alt="Diálogo para crear la contraseña de una base de datos nueva">
+  <img src="images/contrasena_crear.png" width="45%" alt="Ventana para crear la contraseña de una base de datos nueva, con las dos casillas">
 </p>
 
-<p align="center">
-  <img src="images/contrasena_repetir.png" width="30%" alt="Diálogo para repetir la contraseña">
-</p>
-
-Después, cada día solo hace falta abrir Analitix e introducir tu contraseña.
+Después, cada día solo hace falta abrir Analitix: se abre la última base de
+datos usada y pide su contraseña (si la cancelas, vuelves a la lista).
 
 <p align="center">
   <img src="images/inicio.png" width="80%" alt="Ventana principal de Analitix al abrirla">
@@ -1906,8 +1929,14 @@ Marti), el **correo de contacto del proyecto** (contact@analitix.slmail.me; puls
 abre tu programa de correo) y enlaces a su perfil de GitHub y a su página
 personal, gabimarti.github.io (pulsables, abren el navegador).
 
+Debajo, el botón **Invítame a un café en Ko-fi** abre en el navegador la
+página para apoyar el proyecto con una donación (también en **Ayuda →
+Apoyar el proyecto (Ko-fi)...**). Es totalmente voluntario: Analitix es y
+seguirá siendo gratuito y no da acceso a nada extra. La aplicación no se
+conecta a Ko-fi; solo abre el enlace.
+
 <p align="center">
-  <img src="images/acerca_de.png" width="35%" alt="Ventana Acerca de Analitix">
+  <img src="images/acerca_de.png" width="35%" alt="Ventana Acerca de Analitix con el botón de Ko-fi">
 </p>
 
 ### 2.22 🔄 Ayuda → Buscar actualizaciones...

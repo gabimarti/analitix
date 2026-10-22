@@ -30,6 +30,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from tkinter import ttk as tk_ttk
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -39,12 +40,14 @@ from PIL import ImageGrab  # noqa: E402
 
 from analitix import (  # noqa: E402
     branding,
+    config,
+    databases,
     gui,
     main as app_main,  # noqa: E402
     repository,
 )
 from analitix.charts import changes_figure, evolution_figure, heatmap_figure  # noqa: E402
-from analitix.demo import DEMO_PASSWORD, build_demo_db  # noqa: E402
+from analitix.demo import DEMO_FILE, DEMO_NAME, DEMO_PASSWORD, build_demo_db  # noqa: E402
 
 OUT = ROOT / "docs" / "images"
 PDF_EJEMPLO = ROOT / "docs" / "ejemplos" / "informe_alterados_ficticio.pdf"
@@ -84,9 +87,30 @@ def _select(listbox, match: str) -> None:
     raise ValueError(f"'{match}' no está en la lista")
 
 
-def capture_startup(tmp: Path) -> None:
-    """Arranque: aviso legal (splash), ventana de carga y creación de la
-    contraseña de una base de datos nueva (la de ejemplo, en `tmp`)."""
+def _entries(win) -> list:
+    """Casillas de texto de una ventana, en orden de creación."""
+    found = []
+    for child in win.winfo_children():
+        if isinstance(child, tk_ttk.Entry):  # cubre también los de ttkbootstrap
+            found.append(child)
+        found.extend(_entries(child))
+    return found
+
+
+def _button(win, text: str):
+    for child in win.winfo_children():
+        if isinstance(child, tk_ttk.Button) and child.cget("text") == text:
+            return child
+        found = _button(child, text)
+        if found is not None:
+            return found
+    return None
+
+
+def capture_startup() -> None:
+    """Arranque: aviso legal (splash), ventana de carga, lista de bases de
+    datos (gestor, con la de ejemplo ya en la lista), «Nueva base de datos»
+    y contraseña de una base de datos nueva (las dos casillas)."""
     root = gui.tk.Tk()
     root.withdraw()
     branding.set_app_icon(root)
@@ -106,25 +130,45 @@ def capture_startup(tmp: Path) -> None:
     bar.stop()
     loading.destroy()
 
-    def _password(name: str, then=None) -> None:
-        dialog = _last_toplevel(root)
-        dialog.entry.insert(0, DEMO_PASSWORD)
-        _grab(dialog, name)
-        if then:
-            root.after(1000, then)
-        dialog.ok()
+    # Lista de bases de datos: la de ejemplo y otra ficticia (solo la
+    # entrada, sin fichero: «Última copia: nunca»).
+    databases.add_database("Paciente de prueba", "paciente-de-prueba")
 
-    # Contraseña de una base de datos nueva (diálogo "Nueva base de datos").
-    root.after(
-        1000, lambda: _password("contrasena_crear.png", lambda: _password("contrasena_repetir.png"))
-    )
+    def _new_database(lista) -> None:
+        dialog = _last_toplevel(lista)
+        _entries(dialog)[0].insert(0, "Otro paciente ficticio")
+        dialog.update()
+        _grab(dialog, "nueva_base_datos.png")
+        _button(dialog, "Cancelar").invoke()
+        root.after(500, lambda: _button(lista, "Salir").invoke())
+
+    def _list() -> None:
+        lista = _last_toplevel(root)
+        _grab(lista, "bases_de_datos.png")
+        root.after(1000, lambda: _new_database(lista))
+        _button(lista, "Nueva base de datos...").invoke()
+
+    root.after(1000, _list)
+    assert app_main._choose_database(root) is None
+
+    # Contraseña de una base de datos nueva: las dos casillas en la misma
+    # ventana.
+    def _password() -> None:
+        dialog = _last_toplevel(root)
+        for entry in _entries(dialog):
+            entry.insert(0, DEMO_PASSWORD)
+        _grab(dialog, "contrasena_crear.png")
+        _button(dialog, "Aceptar").invoke()
+
+    root.after(1000, _password)
     assert app_main._ask_new_password(root) == DEMO_PASSWORD
     root.destroy()
 
 
-def capture_app(con, pid) -> None:
+def capture_app(con, pid, db_path: Path) -> None:
     gui.messagebox.showinfo = lambda *a, **k: None
-    app = gui.AnalitixApp(con)
+    gui.messagebox.askyesno = lambda *a, **k: False  # p. ej. aviso de versión nueva
+    app = gui.AnalitixApp(con, db_path, DEMO_NAME)
     w, h = WINDOW
     app.geometry(f"{w}x{h}+40+40")
     app.deiconify()
@@ -282,17 +326,23 @@ def render_technical_figures(con, pid) -> None:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        print("Arranque (no toques el ratón):")
-        capture_startup(Path(tmp))
-        con, pid = build_demo_db(
-            Path(tmp) / "demo.db", reports_dir=r"C:\Analitix\informes_analiticas"
-        )
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        # Lista, configuración y bases de datos en la carpeta temporal: nunca
+        # se toca la carpeta `data/` real.
+        config.PATIENTS_DIR = Path(tmp) / "pacientes"
+        config.DB_LIST_PATH = Path(tmp) / "bases_de_datos.json"
+        config.APP_CONFIG_PATH = Path(tmp) / "config.json"
+        databases.set_reminder_days(0)  # sin recordatorio de copia: bloquearía las capturas
+        databases.add_database(DEMO_NAME, DEMO_FILE)
+        db_path = databases.db_path(DEMO_FILE)
+        con, pid = build_demo_db(db_path, reports_dir=r"C:\Analitix\informes_analiticas")
         try:
+            print("Arranque (no toques el ratón):")
+            capture_startup()
             print("Figuras técnicas:")
             render_technical_figures(con, pid)
             print("Capturas de la aplicación (no toques el ratón):")
-            capture_app(con, pid)
+            capture_app(con, pid, db_path)
         finally:
             con.close()
 
