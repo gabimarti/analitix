@@ -3,7 +3,7 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-25
-# Última actualización: 2026-10-09
+# Última actualización: 2026-10-31
 # ---------------------------------------------------------------------------
 """Genera las capturas de pantalla y figuras de la documentación
 (`docs/images/`) y el informe PDF de ejemplo (`docs/ejemplos/`) con un
@@ -35,8 +35,11 @@ from tkinter import ttk as tk_ttk
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+import ctypes  # noqa: E402
+from ctypes import wintypes  # noqa: E402
+
 import pdfplumber  # noqa: E402
-from PIL import ImageGrab  # noqa: E402
+from PIL import Image, ImageGrab  # noqa: E402
 
 from analitix import (  # noqa: E402
     branding,
@@ -54,14 +57,51 @@ PDF_EJEMPLO = ROOT / "docs" / "ejemplos" / "informe_alterados_ficticio.pdf"
 WINDOW = (1280, 820)
 
 
-def _save(img, name: str) -> None:
-    # Paleta de 256 colores: capturas de interfaz, casi sin degradados;
-    # reduce mucho el tamaño en el repositorio sin pérdida visible.
-    img.convert("RGB").quantize(colors=256).save(OUT / name, optimize=True)
+class _MENUBARINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("rcBar", wintypes.RECT),
+        ("hMenu", wintypes.HMENU),
+        ("hwndMenu", wintypes.HWND),
+        ("fBarFocused", wintypes.BOOL),
+        ("fFocused", wintypes.BOOL),
+    ]
+
+
+def _get_menu_bar_top(top) -> int | None:
+    """Retorna la coordenada Y superior de la barra de menús en Windows, o None si no hay."""
+    if sys.platform != "win32":
+        return None
+    if not getattr(top, "cget", None) or not top.cget("menu"):
+        return None
+    try:
+        user32 = ctypes.windll.user32
+        hwnd = user32.GetAncestor(top.winfo_id(), 2)  # GA_ROOT
+        mbi = _MENUBARINFO()
+        mbi.cbSize = ctypes.sizeof(_MENUBARINFO)
+        if user32.GetMenuBarInfo(hwnd, 0xFFFFFFFD, 0, ctypes.byref(mbi)):  # OBJID_MENU
+            return mbi.rcBar.top
+    except Exception:
+        pass
+    try:
+        cy_menu = ctypes.windll.user32.GetSystemMetrics(15)  # SM_CYMENU
+        return top.winfo_rooty() - cy_menu
+    except Exception:
+        return None
+
+
+def _save(img, name: str, quantize: bool = False) -> None:
+    # Por defecto guarda en RGB de 24 bits con compresión optimizada para
+    # no degradar antialiasing de texto, gráficos ni degradados.
+    # Si quantize=True, reduce a paleta de 256 colores.
+    converted = img.convert("RGB")
+    if quantize:
+        converted = converted.quantize(colors=256)
+    converted.save(OUT / name, optimize=True)
     print("  ", name)
 
 
-def _grab(widget, name: str) -> None:
+def _grab(widget, name: str, include_menu: bool = True) -> None:
     top = widget.winfo_toplevel()
     top.lift()
     top.attributes("-topmost", True)
@@ -70,7 +110,15 @@ def _grab(widget, name: str) -> None:
     time.sleep(0.8)
     top.update()
     x, y = top.winfo_rootx(), top.winfo_rooty()
-    _save(ImageGrab.grab(bbox=(x, y, x + top.winfo_width(), y + top.winfo_height())), name)
+    w, h = top.winfo_width(), top.winfo_height()
+
+    if include_menu:
+        menu_top = _get_menu_bar_top(top)
+        if menu_top is not None and menu_top < y:
+            h += y - menu_top
+            y = menu_top
+
+    _save(ImageGrab.grab(bbox=(x, y, x + w, y + h)), name)
 
 
 def _last_toplevel(parent):
@@ -287,14 +335,20 @@ def export_pdf_example(app) -> None:
     print("  ", PDF_EJEMPLO.relative_to(ROOT))
     with pdfplumber.open(PDF_EJEMPLO) as pdf:
         for index, name in ((0, "portada"), (1, "tabla"), (3, "grafico")):
-            _save(pdf.pages[index].to_image(resolution=72).original, f"pdf_alterados_{name}.png")
+            # Renderizar a 150 ppp para nitidez de texto y gráficos vectoriales,
+            # y reescalar con LANCZOS a un ancho óptimo (900 px) para la web y el manual.
+            page_img = pdf.pages[index].to_image(resolution=150).original.convert("RGB")
+            target_w = 900
+            target_h = int(page_img.height * (target_w / page_img.width))
+            resized = page_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+            _save(resized, f"pdf_alterados_{name}.png", quantize=False)
 
 
 def render_technical_figures(con, pid) -> None:
     """Figuras de la documentación técnica, generadas sin capturar pantalla."""
     series = repository.get_series(con, "hemoglobina", pid)
     evolution_figure(series, "Hemoglobina (paciente ficticio)").savefig(
-        OUT / "tecnica_puntos_laboratorio.png", dpi=90, bbox_inches="tight"
+        OUT / "tecnica_puntos_laboratorio.png", dpi=120, bbox_inches="tight"
     )
     rows = []
     for label, ids in gui.HEATMAP_SETS["Panel: Hemograma"]:
@@ -303,7 +357,7 @@ def render_technical_figures(con, pid) -> None:
         )
         rows.append((label, merged))
     heatmap_figure(rows, "Panel: Hemograma (paciente ficticio)").savefig(
-        OUT / "tecnica_mapa_calor.png", dpi=90, bbox_inches="tight"
+        OUT / "tecnica_mapa_calor.png", dpi=120, bbox_inches="tight"
     )
     summary = repository.get_latest_report_summary(con, pid)
     change_rows = [
@@ -319,7 +373,7 @@ def render_technical_figures(con, pid) -> None:
         for f in gui.AnalitixApp._classify_latest_report(summary)
     ]
     changes_figure(change_rows, "Qué ha cambiado (paciente ficticio)").savefig(
-        OUT / "tecnica_que_ha_cambiado.png", dpi=90, bbox_inches="tight"
+        OUT / "tecnica_que_ha_cambiado.png", dpi=120, bbox_inches="tight"
     )
     print("   tecnica_*.png")
 
