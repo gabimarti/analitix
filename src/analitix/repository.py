@@ -529,6 +529,48 @@ def list_patient_reports(con, patient_id: int) -> list[dict[str, Any]]:
     return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
+def get_report_meta(con, report_id: int) -> dict[str, Any] | None:
+    """Metadatos de un informe por su ID (fecha efectiva, lab, fichero, número)."""
+    cur = con.execute(
+        "SELECT rep.id, rep.patient_id, rep.source_file, rep.file_md5, rep.report_number, rep.lab, "
+        "rep.request_date, rep.validation_date, "
+        "COALESCE(MIN(r.sample_date), rep.request_date, rep.validation_date) AS fecha, "
+        "COUNT(r.id) AS num_results "
+        "FROM reports rep LEFT JOIN results r ON r.report_id = rep.id "
+        "WHERE rep.id = ? GROUP BY rep.id",
+        (report_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    cols = [d[0] for d in cur.description]
+    return dict(zip(cols, row))
+
+
+def get_report_results(con, report_id: int) -> list[dict[str, Any]]:
+    """Todos los resultados de un informe en su orden original de aparición (id ASC)."""
+    cur = con.execute(
+        "SELECT id, report_id, section, test_group, loinc_code, raw_name, canonical_id, "
+        "value_raw, value_num, unit, ref_low, ref_high, ref_text, flag_pdf, flag_calc, sample_date "
+        "FROM results WHERE report_id = ? ORDER BY id ASC",
+        (report_id,),
+    )
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def get_previous_report(con, patient_id: int, current_report_id: int) -> dict[str, Any] | None:
+    """Localiza el informe cronológicamente anterior del mismo paciente.
+    Usa la lista ordenada por fecha DESC y devuelve el inmediatamente siguiente al actual."""
+    reports = list_patient_reports(con, patient_id)
+    for idx, rep in enumerate(reports):
+        if rep["id"] == current_report_id:
+            if idx + 1 < len(reports):
+                return reports[idx + 1]
+            return None
+    return None
+
+
 def list_patients(con) -> list[dict[str, Any]]:
     # `num_reports` ayuda a detectar en la propia pestaña Pacientes un
     # paciente "fantasma"/duplicado: alguien con muy pocos informes junto a

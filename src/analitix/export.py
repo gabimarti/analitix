@@ -32,6 +32,7 @@ from analitix.charts import (
 )
 from analitix.config import LOGO_PATH
 from analitix.pdf_parser import NUMERIC_TOKEN_RE
+from analitix.report_detail import format_diff
 from analitix.updates import AUTHOR_URL, REPO_URL
 
 # Excel/LibreOffice interpretan una celda de texto como fórmula si empieza por
@@ -547,3 +548,232 @@ def export_pages_pdf(
             if on_progress:
                 on_progress(numero, total)
     return total
+
+
+def export_report_detail_csv(
+    comparison_rows: list[dict[str, Any]], path: Path, is_comparison: bool = True
+) -> None:
+    """Exporta los resultados del detalle de analítica o comparativa delta a un fichero CSV."""
+    filas = []
+    for r in comparison_rows:
+        if is_comparison:
+            filas.append(
+                {
+                    "Sección": r.get("section") or "",
+                    "Prueba / Parámetro": r.get("raw_name") or "",
+                    "Valor Anterior": r.get("prev_value_raw") or "",
+                    "Valor Actual": r.get("value_raw") or "",
+                    "Variación": format_diff(r.get("diff_num"), r.get("diff_pct")),
+                    "Tendencia": r.get("trend") or "",
+                    "Estado Actual": r.get("status") or "",
+                    "Alerta Rango": r.get("range_alert") or "",
+                    "Valores Referencia": r.get("ref_text") or "",
+                    "Unidades": r.get("unit") or "",
+                }
+            )
+        else:
+            filas.append(
+                {
+                    "Sección": r.get("section") or "",
+                    "Prueba / Parámetro": r.get("raw_name") or "",
+                    "Resultado": r.get("value_raw") or "",
+                    "Estado": r.get("status") or "",
+                    "Valores Referencia": r.get("ref_text") or "",
+                    "Unidades": r.get("unit") or "",
+                }
+            )
+    export_csv(filas, path)
+
+
+def export_report_detail_excel(
+    comparison_rows: list[dict[str, Any]],
+    path: Path,
+    is_comparison: bool = True,
+    sheet_name: str = "Detalle Analítica",
+) -> None:
+    """Exporta los resultados del detalle de analítica o comparativa delta a un libro Excel."""
+    filas = []
+    for r in comparison_rows:
+        if is_comparison:
+            filas.append(
+                {
+                    "Sección": r.get("section") or "",
+                    "Prueba / Parámetro": r.get("raw_name") or "",
+                    "Valor Anterior": r.get("prev_value_raw") or "",
+                    "Valor Actual": r.get("value_raw") or "",
+                    "Variación": format_diff(r.get("diff_num"), r.get("diff_pct")),
+                    "Tendencia": r.get("trend") or "",
+                    "Estado Actual": r.get("status") or "",
+                    "Alerta Rango": r.get("range_alert") or "",
+                    "Valores Referencia": r.get("ref_text") or "",
+                    "Unidades": r.get("unit") or "",
+                }
+            )
+        else:
+            filas.append(
+                {
+                    "Sección": r.get("section") or "",
+                    "Prueba / Parámetro": r.get("raw_name") or "",
+                    "Resultado": r.get("value_raw") or "",
+                    "Estado": r.get("status") or "",
+                    "Valores Referencia": r.get("ref_text") or "",
+                    "Unidades": r.get("unit") or "",
+                }
+            )
+    export_excel(filas, path, sheet_name=sheet_name)
+
+
+def _report_detail_table_page(
+    titulo: str, subtitulo: str, filas: list[dict[str, Any]], is_comparison: bool = True
+) -> Figure:
+    """Página A4 de tabla para el informe detallado cotejable o comparativa delta."""
+    fig = Figure(figsize=(8.27, 11.69), dpi=100)  # A4 vertical
+    fig.text(0.06, 0.95, titulo, fontsize=13, weight="bold")
+    fig.text(0.06, 0.925, subtitulo, fontsize=8.5, color="#555555")
+
+    ax = fig.add_axes((0.05, 0.08, 0.90, 0.82))
+    ax.axis("off")
+
+    if not filas:
+        ax.text(
+            0.5,
+            0.95,
+            "Sin parámetros en este informe.",
+            ha="center",
+            va="top",
+            fontsize=10,
+            transform=ax.transAxes,
+        )
+        return fig
+
+    if is_comparison:
+        columnas = [
+            "Sección",
+            "Parámetro",
+            "Ant.",
+            "Act.",
+            "Variación",
+            "Tend.",
+            "Estado",
+            "Referencia",
+        ]
+        col_widths = [0.18, 0.28, 0.08, 0.08, 0.14, 0.05, 0.09, 0.10]
+        filas_texto = []
+        for f in filas:
+            sec = f.get("section") or ""
+            if len(sec) > 22:
+                sec = sec[:21] + "…"
+            nom = f.get("raw_name") or ""
+            if len(nom) > 36:
+                nom = nom[:35] + "…"
+            filas_texto.append(
+                [
+                    sec,
+                    nom,
+                    str(f.get("prev_value_raw") or "—"),
+                    str(f.get("value_raw") or "—"),
+                    format_diff(f.get("diff_num"), f.get("diff_pct")),
+                    f.get("trend") or "",
+                    f.get("status") or "Normal",
+                    f.get("ref_text") or "—",
+                ]
+            )
+    else:
+        columnas = ["Sección", "Parámetro", "Resultado", "Estado", "Referencia", "Unidades"]
+        col_widths = [0.20, 0.35, 0.12, 0.10, 0.13, 0.10]
+        filas_texto = []
+        for f in filas:
+            sec = f.get("section") or ""
+            if len(sec) > 24:
+                sec = sec[:23] + "…"
+            nom = f.get("raw_name") or ""
+            if len(nom) > 42:
+                nom = nom[:41] + "…"
+            filas_texto.append(
+                [
+                    sec,
+                    nom,
+                    str(f.get("value_raw") or "—"),
+                    f.get("status") or "Normal",
+                    f.get("ref_text") or "—",
+                    f.get("unit") or "",
+                ]
+            )
+
+    tabla = ax.table(
+        cellText=filas_texto,
+        colLabels=columnas,
+        loc="upper center",
+        cellLoc="left",
+        colWidths=col_widths,
+    )
+    tabla.auto_set_font_size(False)
+    tabla.set_fontsize(7.5)
+    tabla.scale(1, 1.35)
+
+    col_idx_estado = 6 if is_comparison else 3
+    for row_idx, f in enumerate(filas, start=1):
+        st = f.get("status")
+        if st == "↑ Alto":
+            tabla[(row_idx, col_idx_estado)].get_text().set_color(COLOR_ALTO)
+            tabla[(row_idx, col_idx_estado)].get_text().set_weight("bold")
+        elif st == "↓ Bajo":
+            tabla[(row_idx, col_idx_estado)].get_text().set_color(COLOR_BAJO)
+            tabla[(row_idx, col_idx_estado)].get_text().set_weight("bold")
+        elif st == "⚠ Fuera de rango":
+            tabla[(row_idx, col_idx_estado)].get_text().set_color(COLOR_BRUSCO)
+            tabla[(row_idx, col_idx_estado)].get_text().set_weight("bold")
+
+    return fig
+
+
+def export_report_detail_pdf(
+    patient_name: str,
+    report_meta: dict[str, Any],
+    comparison_rows: list[dict[str, Any]],
+    path: Path,
+    prev_report_meta: dict[str, Any] | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> int:
+    """Exporta el detalle de la analítica como documento PDF A4 independiente."""
+    is_comparison = prev_report_meta is not None
+    tipo = (
+        "Detalle de analítica y comparativa delta"
+        if is_comparison
+        else "Detalle de analítica (cotejo con informe original)"
+    )
+    fecha = report_meta.get("fecha") or "—"
+    lab = report_meta.get("lab") or "—"
+    num_inf = report_meta.get("report_number") or "—"
+    subtitulo = f"Informe: {num_inf} · Laboratorio: {lab} · Fecha: {fecha[:10]}"
+    if is_comparison:
+        fecha_prev = prev_report_meta.get("fecha") or "—"
+        num_prev = prev_report_meta.get("report_number") or "—"
+        subtitulo += f"\nComparado con analítica anterior: {num_prev} ({fecha_prev[:10]}, {prev_report_meta.get('lab') or '—'})"
+
+    filas_por_pagina = 26
+    chunks = [
+        comparison_rows[i : i + filas_por_pagina]
+        for i in range(0, max(len(comparison_rows), 1), filas_por_pagina)
+    ]
+    total_paginas = 1 + len(chunks)
+
+    with PdfPages(path) as pdf:
+        portada = _cover_page(patient_name, tipo, fecha)
+        _add_footer(portada, tipo, 1, total_paginas)
+        pdf.savefig(portada)
+        if on_progress:
+            on_progress(1, total_paginas)
+
+        for i, chunk in enumerate(chunks, start=1):
+            num_pag = 1 + i
+            pag_subtitulo = (
+                f"{subtitulo} (parte {i} de {len(chunks)})" if len(chunks) > 1 else subtitulo
+            )
+            fig = _report_detail_table_page(tipo, pag_subtitulo, chunk, is_comparison)
+            _add_footer(fig, tipo, num_pag, total_paginas)
+            pdf.savefig(fig)
+            if on_progress:
+                on_progress(num_pag, total_paginas)
+
+    return total_paginas

@@ -22,6 +22,7 @@ import tkinter as tk
 import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog
+from typing import Any
 
 import mplcursors
 import ttkbootstrap as ttk
@@ -96,6 +97,9 @@ from analitix.export import (
     export_excel,
     export_pages_pdf,
     export_pdf,
+    export_report_detail_csv,
+    export_report_detail_excel,
+    export_report_detail_pdf,
     table_page,
     text_page,
 )
@@ -140,6 +144,12 @@ from analitix.renal_risk import (
     get_latest_renal_summary,
     get_renal_index_series,
 )
+from analitix.report_detail import (
+    build_comparison_summary,
+    format_diff as _format_diff_detail,
+    group_results_by_section,
+    match_and_compare_results,
+)
 from analitix.repository import (
     EXPLORABLE_TABLES,
     SEX_OPTIONS,
@@ -157,6 +167,9 @@ from analitix.repository import (
     get_latest_report_summary,
     get_merged_series,
     get_patient_sex,
+    get_previous_report,
+    get_report_meta,
+    get_report_results,
     get_series,
     get_setting,
     get_stats,
@@ -3423,6 +3436,389 @@ class AnalitixApp(ttk.Window):
         self.tree_resumen.configure(yscrollcommand=vsb.set)
         self.tree_resumen.pack(side="left", fill="both", expand=True)
         vsb.pack(side="left", fill="y")
+
+        # Fila de botones bajo el notebook: cotejo y comparativa delta
+        barra_resumen = ttk.Frame(frame)
+        barra_resumen.pack(fill="x", padx=PAD, pady=(0, PAD))
+        ttk.Button(
+            barra_resumen,
+            text="🔍 Ver detalle cotejable / Comparativa delta...",
+            bootstyle="info-outline",
+            command=self._show_report_detail,
+        ).pack(side="left")
+
+    def _show_report_detail(self) -> None:
+        """Diálogo de detalle cotejable y comparativa delta de informes.
+
+        Muestra todos los resultados del informe seleccionado del paciente
+        activo, agrupados por sección y en su orden original de aparición en el
+        PDF, para cotejar visualmente con el documento. Si existe un informe
+        cronológicamente anterior, añade las columnas de variación (Δ absoluta,
+        Δ%, flecha de tendencia y alerta de cambio de rango).
+
+        Permite seleccionar interactivamente cualquier informe del historial del
+        paciente mediante un selector desplegable.
+
+        Desde el diálogo se puede exportar el detalle a PDF, Excel o CSV de
+        forma independiente (sin mezclar con el histórico global).
+        """
+        if self.current_patient_id is None:
+            messagebox.showwarning(
+                "Sin paciente",
+                "No hay ningún paciente activo: importa antes algún informe.",
+                parent=self,
+            )
+            return
+
+        # Informes del paciente con resultados
+        all_reports = [
+            r
+            for r in list_patient_reports(self.con, self.current_patient_id)
+            if (r.get("num_results") or 0) > 0
+        ]
+        if not all_reports:
+            messagebox.showinfo(
+                "Sin datos",
+                "No hay informes con resultados para mostrar.",
+                parent=self,
+            )
+            return
+
+        # Nombre del paciente activo
+        patient = next((p for p in self.patients if p["id"] == self.current_patient_id), None)
+        patient_name = patient["full_name"] if patient else "—"
+
+        # ── Diálogo ────────────────────────────────────────────────────────
+        dialog, outer = self._new_dialog(
+            "Detalle cotejable / Comparativa delta",
+            resizable=True,
+        )
+        dialog.minsize(920, 600)
+
+        # ── Selector de informe ────────────────────────────────────────────
+        sel_bar = ttk.Frame(outer)
+        sel_bar.pack(fill="x", pady=(0, 6))
+
+        ttk.Label(sel_bar, text="Informe a cotejar:", font=("Segoe UI", 9, "bold")).pack(
+            side="left", padx=(0, 6)
+        )
+
+        def _format_combo_label(rep: dict, idx: int) -> str:
+            f = (rep.get("fecha") or "—")[:10]
+            num = rep.get("report_number") or "S/N"
+            lab = rep.get("lab") or "—"
+            n = rep.get("num_results", 0)
+            tag = " (Más reciente)" if idx == 0 else ""
+            return f"{f}  ·  {num}  ·  {lab}  ({n} pruebas){tag}"
+
+        combo_values = [_format_combo_label(r, i) for i, r in enumerate(all_reports)]
+        combo = ttk.Combobox(
+            sel_bar,
+            state="readonly",
+            width=54,
+            values=combo_values,
+        )
+        combo.current(0)
+        combo.pack(side="left")
+
+        # Toggle para alternar entre "Comparativa delta" y "Solo cotejo individual"
+        var_comparativa_delta = tk.BooleanVar(value=True)
+
+        def _on_toggle_delta() -> None:
+            idx = combo.current()
+            if 0 <= idx < len(all_reports):
+                _cargar_informe(idx)
+
+        chk_delta = ttk.Checkbutton(
+            sel_bar,
+            text="Comparativa delta con informe anterior",
+            variable=var_comparativa_delta,
+            bootstyle="round-toggle",
+            command=_on_toggle_delta,
+        )
+        chk_delta.pack(side="left", padx=(16, 0))
+
+        # ── Cabecera con metadatos ─────────────────────────────────────────
+        cab = ttk.Frame(outer)
+        cab.pack(fill="x", pady=(0, 4))
+        lbl_linea1 = ttk.Label(cab, text="", font=("Segoe UI", 10, "bold"))
+        lbl_linea1.pack(anchor="w")
+        lbl_linea2 = ttk.Label(cab, text="", bootstyle="secondary")
+        lbl_linea2.pack(anchor="w")
+
+        # ── Resumen estadístico ────────────────────────────────────────────
+        res_frame = ttk.Labelframe(outer, text="Resumen", padding=4)
+        res_frame.pack(fill="x", pady=(0, 6))
+        res_content = ttk.Frame(res_frame)
+        res_content.pack(fill="x")
+
+        # ── Treeview ───────────────────────────────────────────────────────
+        tree_frame = ttk.Frame(outer)
+        tree_frame.pack(fill="both", expand=True)
+
+        tree = ttk.Treeview(tree_frame, show="headings", height=18)
+        tree.tag_configure("alto", foreground=COLOR_ALTO)
+        tree.tag_configure("bajo", foreground=COLOR_BAJO)
+        tree.tag_configure("fuera", foreground=COLOR_BRUSCO)
+        tree.tag_configure("seccion_hdr", font=("Segoe UI", 9, "bold"), background="#e8e8e8")
+
+        vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        hsb = ttk.Scrollbar(tree_frame, orient="horizontal", command=tree.xview)
+        tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+
+        # Estado mutable para exportación
+        state: dict[str, Any] = {
+            "report_id": None,
+            "meta": None,
+            "prev_meta": None,
+            "rows": [],
+            "is_comparison": False,
+        }
+
+        def _cargar_informe(idx: int) -> None:
+            rep_item = all_reports[idx]
+            report_id = rep_item["id"]
+
+            meta = get_report_meta(self.con, report_id)
+            prev_rep = get_previous_report(self.con, self.current_patient_id, report_id)
+
+            if prev_rep is None:
+                chk_delta.configure(state="disabled")
+                is_comparison = False
+                prev_meta = None
+                prev_results = None
+            else:
+                chk_delta.configure(state="normal")
+                is_comparison = bool(var_comparativa_delta.get())
+                prev_meta = get_report_meta(self.con, prev_rep["id"]) if is_comparison else None
+                prev_results = (
+                    get_report_results(self.con, prev_rep["id"]) if is_comparison else None
+                )
+
+            curr_results = get_report_results(self.con, report_id)
+            rows = match_and_compare_results(curr_results, prev_results)
+            sections = group_results_by_section(rows)
+            summary = build_comparison_summary(rows)
+
+            state["report_id"] = report_id
+            state["meta"] = meta
+            state["prev_meta"] = prev_meta
+            state["rows"] = rows
+            state["is_comparison"] = is_comparison
+
+            # 1. Cabecera
+            fecha_act = (meta.get("fecha") or "—")[:10] if meta else "—"
+            lab_act = (meta.get("lab") or "—") if meta else "—"
+            num_act = (meta.get("report_number") or "—") if meta else "—"
+            lbl_linea1.configure(
+                text=f"Informe: {num_act}  ·  Laboratorio: {lab_act}  ·  Fecha: {fecha_act}"
+            )
+            if is_comparison and prev_meta:
+                fecha_prev = (prev_meta.get("fecha") or "—")[:10]
+                num_prev = prev_meta.get("report_number") or "—"
+                lab_prev = prev_meta.get("lab") or "—"
+                lbl_linea2.configure(
+                    text=f"Comparado con informe anterior: {num_prev}  ·  {lab_prev}  ·  {fecha_prev}",
+                    bootstyle="secondary",
+                )
+            elif prev_rep is not None:
+                lbl_linea2.configure(
+                    text="Modo cotejo individual activado (comparativa delta desactivada).",
+                    bootstyle="secondary",
+                )
+            else:
+                lbl_linea2.configure(
+                    text="Primer informe cronológico registrado: sin analítica previa para comparativa delta.",
+                    bootstyle="secondary",
+                )
+
+            # 2. Resumen estadístico
+            for child in res_content.winfo_children():
+                child.destroy()
+            campos_res = [
+                ("Total parámetros", summary["total"]),
+                ("Fuera de rango", summary["fuera_rango"]),
+            ]
+            if is_comparison:
+                campos_res += [
+                    ("🟢 Normalizados", summary["normalizados"]),
+                    ("Nuevos fuera de rango", summary["nuevos_fuera"]),
+                    ("↑ Al alza", summary["al_alza"]),
+                    ("↓ A la baja", summary["a_la_baja"]),
+                    ("≈ Estables", summary["estables"]),
+                ]
+            for col, (etiq, val) in enumerate(campos_res):
+                ttk.Label(res_content, text=etiq, bootstyle="secondary").grid(
+                    row=0, column=col * 2, sticky="e", padx=(8 if col else 0, 2)
+                )
+                ttk.Label(res_content, text=str(val), font=("Segoe UI", 10, "bold")).grid(
+                    row=0, column=col * 2 + 1, sticky="w", padx=(0, 8)
+                )
+
+            # 3. Columnas del Treeview
+            if is_comparison:
+                cols = (
+                    "seccion",
+                    "parametro",
+                    "valor_ant",
+                    "valor_act",
+                    "variacion",
+                    "tendencia",
+                    "estado",
+                    "alerta",
+                    "referencia",
+                    "unidades",
+                )
+                headings = [
+                    ("seccion", "Sección", 130, "w"),
+                    ("parametro", "Parámetro", 200, "w"),
+                    ("valor_ant", "Anterior", 80, "center"),
+                    ("valor_act", "Actual", 80, "center"),
+                    ("variacion", "Variación", 110, "center"),
+                    ("tendencia", "Tend.", 45, "center"),
+                    ("estado", "Estado", 90, "center"),
+                    ("alerta", "Alerta rango", 145, "w"),
+                    ("referencia", "Referencia", 110, "w"),
+                    ("unidades", "Unidades", 70, "w"),
+                ]
+            else:
+                cols = ("seccion", "parametro", "resultado", "estado", "referencia", "unidades")
+                headings = [
+                    ("seccion", "Sección", 140, "w"),
+                    ("parametro", "Parámetro", 260, "w"),
+                    ("resultado", "Resultado", 100, "center"),
+                    ("estado", "Estado", 100, "center"),
+                    ("referencia", "Referencia", 130, "w"),
+                    ("unidades", "Unidades", 80, "w"),
+                ]
+
+            tree.configure(columns=cols)
+            for col_id, titulo, ancho, anclaje in headings:
+                tree.heading(col_id, text=titulo)
+                tree.column(col_id, width=ancho, anchor=anclaje, minwidth=30)
+
+            # 4. Rellenar filas
+            tree.delete(*tree.get_children())
+            for sec_name, sec_rows in sections.items():
+                tree.insert(
+                    "",
+                    "end",
+                    values=((sec_name,) + ("",) * (len(cols) - 1)),
+                    tags=("seccion_hdr",),
+                    open=True,
+                )
+                for r in sec_rows:
+                    st = r.get("status", "")
+                    if "Alto" in st:
+                        tag = "alto"
+                    elif "Bajo" in st:
+                        tag = "bajo"
+                    elif "Fuera" in st:
+                        tag = "fuera"
+                    else:
+                        tag = ""
+                    if is_comparison:
+                        valores = (
+                            "",
+                            r.get("raw_name") or "",
+                            r.get("prev_value_raw") or "—",
+                            r.get("value_raw") or "—",
+                            _format_diff_detail(r.get("diff_num"), r.get("diff_pct")),
+                            r.get("trend") or "",
+                            st,
+                            r.get("range_alert") or "",
+                            r.get("ref_text") or "—",
+                            r.get("unit") or "",
+                        )
+                    else:
+                        valores = (
+                            "",
+                            r.get("raw_name") or "",
+                            r.get("value_raw") or "—",
+                            st,
+                            r.get("ref_text") or "—",
+                            r.get("unit") or "",
+                        )
+                    tree.insert("", "end", values=valores, tags=(tag,) if tag else ())
+
+        def _on_combo_select(_event: Any = None) -> None:
+            idx = combo.current()
+            if 0 <= idx < len(all_reports):
+                _cargar_informe(idx)
+
+        combo.bind("<<ComboboxSelected>>", _on_combo_select)
+
+        # Cargar informe más reciente por defecto
+        _cargar_informe(0)
+
+        # ── Barra de exportación ───────────────────────────────────────────
+        bar = ttk.Frame(outer)
+        bar.pack(fill="x", pady=(PAD, 0))
+        ttk.Label(bar, text="Exportar detalle:", bootstyle="secondary").pack(side="left")
+
+        def _exportar(fmt: str) -> None:
+            ext_map = {
+                "pdf": (".pdf", "*.pdf"),
+                "excel": (".xlsx", "*.xlsx"),
+                "csv": (".csv", "*.csv"),
+            }
+            ext, ft = ext_map[fmt]
+            path = filedialog.asksaveasfilename(
+                defaultextension=ext, filetypes=[(ext, ft)], parent=dialog
+            )
+            if not path:
+                return
+            path_obj = Path(path)
+            try:
+                if fmt == "pdf":
+                    with self._progress("Generando PDF de detalle", dialog) as paso:
+                        total_pags = export_report_detail_pdf(
+                            patient_name,
+                            state["meta"] or {},
+                            state["rows"],
+                            path_obj,
+                            prev_report_meta=state["prev_meta"],
+                            on_progress=lambda n, t: paso(f"Página {n} de {t}…", n, t),
+                        )
+                    messagebox.showinfo(
+                        "Exportado",
+                        f"PDF de detalle generado ({total_pags} pág.) en:\n{path}",
+                        parent=dialog,
+                    )
+                elif fmt == "excel":
+                    export_report_detail_excel(
+                        state["rows"], path_obj, is_comparison=state["is_comparison"]
+                    )
+                    messagebox.showinfo("Exportado", f"Excel exportado en:\n{path}", parent=dialog)
+                else:
+                    export_report_detail_csv(
+                        state["rows"], path_obj, is_comparison=state["is_comparison"]
+                    )
+                    messagebox.showinfo("Exportado", f"CSV exportado en:\n{path}", parent=dialog)
+            except Exception as exc:  # noqa: BLE001
+                messagebox.showerror("Error al exportar", str(exc), parent=dialog)
+
+        btn_pdf = ttk.Button(
+            bar, text="📄 PDF", bootstyle="primary-outline", command=lambda: _exportar("pdf")
+        )
+        btn_xls = ttk.Button(
+            bar, text="📊 Excel", bootstyle="success-outline", command=lambda: _exportar("excel")
+        )
+        btn_csv = ttk.Button(
+            bar, text="📋 CSV", bootstyle="secondary-outline", command=lambda: _exportar("csv")
+        )
+        btn_cerrar = ttk.Button(bar, text="Cerrar", command=dialog.destroy)
+        btn_pdf.pack(side="left", padx=(8, 2))
+        btn_xls.pack(side="left", padx=2)
+        btn_csv.pack(side="left", padx=2)
+        btn_cerrar.pack(side="right")
+
+        self._center_dialog(dialog)
 
     @staticmethod
     def _enrich_with_variation(r: dict) -> dict:
