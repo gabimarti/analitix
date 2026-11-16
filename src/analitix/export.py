@@ -648,7 +648,6 @@ def _report_detail_table_page(
 
     if is_comparison:
         columnas = [
-            "Sección",
             "Parámetro",
             "Ant.",
             "Act.",
@@ -656,47 +655,57 @@ def _report_detail_table_page(
             "Tend.",
             "Estado",
             "Referencia",
+            "Unidades",
         ]
-        col_widths = [0.18, 0.28, 0.08, 0.08, 0.14, 0.05, 0.09, 0.10]
-        filas_texto = []
-        for f in filas:
-            sec = f.get("section") or ""
-            if len(sec) > 22:
-                sec = sec[:21] + "…"
+        col_widths = [0.30, 0.08, 0.08, 0.15, 0.04, 0.11, 0.11, 0.13]
+        col_idx_var = 3
+        col_idx_estado = 5
+    else:
+        columnas = ["Parámetro", "Resultado", "Estado", "Referencia", "Unidades"]
+        col_widths = [0.43, 0.13, 0.14, 0.16, 0.14]
+        col_idx_var = None
+        col_idx_estado = 2
+
+    filas_texto = []
+    section_rows = set()
+    for row_i, f in enumerate(filas):
+        if f.get("is_section_header"):
+            section_rows.add(row_i + 1)
+            sec_title = str(f.get("section") or "").upper()
+            filas_texto.append([sec_title] + [""] * (len(columnas) - 1))
+        elif is_comparison:
             nom = f.get("raw_name") or ""
-            if len(nom) > 36:
-                nom = nom[:35] + "…"
+            if len(nom) > 40:
+                nom = nom[:39] + "…"
+            u = f.get("unit") or "—"
+            if len(u) > 16:
+                u = u[:15] + "…"
             filas_texto.append(
                 [
-                    sec,
                     nom,
                     str(f.get("prev_value_raw") or "—"),
                     str(f.get("value_raw") or "—"),
                     format_diff(f.get("diff_num"), f.get("diff_pct")),
-                    f.get("trend") or "",
+                    f.get("trend") or "—",
                     f.get("status") or "Normal",
                     f.get("ref_text") or "—",
+                    u,
                 ]
             )
-    else:
-        columnas = ["Sección", "Parámetro", "Resultado", "Estado", "Referencia", "Unidades"]
-        col_widths = [0.20, 0.35, 0.12, 0.10, 0.13, 0.10]
-        filas_texto = []
-        for f in filas:
-            sec = f.get("section") or ""
-            if len(sec) > 24:
-                sec = sec[:23] + "…"
+        else:
             nom = f.get("raw_name") or ""
-            if len(nom) > 42:
-                nom = nom[:41] + "…"
+            if len(nom) > 50:
+                nom = nom[:49] + "…"
+            u = f.get("unit") or "—"
+            if len(u) > 18:
+                u = u[:17] + "…"
             filas_texto.append(
                 [
-                    sec,
                     nom,
                     str(f.get("value_raw") or "—"),
                     f.get("status") or "Normal",
                     f.get("ref_text") or "—",
-                    f.get("unit") or "",
+                    u,
                 ]
             )
 
@@ -711,18 +720,57 @@ def _report_detail_table_page(
     tabla.set_fontsize(7.5)
     tabla.scale(1, 1.35)
 
-    col_idx_estado = 6 if is_comparison else 3
+    # Estilizar encabezados de columna
+    for col_idx in range(len(columnas)):
+        cell = tabla[(0, col_idx)]
+        cell.set_facecolor("#f3f4f6")
+        cell.set_edgecolor("#9ca3af")
+        cell.get_text().set_weight("bold")
+        cell.get_text().set_color("#111827")
+
     for row_idx, f in enumerate(filas, start=1):
+        if row_idx in section_rows:
+            for col_idx in range(len(columnas)):
+                cell = tabla[(row_idx, col_idx)]
+                cell.set_facecolor("#e5e7eb")
+                cell.set_edgecolor("#9ca3af")
+                cell.get_text().set_weight("bold")
+                cell.get_text().set_fontsize(8.0)
+                cell.get_text().set_color("#1f2937")
+            continue
+
+        # Estilo de columna Estado
         st = f.get("status")
+        estado_cell = tabla[(row_idx, col_idx_estado)]
         if st == "↑ Alto":
-            tabla[(row_idx, col_idx_estado)].get_text().set_color(COLOR_ALTO)
-            tabla[(row_idx, col_idx_estado)].get_text().set_weight("bold")
+            estado_cell.get_text().set_color(COLOR_ALTO)
+            estado_cell.get_text().set_weight("bold")
         elif st == "↓ Bajo":
-            tabla[(row_idx, col_idx_estado)].get_text().set_color(COLOR_BAJO)
-            tabla[(row_idx, col_idx_estado)].get_text().set_weight("bold")
+            estado_cell.get_text().set_color(COLOR_BAJO)
+            estado_cell.get_text().set_weight("bold")
         elif st == "⚠ Fuera de rango":
-            tabla[(row_idx, col_idx_estado)].get_text().set_color(COLOR_BRUSCO)
-            tabla[(row_idx, col_idx_estado)].get_text().set_weight("bold")
+            estado_cell.get_text().set_color(COLOR_BRUSCO)
+            estado_cell.get_text().set_weight("bold")
+        else:
+            estado_cell.get_text().set_color("#2e7d32")
+
+        # Estilo de columna Variación con marcadores de color
+        if is_comparison and col_idx_var is not None:
+            diff_pct = f.get("diff_pct")
+            var_cell = tabla[(row_idx, col_idx_var)]
+            if diff_pct is not None:
+                pct_abs = abs(diff_pct)
+                if pct_abs >= 25.0:
+                    var_cell.get_text().set_color(COLOR_ALTO)
+                    var_cell.get_text().set_weight("bold")
+                    var_cell.set_facecolor("#fef2f2")
+                elif pct_abs >= 10.0:
+                    var_cell.get_text().set_color("#b45309")
+                    var_cell.get_text().set_weight("bold")
+                    var_cell.set_facecolor("#fffbeb")
+                else:
+                    var_cell.get_text().set_color("#2e7d32")
+                    var_cell.set_facecolor("#f0fdf4")
 
     return fig
 
@@ -751,10 +799,20 @@ def export_report_detail_pdf(
         num_prev = prev_report_meta.get("report_number") or "—"
         subtitulo += f"\nComparado con analítica anterior: {num_prev} ({fecha_prev[:10]}, {prev_report_meta.get('lab') or '—'})"
 
+    # Intercalar filas de cabecera de sección para que no ocupen una columna dedicada
+    filas_con_seccion: list[dict[str, Any]] = []
+    sec_actual = None
+    for r in comparison_rows:
+        sec = r.get("section") or "General"
+        if sec != sec_actual:
+            sec_actual = sec
+            filas_con_seccion.append({"is_section_header": True, "section": sec})
+        filas_con_seccion.append(r)
+
     filas_por_pagina = 26
     chunks = [
-        comparison_rows[i : i + filas_por_pagina]
-        for i in range(0, max(len(comparison_rows), 1), filas_por_pagina)
+        filas_con_seccion[i : i + filas_por_pagina]
+        for i in range(0, max(len(filas_con_seccion), 1), filas_por_pagina)
     ]
     total_paginas = 1 + len(chunks)
 

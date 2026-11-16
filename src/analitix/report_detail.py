@@ -44,6 +44,52 @@ def normalize_name_key(name: str | None) -> str:
     return " ".join(norm.strip().lower().split())
 
 
+NON_ANALYTICAL_PATTERNS = (
+    "no és procedent",
+    "no es procedent",
+    "no procedent",
+    "no procede",
+    "no realitzat",
+    "no realitzada",
+    "no realizado",
+    "no realizada",
+    "anul·lat",
+    "anul.lat",
+    "anulado",
+    "anulada",
+    "dnr",
+    "dnt",
+)
+
+COMMENT_NAME_PATTERNS = (
+    "comentari",
+    "comentario",
+    "observaci",
+    "interpretaci",
+    "conclusi",
+)
+
+
+def is_comment_or_note(name: str | None, value_num: float | None = None) -> bool:
+    """True si el parámetro corresponde a un comentario, nota u observación no cuantitativa."""
+    if not name:
+        return False
+    norm = normalize_name_key(name)
+    if any(p in norm for p in COMMENT_NAME_PATTERNS):
+        return value_num is None
+    return False
+
+
+def is_non_analytical_value(val: Any) -> bool:
+    """True si el valor indica explícitamente que la prueba no se realizó o no procede."""
+    if val is None:
+        return True
+    s = str(val).strip().lower()
+    if not s or s in ("—", "-", "nan"):
+        return True
+    return any(p in s for p in NON_ANALYTICAL_PATTERNS)
+
+
 def format_status(flag_calc: str | None, flag_pdf: str | None) -> str:
     """Etiqueta textual legible para el estado de rango de un parámetro."""
     flag = (flag_calc or "").strip().lower()
@@ -52,9 +98,23 @@ def format_status(flag_calc: str | None, flag_pdf: str | None) -> str:
         return "↑ Alto"
     if flag == "bajo" or pdf in ("L", "<", "LOW", "BAIX"):
         return "↓ Bajo"
-    if flag or pdf:
+    if flag in ("alto", "bajo") or (
+        pdf and pdf not in ("NORMAL", "OK", "NEG", "NEGATIVO", "NEGATIU", "")
+    ):
         return "⚠ Fuera de rango"
     return "Normal"
+
+
+def diff_level(diff_pct: float | None) -> str:
+    """Nivel de variación porcentual: 'high' (>=25%), 'moderate' (10-25%), 'low' (<10%), 'none'."""
+    if diff_pct is None:
+        return "none"
+    pct = abs(diff_pct)
+    if pct >= 25.0:
+        return "high"
+    if pct >= 10.0:
+        return "moderate"
+    return "low"
 
 
 def format_diff(diff_num: float | None, diff_pct: float | None) -> str:
@@ -127,6 +187,22 @@ def match_and_compare_results(
         # Extracción de valores actuales
         curr_val_raw = curr.get("value_raw") or ""
         curr_val_num = curr.get("value_num")
+
+        # Omitir comentarios, notas u observaciones de texto que no son parámetros analíticos
+        if is_comment_or_note(curr.get("raw_name"), curr_val_num):
+            continue
+
+        # Comprobar si el resultado no es analítico en el informe actual y en el anterior
+        curr_is_empty = is_non_analytical_value(curr_val_raw) and curr_val_num is None
+        prev_is_empty = prev_match is None or (
+            is_non_analytical_value(prev_match.get("value_raw"))
+            and prev_match.get("value_num") is None
+        )
+
+        # Si ni el informe actual ni el anterior tienen un valor analítico real, omitir el parámetro
+        if curr_is_empty and prev_is_empty:
+            continue
+
         curr_flag_calc = curr.get("flag_calc")
         curr_flag_pdf = curr.get("flag_pdf")
         curr_status = format_status(curr_flag_calc, curr_flag_pdf)
@@ -164,6 +240,7 @@ def match_and_compare_results(
             else "",
             "diff_num": None,
             "diff_pct": None,
+            "diff_level": "none",
             "trend": "",
             "range_alert": ALERT_NORMAL,
         }
@@ -175,7 +252,9 @@ def match_and_compare_results(
                 d_num = round(curr_val_num - prev_num, 4)
                 row["diff_num"] = d_num
                 if prev_num != 0:
-                    row["diff_pct"] = round((d_num / abs(prev_num)) * 100, 1)
+                    pct = round((d_num / abs(prev_num)) * 100, 1)
+                    row["diff_pct"] = pct
+                    row["diff_level"] = diff_level(pct)
 
                 if d_num > 0.00001:
                     row["trend"] = ARROW_UP
@@ -231,7 +310,9 @@ def group_results_by_section(results: list[dict[str, Any]]) -> dict[str, list[di
 def build_comparison_summary(comparison_rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Genera un resumen estadístico de la analítica y sus variaciones."""
     total = len(comparison_rows)
-    fuera_rango = sum(1 for r in comparison_rows if r.get("status") != "Normal")
+    fuera_rango = sum(
+        1 for r in comparison_rows if r.get("status") in ("↑ Alto", "↓ Bajo", "⚠ Fuera de rango")
+    )
     normalizados = sum(1 for r in comparison_rows if r.get("range_alert") == ALERT_NORMALIZED)
     nuevos_fuera = sum(
         1

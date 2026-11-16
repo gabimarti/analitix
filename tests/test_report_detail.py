@@ -29,10 +29,87 @@ def test_normalize_name_key():
 def test_format_status():
     assert report_detail.format_status("alto", None) == "↑ Alto"
     assert report_detail.format_status("bajo", None) == "↓ Bajo"
+    assert report_detail.format_status("normal", None) == "Normal"
     assert report_detail.format_status(None, "*") == "↑ Alto"
     assert report_detail.format_status(None, "L") == "↓ Bajo"
     assert report_detail.format_status(None, "ANORMAL") == "⚠ Fuera de rango"
     assert report_detail.format_status(None, None) == "Normal"
+
+
+def test_diff_level():
+    assert report_detail.diff_level(50.0) == "high"
+    assert report_detail.diff_level(-25.0) == "high"
+    assert report_detail.diff_level(15.0) == "moderate"
+    assert report_detail.diff_level(-10.0) == "moderate"
+    assert report_detail.diff_level(5.0) == "low"
+    assert report_detail.diff_level(0.0) == "low"
+    assert report_detail.diff_level(None) == "none"
+
+
+def test_filter_non_analytical_values():
+    curr = [
+        {
+            "id": 1,
+            "raw_name": "Bilirubina directa",
+            "value_raw": "No és procedent",
+            "value_num": None,
+        },
+        {"id": 2, "raw_name": "Glucosa", "value_raw": "90", "value_num": 90.0},
+        {"id": 3, "raw_name": "Prueba nueva", "value_raw": "5.5", "value_num": 5.5},
+        {"id": 4, "raw_name": "Prueba cancelada", "value_raw": "No procede", "value_num": None},
+    ]
+    prev = [
+        {
+            "id": 10,
+            "raw_name": "Bilirubina directa",
+            "value_raw": "No és procedent",
+            "value_num": None,
+        },
+        {"id": 11, "raw_name": "Glucosa", "value_raw": "95", "value_num": 95.0},
+        {"id": 12, "raw_name": "Prueba cancelada", "value_raw": "10.0", "value_num": 10.0},
+    ]
+    rows = report_detail.match_and_compare_results(curr, prev)
+    # Bilirubina directa debe ser omitida porque es 'No és procedent' en ambos
+    # Prueba cancelada debe mantenerse porque en prev sí tenía valor real (10.0)
+    # Glucosa y Prueba nueva deben mantenerse
+    names = [r["raw_name"] for r in rows]
+    assert "Bilirubina directa" not in names
+    assert "Glucosa" in names
+    assert "Prueba nueva" in names
+    assert "Prueba cancelada" in names
+    assert len(rows) == 3
+
+
+def test_filter_comments_and_notes():
+    assert report_detail.is_comment_or_note("Comentari proteïnograma", None) is True
+    assert report_detail.is_comment_or_note("Comentario clínico", None) is True
+    assert report_detail.is_comment_or_note("Observacions", None) is True
+    assert report_detail.is_comment_or_note("Glucosa", 90.0) is False
+    assert report_detail.is_comment_or_note("Hemoglobina", None) is False
+
+    curr = [
+        {
+            "id": 1,
+            "raw_name": "Comentari proteïnograma",
+            "value_raw": "Desplaçament de banda",
+            "value_num": None,
+        },
+        {"id": 2, "raw_name": "Glucosa", "value_raw": "90", "value_num": 90.0},
+    ]
+    prev = [
+        {
+            "id": 10,
+            "raw_name": "Comentari proteïnograma",
+            "value_raw": "Desplaçament de banda",
+            "value_num": None,
+        },
+        {"id": 11, "raw_name": "Glucosa", "value_raw": "95", "value_num": 95.0},
+    ]
+    rows = report_detail.match_and_compare_results(curr, prev)
+    names = [r["raw_name"] for r in rows]
+    assert "Comentari proteïnograma" not in names
+    assert "Glucosa" in names
+    assert len(rows) == 1
 
 
 def test_format_diff():

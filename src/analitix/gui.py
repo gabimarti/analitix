@@ -3494,7 +3494,8 @@ class AnalitixApp(ttk.Window):
             "Detalle cotejable / Comparativa delta",
             resizable=True,
         )
-        dialog.minsize(920, 600)
+        dialog.geometry("1060x650")
+        dialog.minsize(860, 480)
 
         # ── Selector de informe ────────────────────────────────────────────
         sel_bar = ttk.Frame(outer)
@@ -3664,7 +3665,6 @@ class AnalitixApp(ttk.Window):
             # 3. Columnas del Treeview
             if is_comparison:
                 cols = (
-                    "seccion",
                     "parametro",
                     "valor_ant",
                     "valor_act",
@@ -3676,32 +3676,30 @@ class AnalitixApp(ttk.Window):
                     "unidades",
                 )
                 headings = [
-                    ("seccion", "Sección", 130, "w"),
-                    ("parametro", "Parámetro", 200, "w"),
-                    ("valor_ant", "Anterior", 80, "center"),
-                    ("valor_act", "Actual", 80, "center"),
-                    ("variacion", "Variación", 110, "center"),
-                    ("tendencia", "Tend.", 45, "center"),
-                    ("estado", "Estado", 90, "center"),
-                    ("alerta", "Alerta rango", 145, "w"),
-                    ("referencia", "Referencia", 110, "w"),
-                    ("unidades", "Unidades", 70, "w"),
+                    ("parametro", "Parámetro", 240, "w", True),
+                    ("valor_ant", "Anterior", 85, "center", False),
+                    ("valor_act", "Actual", 85, "center", False),
+                    ("variacion", "Variación", 120, "center", False),
+                    ("tendencia", "Tend.", 50, "center", False),
+                    ("estado", "Estado", 115, "center", False),
+                    ("alerta", "Alerta rango", 145, "w", False),
+                    ("referencia", "Referencia", 120, "w", False),
+                    ("unidades", "Unidades", 95, "w", False),
                 ]
             else:
-                cols = ("seccion", "parametro", "resultado", "estado", "referencia", "unidades")
+                cols = ("parametro", "resultado", "estado", "referencia", "unidades")
                 headings = [
-                    ("seccion", "Sección", 140, "w"),
-                    ("parametro", "Parámetro", 260, "w"),
-                    ("resultado", "Resultado", 100, "center"),
-                    ("estado", "Estado", 100, "center"),
-                    ("referencia", "Referencia", 130, "w"),
-                    ("unidades", "Unidades", 80, "w"),
+                    ("parametro", "Parámetro", 360, "w", True),
+                    ("resultado", "Resultado", 110, "center", False),
+                    ("estado", "Estado", 110, "center", False),
+                    ("referencia", "Referencia", 140, "w", False),
+                    ("unidades", "Unidades", 100, "w", False),
                 ]
 
             tree.configure(columns=cols)
-            for col_id, titulo, ancho, anclaje in headings:
+            for col_id, titulo, ancho, anclaje, stretch in headings:
                 tree.heading(col_id, text=titulo)
-                tree.column(col_id, width=ancho, anchor=anclaje, minwidth=30)
+                tree.column(col_id, width=ancho, anchor=anclaje, stretch=stretch, minwidth=30)
 
             # 4. Rellenar filas
             tree.delete(*tree.get_children())
@@ -3725,25 +3723,23 @@ class AnalitixApp(ttk.Window):
                         tag = ""
                     if is_comparison:
                         valores = (
-                            "",
                             r.get("raw_name") or "",
                             r.get("prev_value_raw") or "—",
                             r.get("value_raw") or "—",
                             _format_diff_detail(r.get("diff_num"), r.get("diff_pct")),
-                            r.get("trend") or "",
+                            r.get("trend") or "—",
                             st,
-                            r.get("range_alert") or "",
+                            r.get("range_alert") or "—",
                             r.get("ref_text") or "—",
-                            r.get("unit") or "",
+                            r.get("unit") or "—",
                         )
                     else:
                         valores = (
-                            "",
                             r.get("raw_name") or "",
                             r.get("value_raw") or "—",
                             st,
                             r.get("ref_text") or "—",
-                            r.get("unit") or "",
+                            r.get("unit") or "—",
                         )
                     tree.insert("", "end", values=valores, tags=(tag,) if tag else ())
 
