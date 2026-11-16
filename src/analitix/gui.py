@@ -610,6 +610,7 @@ class AnalitixApp(ttk.Window):
             label="Comparativa", command=lambda: self._show_page("comparativa")
         )
         analisis_menu.add_command(label="Resumen", command=lambda: self._show_page("resumen"))
+        analisis_menu.add_command(label="Detalle de analítica...", command=self._show_report_detail)
         analisis_menu.add_command(
             label="Mapa de calor", command=lambda: self._show_page("mapa_calor")
         )
