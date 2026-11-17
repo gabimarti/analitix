@@ -83,8 +83,10 @@ from analitix.charts import (
 )
 from analitix.config import (
     DB_LIST_PATH,
+    DEFAULT_CHART_YEARS,
     FROZEN,
     KOFI_CUP_PATH,
+    MIN_CHART_YEARS,
     PATIENTS_DIR,
     PROJECT_ROOT,
     REPORTS_DIR,
@@ -487,11 +489,11 @@ AVISO_ENTRADA_MANUAL = (
 )
 
 # Años que muestran por defecto los gráficos de evolución (contados hacia
-# atrás desde la última analítica de cada parámetro); el interruptor "Ver
-# todo el histórico" los amplía. Elección de interfaz para que el estado
-# actual no quede comprimido por valores muy antiguos (recomendación de
-# Zikmund-Fisher, AHRQ 2017, no revisada por pares), no un criterio clínico.
-HISTORY_YEARS = 5
+# atrás desde la última analítica de cada parámetro); configurable en
+# Configuración → General (M1, mínimo 3 años, o todo el histórico). Elección
+# de interfaz para que el estado actual no quede comprimido por valores muy
+# antiguos (recomendación de Zikmund-Fisher, AHRQ 2017, no revisada por pares).
+HISTORY_YEARS = DEFAULT_CHART_YEARS
 
 STATS_LABELS = [
     ("num_patients", "Pacientes"),
@@ -565,9 +567,23 @@ class AnalitixApp(ttk.Window):
         self.var_personal_range = tk.BooleanVar(
             value=get_setting(self.con, "personal_range", "0") == "1"
         )
-        self.var_full_history = tk.BooleanVar(
-            value=get_setting(self.con, "full_history", "0") == "1"
-        )
+        # Periodo en años para gráficas (M1): 0 = todo el histórico, o entero >= 3.
+        raw_anios = get_setting(self.con, "anios_graficas")
+        if raw_anios is None:
+            self.chart_years = (
+                0 if get_setting(self.con, "full_history", "0") == "1" else DEFAULT_CHART_YEARS
+            )
+        else:
+            try:
+                self.chart_years = int(raw_anios)
+                if self.chart_years != 0 and self.chart_years < MIN_CHART_YEARS:
+                    self.chart_years = MIN_CHART_YEARS
+            except (ValueError, TypeError):
+                self.chart_years = (
+                    0 if raw_anios.lower() in ("0", "todo", "all") else DEFAULT_CHART_YEARS
+                )
+        self.var_chart_years = tk.IntVar(value=self.chart_years)
+        self.var_full_history = tk.BooleanVar(value=(self.chart_years == 0))
         # Laboratorios excluidos de gráficos y paneles (Análisis → Laboratorios
         # incluidos...): se guardan en `settings` y se cargan en la tabla
         # temporal de la conexión que filtra las consultas (`repository`).
@@ -629,16 +645,6 @@ class AnalitixApp(ttk.Window):
         )
         analisis_menu.add_separator()
         analisis_menu.add_command(label="Laboratorios incluidos...", command=self._choose_labs)
-        # Opción normal con texto que cambia, no `add_checkbutton`: en Windows
-        # la marca ✔ de Tk se dibuja encima de la primera letra.
-        analisis_menu.add_command(
-            label=self._history_menu_label(),
-            command=lambda: (
-                self.var_full_history.set(not self.var_full_history.get()),
-                self._toggle_full_history(),
-            ),
-        )
-        self._history_menu = (analisis_menu, analisis_menu.index("end"))
         menubar.add_cascade(label="Análisis", menu=analisis_menu)
 
         # Menú separado de "Análisis" (que son gráficos puros de uno o dos
@@ -2874,13 +2880,13 @@ class AnalitixApp(ttk.Window):
             command=self._toggle_personal_range,
             bootstyle="round-toggle",
         ).pack(anchor="w", pady=(10, 0))
-        ttk.Checkbutton(
+        self.lbl_chart_years_info = ttk.Label(
             left,
-            text=f"Ver todo el histórico (si no, {HISTORY_YEARS} años)",
-            variable=self.var_full_history,
-            command=self._toggle_full_history,
-            bootstyle="round-toggle",
-        ).pack(anchor="w", pady=(6, 0))
+            text=f"Periodo: {'Todo el histórico' if self.chart_years == 0 else f'Últimos {self.chart_years} años'}",
+            bootstyle="secondary",
+            font=("", 9),
+        )
+        self.lbl_chart_years_info.pack(anchor="w", pady=(8, 0))
 
         self.chart_frame_evolucion = ttk.Frame(frame)
         self.chart_frame_evolucion.pack(side="left", fill="both", expand=True, padx=PAD, pady=PAD)
@@ -5780,49 +5786,33 @@ class AnalitixApp(ttk.Window):
         return self._mark_window(fig, hidden)
 
     def _windowed(self, series: list[dict]) -> list[dict]:
-        """Los `HISTORY_YEARS` años anteriores a la última analítica de la
+        """Los `chart_years` años anteriores a la última analítica de la
         serie (no a hoy: un historial antiguo no queda vacío), salvo con
-        "Ver todo el histórico". `fecha` es "AAAA-MM-DD[ HH:MM:SS]"."""
-        if self.var_full_history.get() or not series:
+        "Todo el histórico" (chart_years == 0). `fecha` es "AAAA-MM-DD[ HH:MM:SS]"."""
+        years = getattr(self, "chart_years", DEFAULT_CHART_YEARS)
+        var_full = getattr(self, "var_full_history", None)
+        if (var_full is not None and var_full.get()) or years <= 0 or not series:
             return series
         last = series[-1]["fecha"][:10]
-        cutoff = f"{int(last[:4]) - HISTORY_YEARS}{last[4:]}"
+        cutoff = f"{int(last[:4]) - years}{last[4:]}"
         return [s for s in series if s["fecha"][:10] >= cutoff]
 
-    @staticmethod
-    def _mark_window(fig, hidden: int, que: str = "analíticas"):
+    def _mark_window(self, fig, hidden: int, que: str = "analíticas"):
         """Aviso en el gráfico cuando la ventana de años oculta datos
         (`que`: "analíticas" o, en tensión arterial, "mediciones")."""
-        if fig is not None and hidden:
+        years = getattr(self, "chart_years", DEFAULT_CHART_YEARS)
+        if fig is not None and hidden and years > 0:
             fig.text(
                 0.99,
                 0.005,
-                f"Últimos {HISTORY_YEARS} años · {hidden} {que} anteriores ocultas "
-                "(Análisis → Ver todo el histórico)",
+                f"Últimos {years} años · {hidden} {que} anteriores ocultas "
+                "(Configuración → General para cambiar el periodo)",
                 ha="right",
                 va="bottom",
                 fontsize=7,
                 color="#777777",
             )
         return fig
-
-    def _history_menu_label(self) -> str:
-        """Texto de la opción del menú Análisis: lo que hará al pulsarla."""
-        return (
-            f"Ver solo los últimos {HISTORY_YEARS} años"
-            if self.var_full_history.get()
-            else "Ver todo el histórico"
-        )
-
-    def _toggle_full_history(self) -> None:
-        """Interruptor "Ver todo el histórico" (Evolución y menú Análisis):
-        se recuerda y redibuja Evolución/Comparativa si tienen algo elegido;
-        los paneles lo aplican al elegir su siguiente índice."""
-        set_setting(self.con, "full_history", "1" if self.var_full_history.get() else "0")
-        menu, index = self._history_menu
-        menu.entryconfigure(index, label=self._history_menu_label())
-        if self.list_tests_evolucion.curselection():
-            self._show_evolution()
         if self._comparativa_selection():
             self._show_comparison()
         self._refresh_bp_panel()
@@ -6070,7 +6060,9 @@ class AnalitixApp(ttk.Window):
             filas if modo == "alterados" else [f for f in filas if f["orden"] in (0, 1)]
         )
         series_by_canonical_id = {
-            f["canonical_id"]: get_series(self.con, f["canonical_id"], self.current_patient_id)
+            f["canonical_id"]: self._windowed(
+                get_series(self.con, f["canonical_id"], self.current_patient_id)
+            )
             for f in filas_con_grafico
         }
         labels = {f["canonical_id"]: f["raw_name"] for f in filas}
@@ -6794,9 +6786,9 @@ class AnalitixApp(ttk.Window):
             graficos,
             text="Nº mínimo de analíticas para que una evolución se considere representativa. Se "
             "aplica a todos los gráficos de evolución (Evolución, Comparativa, paneles clínicos y "
-            "PDF): por debajo se dibujan con un aviso, y con una sola analítica no se dibuja el "
-            "gráfico, solo el valor. En Evolución/Comparativa, esas pruebas se agrupan además al "
-            "final de la lista. Los cambios se ven al volver a abrir el gráfico:",
+            "PDF): por debajo se dibujan con un aviso, y con menos de 2 analíticas no se dibuja "
+            "el gráfico. En Evolución/Comparativa, esas pruebas se agrupan además al final de la "
+            "lista. Los cambios se ven al volver a abrir el gráfico:",
             wraplength=700,
         ).pack(anchor="w")
         fila_min_puntos = ttk.Frame(graficos)
@@ -6806,6 +6798,30 @@ class AnalitixApp(ttk.Window):
             fila_min_puntos, from_=2, to=20, textvariable=self.var_min_points, width=5
         ).pack(side="left")
         ttk.Button(fila_min_puntos, text="Guardar", command=self._change_min_points).pack(
+            side="left", padx=(8, 0)
+        )
+
+        ttk.Label(
+            graficos,
+            text="Periodo de tiempo a mostrar en las gráficas de evolución (M1). El valor mínimo "
+            "es 3 años, o «Todo el histórico» para mostrar todas las analíticas disponibles:",
+            wraplength=700,
+        ).pack(anchor="w", pady=(12, 0))
+        fila_anios = ttk.Frame(graficos)
+        fila_anios.pack(anchor="w", pady=(6, 0))
+        self.var_chart_years_str = tk.StringVar(
+            value="Todo el histórico" if self.chart_years == 0 else f"{self.chart_years} años"
+        )
+        self.combo_chart_years = ttk.Combobox(
+            fila_anios,
+            textvariable=self.var_chart_years_str,
+            values=self._chart_years_options(),
+            state="readonly",
+            width=20,
+        )
+        self.combo_chart_years.pack(side="left")
+        self.combo_chart_years.bind("<<ComboboxSelected>>", lambda _e: self._change_chart_years())
+        ttk.Button(fila_anios, text="Guardar", command=self._change_chart_years).pack(
             side="left", padx=(8, 0)
         )
 
@@ -7284,6 +7300,44 @@ class AnalitixApp(ttk.Window):
         self.var_min_points.set(self.min_points)
         set_setting(self.con, "min_points_evolucion", str(self.min_points))
         self._refresh_test_lists()
+        messagebox.showinfo("Analitix", "Preferencia guardada.", parent=self)
+
+    def _chart_years_options(self) -> list[str]:
+        max_years = 20
+        if self.current_patient_id is not None:
+            reports = list_patient_reports(self.con, self.current_patient_id)
+            fechas = [r["fecha"][:4] for r in reports if r.get("fecha")]
+            if fechas:
+                anios_datos = int(max(fechas)) - int(min(fechas)) + 1
+                max_years = max(max_years, anios_datos)
+        opciones = ["Todo el histórico"]
+        for y in range(MIN_CHART_YEARS, max(max_years + 1, 11)):
+            opciones.append(f"{y} años")
+        return opciones
+
+    def _change_chart_years(self) -> None:
+        val = self.var_chart_years_str.get().strip()
+        if "todo" in val.lower() or val == "0":
+            self.chart_years = 0
+        else:
+            digits = "".join(c for c in val if c.isdigit())
+            try:
+                n = int(digits)
+                self.chart_years = max(MIN_CHART_YEARS, n)
+            except ValueError:
+                self.chart_years = DEFAULT_CHART_YEARS
+        self.var_chart_years.set(self.chart_years)
+        self.var_full_history.set(self.chart_years == 0)
+        set_setting(self.con, "anios_graficas", str(self.chart_years))
+        self.var_chart_years_str.set(
+            "Todo el histórico" if self.chart_years == 0 else f"{self.chart_years} años"
+        )
+        if hasattr(self, "lbl_chart_years_info"):
+            self.lbl_chart_years_info.configure(
+                text=f"Periodo: {'Todo el histórico' if self.chart_years == 0 else f'Últimos {self.chart_years} años'}"
+            )
+        if self.list_tests_evolucion.curselection():
+            self._show_evolution()
         messagebox.showinfo("Analitix", "Preferencia guardada.", parent=self)
 
     def _change_password(self) -> None:

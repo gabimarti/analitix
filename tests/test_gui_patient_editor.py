@@ -54,15 +54,35 @@ def test_history_window_counts_back_from_last_report():
     from analitix.gui import AnalitixApp
 
     serie = [
-        {"fecha": f} for f in ("2012-03-01", "2019-06-01", "2019-06-02 08:30:00", "2024-06-01")
+        {"fecha": f}
+        for f in (
+            "2012-03-01",
+            "2019-06-01",
+            "2019-06-02 08:30:00",
+            "2021-06-01",
+            "2024-06-01",
+        )
     ]
 
-    def app(full):
-        return SimpleNamespace(var_full_history=SimpleNamespace(get=lambda: full))
+    def app(years=5, full=False):
+        return SimpleNamespace(
+            chart_years=years,
+            var_full_history=SimpleNamespace(get=lambda: full),
+        )
 
-    assert [s["fecha"][:10] for s in AnalitixApp._windowed(app(False), serie)] == [
+    # 5 años antes de la última analítica (2024 -> >= 2019)
+    assert [s["fecha"][:10] for s in AnalitixApp._windowed(app(5), serie)] == [
         "2019-06-01",
         "2019-06-02",
+        "2021-06-01",
         "2024-06-01",
-    ]  # 5 años antes de la última, no de hoy
-    assert AnalitixApp._windowed(app(True), serie) == serie
+    ]
+    # 3 años antes de la última analítica (2024 -> >= 2021)
+    assert [s["fecha"][:10] for s in AnalitixApp._windowed(app(3), serie)] == [
+        "2021-06-01",
+        "2024-06-01",
+    ]
+    # Todo el histórico (years = 0)
+    assert AnalitixApp._windowed(app(0), serie) == serie
+    # Todo el histórico con flag full_history
+    assert AnalitixApp._windowed(app(5, full=True), serie) == serie

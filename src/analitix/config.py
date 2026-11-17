@@ -96,6 +96,10 @@ PATIENTS_DIR = DATA_DIR / "pacientes"
 DB_LIST_PATH = DATA_DIR / "bases_de_datos.json"
 APP_CONFIG_PATH = DATA_DIR / "config.json"
 
+# Parámetros generales de visualización de gráficas (M1)
+DEFAULT_CHART_YEARS = 5
+MIN_CHART_YEARS = 3
+
 # Alias de pruebas en dos capas: los que trae la aplicación
 # (`BUNDLED_CATALOG_PATH`, versionados) y los que el usuario añade al fusionar
 # pruebas (`CATALOG_PATH`, ver `catalog.add_aliases`). Desde el repositorio son
