@@ -81,7 +81,9 @@ def test_filter_non_analytical_values():
 
 
 def test_filter_comments_and_notes():
+    # Se excluye siempre por nombre, independientemente de value_num
     assert report_detail.is_comment_or_note("Comentari proteïnograma", None) is True
+    assert report_detail.is_comment_or_note("Comentari proteïnograma", 1.5) is True
     assert report_detail.is_comment_or_note("Comentario clínico", None) is True
     assert report_detail.is_comment_or_note("Observacions", None) is True
     assert report_detail.is_comment_or_note("Glucosa", 90.0) is False

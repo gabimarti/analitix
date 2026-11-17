@@ -678,13 +678,20 @@ def _report_detail_table_page(
             if len(nom) > 40:
                 nom = nom[:39] + "…"
             u = f.get("unit") or "—"
-            if len(u) > 16:
-                u = u[:15] + "…"
+            if len(u) > 14:
+                u = u[:13] + "…"
+            # Truncar Ant./Act. para que no desborden la columna estrecha (8%)
+            ant = str(f.get("prev_value_raw") or "—")
+            if len(ant) > 9:
+                ant = ant[:8] + "…"
+            act = str(f.get("value_raw") or "—")
+            if len(act) > 9:
+                act = act[:8] + "…"
             filas_texto.append(
                 [
                     nom,
-                    str(f.get("prev_value_raw") or "—"),
-                    str(f.get("value_raw") or "—"),
+                    ant,
+                    act,
                     format_diff(f.get("diff_num"), f.get("diff_pct")),
                     f.get("trend") or "—",
                     f.get("status") or "Normal",

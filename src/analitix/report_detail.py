@@ -71,13 +71,16 @@ COMMENT_NAME_PATTERNS = (
 
 
 def is_comment_or_note(name: str | None, value_num: float | None = None) -> bool:
-    """True si el parámetro corresponde a un comentario, nota u observación no cuantitativa."""
+    """True si el parámetro corresponde a un comentario, nota u observación no cuantitativa.
+
+    Se excluye cualquier parámetro cuyo nombre contenga un patrón de comentario/observación,
+    independientemente de si tiene valor numérico: 'Comentari X' nunca es un parámetro
+    analítico cuantitativo, aunque el parser haya asignado un valor_num por error.
+    """
     if not name:
         return False
     norm = normalize_name_key(name)
-    if any(p in norm for p in COMMENT_NAME_PATTERNS):
-        return value_num is None
-    return False
+    return any(p in norm for p in COMMENT_NAME_PATTERNS)
 
 
 def is_non_analytical_value(val: Any) -> bool:
