@@ -240,6 +240,90 @@ def test_changes_figure_orders_and_skips():
     assert [r["label"] for r in items] == ["Plaquetas", "Creatinina"]
 
 
+def test_changes_figure_items_excludes_empty_and_zero_delta():
+    """changes_figure_items devuelve solo los ítems con barra visible:
+    con rango, con anterior y con delta > CHANGE_EPSILON."""
+    from analitix.charts import changes_figure_items
+
+    rows = [
+        # Tiene barra: hay rango, hay anterior, hay cambio real
+        dict(label="Creatinina", previous=0.9, value=1.1, ref_low=0.5, ref_high=1.0),
+        # Sin rango → se omite
+        dict(label="Sin rango", previous=1, value=2, ref_low=None, ref_high=None),
+        # Sin anterior → se omite
+        dict(label="Sin anterior", previous=None, value=2, ref_low=1, ref_high=3),
+        # Valor idéntico al anterior (delta=0, estado=igual) → se omite
+        dict(label="Inmóvil", previous=5.0, value=5.0, ref_low=4.0, ref_high=6.0),
+    ]
+    items = changes_figure_items(rows)
+    assert len(items) == 1
+    assert items[0]["label"] == "Creatinina"
+
+
+def test_changes_figure_height_scales_with_items():
+    """La altura de la figura crece con el número de ítems para que las
+    barras tengan el mismo grosor visual en todas las páginas (fix M6)."""
+    import math
+
+    from analitix.charts import _CHANGES_BAR_HEIGHT_IN, _CHANGES_HEADER_IN, changes_figure
+
+    def _row_n(n):
+        # n ítems distintos, todos con delta real
+        return [
+            dict(
+                label=f"P{i}",
+                previous=float(i),
+                value=float(i) + 0.5,
+                ref_low=0.0,
+                ref_high=10.0,
+            )
+            for i in range(n)
+        ]
+
+    fig_5 = changes_figure(_row_n(5), "5 items")
+    fig_20 = changes_figure(_row_n(20), "20 items")
+    h5 = fig_5.get_size_inches()[1]
+    h20 = fig_20.get_size_inches()[1]
+    # La figura con más ítems debe ser más alta
+    assert h20 > h5
+    # Ambas alturas deben seguir la fórmula lineal
+    assert math.isclose(h5, _CHANGES_BAR_HEIGHT_IN * 5 + _CHANGES_HEADER_IN, rel_tol=1e-6)
+    assert math.isclose(h20, _CHANGES_BAR_HEIGHT_IN * 20 + _CHANGES_HEADER_IN, rel_tol=1e-6)
+
+
+def test_changes_figure_max_page_rows_uniform_scale():
+    """Con max_page_rows, la figura reserva capacidad fija de slots y coloca las
+    barras arriba, asegurando grosor idéntico entre páginas con distinta cantidad."""
+    import math
+
+    from analitix.charts import _CHANGES_BAR_HEIGHT_IN, _CHANGES_HEADER_IN, changes_figure
+
+    rows_5 = [
+        dict(label=f"P{i}", previous=float(i), value=float(i) + 0.5, ref_low=0.0, ref_high=10.0)
+        for i in range(5)
+    ]
+    rows_20 = [
+        dict(label=f"P{i}", previous=float(i), value=float(i) + 0.5, ref_low=0.0, ref_high=10.0)
+        for i in range(20)
+    ]
+    fig_5 = changes_figure(rows_5, "5 de 25", max_page_rows=25)
+    fig_20 = changes_figure(rows_20, "20 de 25", max_page_rows=25)
+
+    # Ambas figuras tienen la misma altura reservada para 25 slots
+    expected_h = _CHANGES_BAR_HEIGHT_IN * 25 + _CHANGES_HEADER_IN
+    assert math.isclose(fig_5.get_size_inches()[1], expected_h, rel_tol=1e-6)
+    assert math.isclose(fig_20.get_size_inches()[1], expected_h, rel_tol=1e-6)
+
+    # Ambas figuras tienen el mismo límite de eje Y para 25 slots (-0.6 a 24.6)
+    assert fig_5.axes[0].get_ylim() == (-0.6, 24.6)
+    assert fig_20.axes[0].get_ylim() == (-0.6, 24.6)
+
+    # En la figura de 5 ítems, las barras se sitúan arriba en y = 20..24
+    assert list(fig_5.axes[0].get_yticks()) == [20, 21, 22, 23, 24]
+    # En la figura de 20 ítems, las barras se sitúan arriba en y = 5..24
+    assert list(fig_20.axes[0].get_yticks()) == list(range(5, 25))
+
+
 def test_heatmap_labels_only_row_extremes_with_many_columns():
     from analitix.charts import HEATMAP_MAX_LABELED_COLUMNS, _ink_for, heatmap_figure
 

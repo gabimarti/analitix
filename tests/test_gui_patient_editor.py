@@ -36,6 +36,18 @@ def test_heatmap_pages_are_balanced():
     assert sum((t for t, _ in paginas), []) == list(range(50))  # sin perder ni repetir filas
 
 
+def test_balanced_pages_of_splits_evenly():
+    from analitix.gui import _balanced_pages_of
+
+    assert _balanced_pages_of([]) == []
+    # 41 filas con max 25: 2 páginas equilibradas (21 y 20), nunca 25 y 16 descompensadas
+    paginas = _balanced_pages_of(list(range(41)), 25)
+    assert [(len(t), s) for t, s in paginas] == [(21, " (1/2)"), (20, " (2/2)")]
+    assert sum((t for t, _ in paginas), []) == list(range(41))
+    # Si cabe en 1 página, va todo en una sin sufijo
+    assert _balanced_pages_of(list(range(25)), 25) == [(list(range(25)), "")]
+
+
 def test_history_window_counts_back_from_last_report():
     from types import SimpleNamespace
 

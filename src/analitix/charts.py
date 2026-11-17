@@ -1167,6 +1167,38 @@ RCV_ESPERABLE_ALPHA = 0.35
 # Diferencia de distancia al rango (en anchos) por debajo de la cual no se
 # considera que se haya acercado ni alejado (evita colorear por redondeos).
 CHANGE_EPSILON = 0.01
+# Alto fijo de cada barra en pulgadas: con este valor todas las páginas de
+# «Qué ha cambiado» tienen barras del mismo grosor, independientemente de
+# cuántos ítems quepan en cada trozo (_pages_of usa PDF_ROWS_PER_PAGE = 25).
+_CHANGES_BAR_HEIGHT_IN = 0.32
+# Margen superior (título + leyenda) e inferior (eje X + etiqueta) en
+# pulgadas; la figura crece con las barras y nunca encoge por debajo del mínimo.
+_CHANGES_HEADER_IN = 1.9
+_CHANGES_MIN_HEIGHT_IN = 3.2
+
+
+def changes_figure_items(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Filtra y calcula los ítems que `changes_figure` incluye como barras.
+
+    Mismo criterio que el bucle interno de `changes_figure`:
+    - requiere `previous` y `value` no nulos
+    - requiere rango de referencia (`change_status` no nulo)
+    - omite ítems con delta ≈ 0 y estado «igual» (sin barra visible)
+
+    Útil para pre-filtrar en `gui.py` antes de `_pages_of`, de modo que
+    ninguna página llegue a `changes_figure` con 0 ítems visibles.
+    """
+    result = []
+    for r in rows:
+        if r.get("previous") is None or r.get("value") is None:
+            continue
+        status = change_status(r["previous"], r["value"], r.get("ref_low"), r.get("ref_high"))
+        if status is None:
+            continue
+        if abs(status[0]) < CHANGE_EPSILON and status[1] == "igual":
+            continue
+        result.append({**r, "delta": status[0], "estado": status[1]})
+    return result
 
 
 def change_status(
@@ -1191,8 +1223,13 @@ def change_status(
     return (value - previous) / width, estado
 
 
-def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
-    """Barras divergentes "Qué ha cambiado": una barra horizontal por
+def changes_figure(
+    rows: list[dict[str, Any]],
+    title: str,
+    *,
+    max_page_rows: int | None = None,
+) -> Figure:
+    """Barras divergentes «Qué ha cambiado»: una barra horizontal por
     parámetro con el cambio respecto al informe anterior en anchos del rango
     de referencia (comparable entre parámetros de escalas distintas; el %
     va en el tooltip), ordenadas de mayor a menor cambio, color según se
@@ -1202,26 +1239,35 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
     variación esperable, la barra se dibuja atenuada, conservando el color
     de si se acerca o se aleja del rango); los que no tienen anterior o
     rango se omiten. Guarda en `ax.analitix_changes` las filas en el orden
-    dibujado, para el tooltip."""
-    items = []
-    unchanged = 0
-    for r in rows:
-        if r.get("previous") is None or r.get("value") is None:
-            continue
-        status = change_status(r["previous"], r["value"], r.get("ref_low"), r.get("ref_high"))
-        if status is None:
-            continue
-        if abs(status[0]) < CHANGE_EPSILON and status[1] == "igual":
-            unchanged += 1  # sin barra visible: solo ocuparía sitio
-            continue
-        items.append({**r, "delta": status[0], "estado": status[1]})
+    dibujado, para el tooltip.
+
+    La altura de la figura escala con el número de ítems (`_CHANGES_BAR_HEIGHT_IN`
+    por ítem + `_CHANGES_HEADER_IN` de márgenes). Si se especifica `max_page_rows`
+    (p. ej. en informes PDF de varias páginas), el eje Y reserva capacidad fija
+    para tantas filas y coloca las barras arriba, garantizando que el grosor y
+    espaciado de las barras sea 100% homogéneo en todas las páginas."""
+    # Separar ítems con barra visible de los que se mantienen «sin cambio»
+    items = changes_figure_items(rows)
+    # Contar los que tienen rango y anterior pero delta ≈ 0 (sin barra)
+    con_rango = sum(
+        1
+        for r in rows
+        if r.get("previous") is not None
+        and r.get("value") is not None
+        and change_status(r["previous"], r["value"], r.get("ref_low"), r.get("ref_high"))
+        is not None
+    )
+    unchanged = con_rango - len(items)
     items.sort(key=lambda r: abs(r["delta"]))  # el mayor cambio, arriba
 
-    n = max(len(items), 1)
-    fig = Figure(figsize=(9, max(3.2, 0.32 * n + 1.9)), dpi=100)
+    # Si se fija capacidad por página, las barras se sitúan arriba y el eje
+    # mantiene el rango completo para preservar la escala física exacta.
+    slots = max(max_page_rows or len(items), 1)
+    y = np.arange(slots - len(items), slots)
+    alto = max(_CHANGES_MIN_HEIGHT_IN, _CHANGES_BAR_HEIGHT_IN * slots + _CHANGES_HEADER_IN)
+    fig = Figure(figsize=(9, alto), dpi=100)
     ax = fig.add_subplot(111)
     colors = {"empeora": CHANGE_WORSE, "mejora": CHANGE_BETTER, "igual": CHANGE_NEUTRAL}
-    y = np.arange(len(items))
     esperable = [(r.get("rcv") or {}).get("estado") == "esperable" for r in items]
     ax.barh(
         y,
@@ -1238,7 +1284,7 @@ def changes_figure(rows: list[dict[str, Any]], title: str) -> Figure:
     ax.set_yticklabels(
         [r["label"] if len(r["label"]) <= 40 else r["label"][:39] + "…" for r in items], fontsize=8
     )
-    ax.set_ylim(-0.6, n - 0.4)
+    ax.set_ylim(-0.6, slots - 0.4)
 
     # Margen a los dos lados para las etiquetas "anterior → actual".
     extent = max((abs(r["delta"]) for r in items), default=1.0) or 1.0

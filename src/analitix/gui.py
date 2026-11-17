@@ -73,6 +73,7 @@ from analitix.charts import (
     bp_figure,
     change_status,
     changes_figure,
+    changes_figure_items,
     comparison_figure,
     data_sufficiency,
     evolution_figure,
@@ -337,18 +338,31 @@ PDF_COMBINED_PANELS = {
 def _pages_of(filas: list, por_pagina: int = PDF_ROWS_PER_PAGE) -> list[tuple[list, str]]:
     """Reparte `filas` en trozos de `por_pagina` (por defecto los del PDF),
     con el sufijo de título de cada uno (" (1/2)"...; vacío si cabe en una)."""
+    if not filas:
+        return []
     trozos = [filas[i : i + por_pagina] for i in range(0, len(filas), por_pagina)]
     if len(trozos) <= 1:
         return [(t, "") for t in trozos]
     return [(t, f" ({n}/{len(trozos)})") for n, t in enumerate(trozos, start=1)]
 
 
+def _balanced_pages_of(
+    filas: list, max_por_pagina: int = PDF_ROWS_PER_PAGE
+) -> list[tuple[list, str]]:
+    """Reparte `filas` en el mínimo de páginas necesarias sin exceder `max_por_pagina`,
+    distribuyendo las filas equitativamente entre ellas (50 -> 25 + 25; 41 -> 21 + 20;
+    nunca 25 + 16 con descompensación visual)."""
+    if not filas:
+        return []
+    paginas = -(-len(filas) // max_por_pagina) or 1
+    return _pages_of(filas, -(-len(filas) // paginas) or 1)
+
+
 def _heatmap_pages(filas: list) -> list[tuple[list, str]]:
     """Páginas del mapa de calor en pantalla: las mínimas de como mucho
     `HEATMAP_PAGE_ROWS` filas, con el mismo número de filas en cada una
     (50 -> 17 + 17 + 16, no 20 + 20 + 10)."""
-    paginas = -(-len(filas) // HEATMAP_PAGE_ROWS) or 1
-    return _pages_of(filas, -(-len(filas) // paginas) or 1)
+    return _balanced_pages_of(filas, HEATMAP_PAGE_ROWS)
 
 
 def _check_period(desde: str, hasta: str) -> tuple[str | None, str | None] | None:
@@ -6332,14 +6346,23 @@ class AnalitixApp(ttk.Window):
                         return abs(status[0]) if status else 0.0
 
                     medibles.sort(key=_magnitud, reverse=True)
+                    # Pre-filtrar con la misma lógica que changes_figure para
+                    # que _pages_of nunca genere una página con 0 barras
+                    # visibles (evita la tercera página vacía cuando el número
+                    # de ítems es múltiplo exacto de PDF_ROWS_PER_PAGE, o
+                    # cuando todos los ítems de un trozo tienen delta ≈ 0).
+                    medibles_visibles = [f for f in medibles if changes_figure_items([f])]
                     titulo = f"Qué ha cambiado — último informe ({summary['fecha'][:10]})"
+                    # Reparto equilibrado de ítems entre páginas con capacidad fija
+                    # (max_page_rows) para que todas las páginas tengan barras con el
+                    # mismo grosor y separación física homogénea.
                     paginas.extend(
-                        _same_size(
-                            [
-                                changes_figure(trozo, titulo + sufijo)
-                                for trozo, sufijo in _pages_of(medibles)
-                            ]
-                        )
+                        [
+                            changes_figure(trozo, titulo + sufijo, max_page_rows=PDF_ROWS_PER_PAGE)
+                            for trozo, sufijo in _balanced_pages_of(
+                                medibles_visibles, PDF_ROWS_PER_PAGE
+                            )
+                        ]
                     )
                     avanza()
                 if var_mapa.get():
