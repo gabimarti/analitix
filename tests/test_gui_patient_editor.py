@@ -86,3 +86,27 @@ def test_history_window_counts_back_from_last_report():
     assert AnalitixApp._windowed(app(0), serie) == serie
     # Todo el histórico con flag full_history
     assert AnalitixApp._windowed(app(5, full=True), serie) == serie
+
+
+def test_format_points_count_dual_range():
+    from types import SimpleNamespace
+
+    from analitix.gui import AnalitixApp
+
+    def app(years=3):
+        fake = SimpleNamespace(chart_years=years)
+        fake._windowed = lambda s: AnalitixApp._windowed(fake, s)
+        return fake
+
+    serie = [
+        {"fecha": "2018-01-01", "value_num": 1.0},
+        {"fecha": "2020-01-01", "value_num": 2.0},
+        {"fecha": "2024-01-01", "value_num": 3.0},
+    ]
+
+    # Con chart_years=3, solo entra la de 2024 (1 de 3)
+    assert AnalitixApp._format_points_count(app(3), serie) == "n=1 / 3 hist."
+    # Con chart_years=0 (todo el histórico), muestra solo n=3
+    assert AnalitixApp._format_points_count(app(0), serie) == "n=3"
+    # Sin recorte (todos dentro de los últimos 10 años)
+    assert AnalitixApp._format_points_count(app(10), serie) == "n=3"

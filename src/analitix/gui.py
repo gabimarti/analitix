@@ -2722,7 +2722,7 @@ class AnalitixApp(ttk.Window):
             bootstyle="secondary",
         ).grid(row=1, column=0, columnspan=10, sticky="w", pady=(2, 0))
         columnas = ("periodo", "fechas", "n", "dias", "sistolica", "diastolica", "pulso")
-        self.tree_bp_medias = ttk.Treeview(frame, columns=columnas, show="headings", height=3)
+        self.tree_bp_medias = ttk.Treeview(frame, columns=columnas, show="headings", height=4)
         for col, texto, ancho in zip(
             columnas,
             (
@@ -2794,11 +2794,23 @@ class AnalitixApp(ttk.Window):
             list_bp_readings(self.con, self.current_patient_id) if self.current_patient_id else []
         )
         self.tree_bp_medias.delete(*self.tree_bp_medias.get_children())
-        for nombre, periodo in (
-            ("Todo el histórico", (None, None)),
-            ("Periodo mostrado", intervalo),
-            ("Periodo de comparación", comparacion),
-        ):
+        filas_periodos: list[tuple[str, tuple[str | None, str | None] | None]] = [
+            ("Todo el histórico", (None, None))
+        ]
+        years = getattr(self, "chart_years", DEFAULT_CHART_YEARS)
+        if years > 0 and todas:
+            hoy = dt.date.today()
+            try:
+                desde_anios = hoy.replace(year=hoy.year - years).isoformat()
+            except ValueError:
+                desde_anios = (hoy - dt.timedelta(days=years * 365)).isoformat()
+            filas_periodos.append((f"Últimos {years} años", (desde_anios, None)))
+        if intervalo is not None:
+            filas_periodos.append(("Periodo mostrado", intervalo))
+        if comparacion is not None:
+            filas_periodos.append(("Periodo de comparación", comparacion))
+
+        for nombre, periodo in filas_periodos:
             if periodo is None or (nombre == "Todo el histórico" and not todas):
                 continue
             s = bp_period_stats(todas, *periodo)
@@ -3885,6 +3897,14 @@ class AnalitixApp(ttk.Window):
         self._draw_changes(summary)
         self._draw_positions(summary)
 
+        years = getattr(self, "chart_years", DEFAULT_CHART_YEARS)
+        if years > 0:
+            self.tree_resumen.heading("tendencia", text=f"Tendencia ({years}a / hist.)")
+            self.tree_resumen.column("tendencia", width=190, anchor="center")
+        else:
+            self.tree_resumen.heading("tendencia", text="Tendencia")
+            self.tree_resumen.column("tendencia", width=130, anchor="center")
+
         for f in self._classify_latest_report(summary):
             flag, pct, brusco = f["flag_calc"], f["pct"], f["brusco"]
             ref_low, ref_high = f["ref_low"], f["ref_high"]
@@ -3901,7 +3921,23 @@ class AnalitixApp(ttk.Window):
                 if f["canonical_id"]
                 else []
             )
-            tendencia = trend_arrow(serie, ref_low, ref_high) or "—"
+            if years > 0 and serie:
+                serie_ventana = self._windowed(serie)
+                if len(serie) > len(serie_ventana) and len(serie_ventana) >= 2:
+                    tend_periodo = trend_arrow(serie_ventana, ref_low, ref_high)
+                    tend_hist = trend_arrow(serie, ref_low, ref_high)
+                    if tend_periodo and tend_hist and tend_periodo != tend_hist:
+                        tendencia = f"{tend_periodo} (hist. {tend_hist})"
+                    elif tend_periodo:
+                        tendencia = tend_periodo
+                    elif tend_hist:
+                        tendencia = f"— (hist. {tend_hist})"
+                    else:
+                        tendencia = "—"
+                else:
+                    tendencia = trend_arrow(serie, ref_low, ref_high) or "—"
+            else:
+                tendencia = trend_arrow(serie, ref_low, ref_high) or "—"
             tag = flag if flag in ("alto", "bajo") else ("brusco" if brusco else "")
             self.tree_resumen.insert(
                 "",
@@ -4176,6 +4212,16 @@ class AnalitixApp(ttk.Window):
         ]
         return "\n".join(lineas)
 
+    def _format_points_count(self, points: list[dict]) -> str:
+        """Formatea el número de analíticas para listas de paneles:
+        'n=X' o 'n=X / Y hist.' si hay recorte por periodo configurado."""
+        years = getattr(self, "chart_years", DEFAULT_CHART_YEARS)
+        if years > 0:
+            w_points = self._windowed(points)
+            if len(points) > len(w_points):
+                return f"n={len(w_points)} / {len(points)} hist."
+        return f"n={len(points)}"
+
     def _refresh_lipid_panel(self) -> None:
         self._lipid_series = (
             get_lipid_index_series(self.con, self.current_patient_id)
@@ -4189,7 +4235,8 @@ class AnalitixApp(ttk.Window):
             fuera_de_rango = any(p["flag_calc"] == "alto" for p in points)
             idx = self.list_lipid_indices.size()
             self.list_lipid_indices.insert(
-                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+                "end",
+                f"{'⚠ ' if fuera_de_rango else ''}{label} ({self._format_points_count(points)})",
             )
             if fuera_de_rango:
                 self.list_lipid_indices.itemconfig(idx, fg=COLOR_ALTERADO)
@@ -4355,7 +4402,8 @@ class AnalitixApp(ttk.Window):
             fuera_de_rango = any(p["flag_calc"] == "alto" for p in points)
             idx = self.list_hepatic_indices.size()
             self.list_hepatic_indices.insert(
-                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+                "end",
+                f"{'⚠ ' if fuera_de_rango else ''}{label} ({self._format_points_count(points)})",
             )
             if fuera_de_rango:
                 self.list_hepatic_indices.itemconfig(idx, fg=COLOR_ALTERADO)
@@ -4531,7 +4579,8 @@ class AnalitixApp(ttk.Window):
             fuera_de_rango = any(p["flag_calc"] in ("alto", "bajo") for p in points)
             idx = self.list_renal_indices.size()
             self.list_renal_indices.insert(
-                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+                "end",
+                f"{'⚠ ' if fuera_de_rango else ''}{label} ({self._format_points_count(points)})",
             )
             if fuera_de_rango:
                 self.list_renal_indices.itemconfig(idx, fg=COLOR_ALTERADO)
@@ -4733,7 +4782,8 @@ class AnalitixApp(ttk.Window):
             fuera_de_rango = any(p["flag_calc"] in ("alto", "bajo") for p in points)
             idx = self.list_hemogram_indices.size()
             self.list_hemogram_indices.insert(
-                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+                "end",
+                f"{'⚠ ' if fuera_de_rango else ''}{label} ({self._format_points_count(points)})",
             )
             if fuera_de_rango:
                 self.list_hemogram_indices.itemconfig(idx, fg=COLOR_ALTERADO)
@@ -4898,7 +4948,8 @@ class AnalitixApp(ttk.Window):
             fuera_de_rango = any(p["flag_calc"] in ("alto", "bajo") for p in points)
             idx = self.list_iron_indices.size()
             self.list_iron_indices.insert(
-                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+                "end",
+                f"{'⚠ ' if fuera_de_rango else ''}{label} ({self._format_points_count(points)})",
             )
             if fuera_de_rango:
                 self.list_iron_indices.itemconfig(idx, fg=COLOR_ALTERADO)
@@ -5151,7 +5202,8 @@ class AnalitixApp(ttk.Window):
             fuera_de_rango = any(p["flag_calc"] == "alto" for p in points)
             idx = self.list_uric_acid_indices.size()
             self.list_uric_acid_indices.insert(
-                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+                "end",
+                f"{'⚠ ' if fuera_de_rango else ''}{label} ({self._format_points_count(points)})",
             )
             if fuera_de_rango:
                 self.list_uric_acid_indices.itemconfig(idx, fg=COLOR_ALTERADO)
@@ -5285,7 +5337,8 @@ class AnalitixApp(ttk.Window):
             fuera_de_rango = any(p["flag_calc"] in ("alto", "bajo") for p in points)
             idx = self.list_calcio_indices.size()
             self.list_calcio_indices.insert(
-                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+                "end",
+                f"{'⚠ ' if fuera_de_rango else ''}{label} ({self._format_points_count(points)})",
             )
             if fuera_de_rango:
                 self.list_calcio_indices.itemconfig(idx, fg=COLOR_ALTERADO)
@@ -5473,7 +5526,8 @@ class AnalitixApp(ttk.Window):
             fuera_de_rango = any(p["flag_calc"] == "alto" for p in points)
             idx = self.list_glucemia_indices.size()
             self.list_glucemia_indices.insert(
-                "end", f"{'⚠ ' if fuera_de_rango else ''}{label} (n={len(points)})"
+                "end",
+                f"{'⚠ ' if fuera_de_rango else ''}{label} ({self._format_points_count(points)})",
             )
             if fuera_de_rango:
                 self.list_glucemia_indices.itemconfig(idx, fg=COLOR_ALTERADO)
@@ -5730,6 +5784,7 @@ class AnalitixApp(ttk.Window):
         tienen y se dibujan sin banda). El rango personal solo en Evolución
         (`with_personal`), donde está su interruptor.
         Con menos de 2 valores filtrados no se genera el gráfico (devuelve None)."""
+        full_series = series
         hidden = len(series)
         series = self._windowed(series)
         hidden -= len(series)
@@ -5757,17 +5812,26 @@ class AnalitixApp(ttk.Window):
         # Después del RCV y del rango personal, que se miden contra el rango
         # del laboratorio: el objetivo del médico solo cambia lo que se dibuja.
         if canonical_id:
-            series = apply_target(
-                series, get_target(self.con, self.current_patient_id, canonical_id)
-            )
+            target = get_target(self.con, self.current_patient_id, canonical_id)
+            series = apply_target(series, target)
+            if full_series is not series:
+                full_series = apply_target(full_series, target)
         # Filtrado glomerular (prueba suelta o índice "fg" del panel renal):
         # único umbral de velocidad con respaldo de guía (KDIGO, ver
         # `charts.KDIGO_RAPID_DECLINE_PER_YEAR`).
         if canonical_id in FG_IDS or canonical_id == "fg":
             series = [{**s, "kdigo_fg": True} for s in series]
+            full_series = [{**s, "kdigo_fg": True} for s in full_series]
         return self._mark_window(
             evolution_figure(
-                series, label, self.min_points, rcv=rcv, personal=personal, note=deriva
+                series,
+                label,
+                self.min_points,
+                rcv=rcv,
+                personal=personal,
+                note=deriva,
+                full_series=full_series,
+                chart_years=self.chart_years,
             ),
             hidden,
         )
@@ -5775,6 +5839,7 @@ class AnalitixApp(ttk.Window):
     def _comparison_figure(self, series_by_test: dict[str, list[dict]]):
         """`charts.comparison_figure` con la misma ventana de años que
         `_evolution_figure` (Comparativa e Inflamación/Tiroides/Glucosa)."""
+        full_series_by_test = dict(series_by_test)
         hidden = sum(len(s) for s in series_by_test.values())
         series_by_test = {
             label: self._windowed(s)
@@ -5782,7 +5847,12 @@ class AnalitixApp(ttk.Window):
             if len(self._windowed(s)) >= 2
         }
         hidden -= sum(len(s) for s in series_by_test.values())
-        fig = comparison_figure(series_by_test, self.min_points)
+        fig = comparison_figure(
+            series_by_test,
+            self.min_points,
+            full_series_by_test=full_series_by_test,
+            chart_years=self.chart_years,
+        )
         return self._mark_window(fig, hidden)
 
     def _windowed(self, series: list[dict]) -> list[dict]:
@@ -6059,11 +6129,12 @@ class AnalitixApp(ttk.Window):
         filas_con_grafico = (
             filas if modo == "alterados" else [f for f in filas if f["orden"] in (0, 1)]
         )
-        series_by_canonical_id = {
-            f["canonical_id"]: self._windowed(
-                get_series(self.con, f["canonical_id"], self.current_patient_id)
-            )
+        full_series_by_canonical_id = {
+            f["canonical_id"]: get_series(self.con, f["canonical_id"], self.current_patient_id)
             for f in filas_con_grafico
+        }
+        series_by_canonical_id = {
+            cid: self._windowed(s) for cid, s in full_series_by_canonical_id.items()
         }
         labels = {f["canonical_id"]: f["raw_name"] for f in filas}
         patient = next((p for p in self.patients if p["id"] == self.current_patient_id), None)
@@ -6089,6 +6160,8 @@ class AnalitixApp(ttk.Window):
                 tipo_informe=tipo_informe,
                 min_points=self.min_points,
                 on_progress=lambda n, t: paso(f"Escribiendo página {n} de {t}...", n, t),
+                full_series_by_canonical_id=full_series_by_canonical_id,
+                chart_years=self.chart_years,
             )
         messagebox.showinfo(
             "Exportado",

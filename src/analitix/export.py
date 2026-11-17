@@ -293,6 +293,8 @@ def export_pdf(
     tipo_informe: str,
     min_points: int = DEFAULT_MIN_POINTS,
     on_progress: Callable[[int, int], None] | None = None,
+    full_series_by_canonical_id: dict[str, list[dict[str, Any]]] | None = None,
+    chart_years: int = 0,
 ) -> int:
     """Informe de seguimiento en PDF (ampliado 2026-09-21 en dos pasos:
     primero con dos tipos de informe — "completo"/"de alterados", ver
@@ -345,7 +347,14 @@ def export_pdf(
             pagina += 1
 
         for f, series in graficos:
-            fig = evolution_figure(series, labels.get(f["canonical_id"], f["raw_name"]), min_points)
+            full_s = (full_series_by_canonical_id or {}).get(f["canonical_id"])
+            fig = evolution_figure(
+                series,
+                labels.get(f["canonical_id"], f["raw_name"]),
+                min_points,
+                full_series=full_s,
+                chart_years=chart_years,
+            )
             if fig is not None:
                 _add_footer(fig, tipo_informe, pagina, total)
                 pdf.savefig(fig)

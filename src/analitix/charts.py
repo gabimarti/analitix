@@ -360,13 +360,19 @@ def trend_arrow(
     return f"{arrow} {magnitud_pct_anual:+.0f}%/año"
 
 
-def _pct_change_text(valores: list[float]) -> str | None:
+def _pct_change_text(
+    valores: list[float],
+    full_valores: list[float] | None = None,
+    chart_years: int = 0,
+) -> str | None:
     """Variación porcentual del último valor respecto al anterior y respecto
     al primero de la serie — la tendencia ya dice hacia dónde va el valor a
     largo plazo, pero no si el último salto en concreto es grande o
-    pequeño en términos relativos. `None` con menos de 2 puntos, o si el
-    valor de referencia de una de las dos comparaciones es 0 (división por
-    cero: se omite solo esa comparación, no las dos)."""
+    pequeño en términos relativos. Si se indica `full_valores` y `chart_years > 0`,
+    compara la variación del periodo configurado frente a la histórica.
+    `None` con menos de 2 puntos, o si el valor de referencia de una de las
+    dos comparaciones es 0 (división por cero: se omite solo esa comparación,
+    no las dos)."""
     if len(valores) < 2:
         return None
     partes = []
@@ -375,7 +381,19 @@ def _pct_change_text(valores: list[float]) -> str | None:
         partes.append(f"último cambio: {ultimo_pct:+.1f}% vs. anterior")
     if valores[0] != 0:
         total_pct = (valores[-1] - valores[0]) / valores[0] * 100
-        partes.append(f"variación del periodo: {total_pct:+.1f}%")
+        if (
+            full_valores
+            and chart_years > 0
+            and len(full_valores) > len(valores)
+            and full_valores[0] != 0
+        ):
+            hist_pct = (full_valores[-1] - full_valores[0]) / full_valores[0] * 100
+            partes.append(
+                f"variación últimos {chart_years} años: {total_pct:+.1f}% "
+                f"(total hist.: {hist_pct:+.1f}%)"
+            )
+        else:
+            partes.append(f"variación del periodo: {total_pct:+.1f}%")
     return " · ".join(partes) if partes else None
 
 
@@ -443,7 +461,64 @@ def time_in_range(series: list[dict[str, Any]]) -> tuple[float, int] | None:
     return dentro / total * 100, huecos
 
 
-def series_summary(series: list[dict[str, Any]]) -> str | None:
+def calc_series_stats(series: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Calcula media, mínimo, máximo y número de puntos válidos para una serie temporal.
+    Ignora puntos sin `value_num` o nulos. Devuelve None si no hay valores numéricos."""
+    valores = [s["value_num"] for s in series if s.get("value_num") is not None]
+    if not valores:
+        return None
+    return {
+        "n": len(valores),
+        "media": sum(valores) / len(valores),
+        "min": min(valores),
+        "max": max(valores),
+    }
+
+
+def _format_stat_val(v: float) -> str:
+    """Formatea un número estadístico con hasta 2 decimales significativos evitando ceros redundantes."""
+    return f"{round(v, 2):g}"
+
+
+def series_stats_text(
+    series: list[dict[str, Any]],
+    full_series: list[dict[str, Any]] | None = None,
+    chart_years: int = 0,
+) -> str | None:
+    """Texto descriptivo con media, mínimo y máximo.
+    Si se especifica `chart_years > 0` y `full_series` contiene analíticas anteriores a la ventana,
+    presenta los estadísticos de ambos rangos en paralelo."""
+    st_periodo = calc_series_stats(series)
+    if not st_periodo:
+        return None
+
+    if full_series and chart_years > 0 and len(full_series) > len(series):
+        st_hist = calc_series_stats(full_series)
+        if st_hist and (st_hist["n"] > st_periodo["n"]):
+            return (
+                f"Estadísticas: últimos {chart_years} años (n={st_periodo['n']}): "
+                f"media {_format_stat_val(st_periodo['media'])}, "
+                f"mín {_format_stat_val(st_periodo['min'])}, "
+                f"máx {_format_stat_val(st_periodo['max'])} · "
+                f"Total histórico (n={st_hist['n']}): "
+                f"media {_format_stat_val(st_hist['media'])}, "
+                f"mín {_format_stat_val(st_hist['min'])}, "
+                f"máx {_format_stat_val(st_hist['max'])}"
+            )
+
+    return (
+        f"Estadísticas (n={st_periodo['n']}): "
+        f"media {_format_stat_val(st_periodo['media'])}, "
+        f"mín {_format_stat_val(st_periodo['min'])}, "
+        f"máx {_format_stat_val(st_periodo['max'])}"
+    )
+
+
+def series_summary(
+    series: list[dict[str, Any]],
+    full_series: list[dict[str, Any]] | None = None,
+    chart_years: int = 0,
+) -> str | None:
     """Resumen en lenguaje llano de la serie, descriptivo y nunca causal:
     "Dentro del rango en 9 de 10 analíticas; la última (2026-01-01), un 8 %
     por encima del límite superior." Los estudios con pacientes encuentran
@@ -452,13 +527,27 @@ def series_summary(series: list[dict[str, Any]]) -> str | None:
     doi:10.1037/xap0000203; Shaffer et al., JAMIA Open 2026;9(2):ooag034,
     doi:10.1093/jamiaopen/ooag034). Cuenta solo los puntos con rango de
     referencia (el estado de cada uno es su `flag_calc`, calculado contra
-    el rango de su propio informe); `None` si ninguno lo tiene."""
+    el rango de su propio informe); `None` si ninguno lo tiene. Si se indica
+    `full_series` y `chart_years > 0`, desglosa en paralelo el periodo
+    configurado frente al total histórico."""
     con_rango = [s for s in series if s.get("ref_low") is not None or s.get("ref_high") is not None]
     if not con_rango:
         return None
     dentro = sum(1 for s in con_rango if s.get("flag_calc") not in ("alto", "bajo"))
     que = "del objetivo indicado por su médico" if series[0].get("objetivo") else "del rango"
-    texto = f"Dentro {que} en {dentro} de {len(con_rango)} analíticas"
+
+    if full_series and chart_years > 0 and len(full_series) > len(series):
+        con_rango_h = [
+            s for s in full_series if s.get("ref_low") is not None or s.get("ref_high") is not None
+        ]
+        dentro_h = sum(1 for s in con_rango_h if s.get("flag_calc") not in ("alto", "bajo"))
+        texto = (
+            f"Dentro {que} en {dentro} de {len(con_rango)} analíticas (últimos {chart_years} años) "
+            f"y en {dentro_h} de {len(con_rango_h)} (total histórico)"
+        )
+    else:
+        texto = f"Dentro {que} en {dentro} de {len(con_rango)} analíticas"
+
     tir = time_in_range(series)
     if tir:
         pct, huecos = tir
@@ -515,20 +604,25 @@ def _draw_info_box(
     ref_low: float | None,
     ref_high: float | None,
     summary: str | None = None,
+    stats_text: str | None = None,
+    full_valores: list[float] | None = None,
+    chart_years: int = 0,
     extra: str | None = None,
 ) -> None:
     """Recuadro de texto bajo el eje con el resumen en texto de la serie
-    (`series_summary`), la tendencia (si hay suficientes puntos) y la
-    variación porcentual (si hay al menos 2) en líneas separadas. Anclado a
-    `ax` (no a la figura), para que funcione igual en Evolución como en
-    cada panel de la Comparativa; `annotation_clip=False` evita que se
-    recorte al quedar fuera del área de datos."""
+    (`series_summary`), estadísticas descriptivas (`series_stats_text`),
+    la tendencia (si hay suficientes puntos) y la variación porcentual (si hay
+    al menos 2) en líneas separadas. Anclado a `ax` (no a la figura), para que
+    funcione igual en Evolución como en cada panel de la Comparativa;
+    `annotation_clip=False` evita que se recorte al quedar fuera del área de
+    datos."""
     lineas = [
         t
         for t in (
             summary,
+            stats_text,
             _trend_text(fit, valores, ref_low, ref_high),
-            _pct_change_text(valores),
+            _pct_change_text(valores, full_valores=full_valores, chart_years=chart_years),
             extra,
         )
         if t
@@ -629,6 +723,8 @@ def _plot_series_on_ax(
     base_color: str = COLOR_NORMAL,
     min_points: int = DEFAULT_MIN_POINTS,
     note: str | None = None,
+    full_series: list[dict[str, Any]] | None = None,
+    chart_years: int = 0,
 ) -> list:
     """Dibuja una serie sobre `ax` (línea, banda/límites de referencia, puntos
     coloreados según estén dentro o fuera de rango). Devuelve los handles de
@@ -790,13 +886,21 @@ def _plot_series_on_ax(
         )
 
     _draw_trend_lines(ax, fit)
+    full_vals = (
+        [s["value_num"] for s in full_series if s.get("value_num") is not None]
+        if full_series
+        else None
+    )
     _draw_info_box(
         ax,
         fit,
         valores,
         ref_low[-1] if ref_low else None,
         ref_high[-1] if ref_high else None,
-        summary=series_summary(series),
+        summary=series_summary(series, full_series=full_series, chart_years=chart_years),
+        stats_text=series_stats_text(series, full_series=full_series, chart_years=chart_years),
+        full_valores=full_vals,
+        chart_years=chart_years,
         extra="\n".join(t for t in (_kdigo_note(series, fit), note) if t) or None,
     )
     _apply_y_margin(ax, y_extent)
@@ -892,6 +996,8 @@ def evolution_figure(
     rcv: dict[str, Any] | None = None,
     personal: dict[str, Any] | None = None,
     note: str | None = None,
+    full_series: list[dict[str, Any]] | None = None,
+    chart_years: int = 0,
 ) -> Figure | None:
     """Gráfico de evolución de una prueba en el tiempo, con las líneas de
     mínimo/máximo de referencia y los valores fuera de rango resaltados.
@@ -899,12 +1005,22 @@ def evolution_figure(
     `rcv` (opcional, `rcv.classify_change` de los dos últimos valores):
     añade la banda de variación esperable (`_draw_rcv_band`). `personal`
     (opcional, `rcv.personal_range`): añade la banda del rango personal
-    (`_draw_personal_band`)."""
+    (`_draw_personal_band`). Si se indica `full_series` y `chart_years > 0`,
+    calcula y presenta los estadísticos (media, mín, máx, dentro de rango)
+    del periodo y del histórico en paralelo."""
     if len(series) < 2:
         return None
     fig = Figure(figsize=(8, 4.5), dpi=100)
     ax = fig.add_subplot(111)
-    handles = _plot_series_on_ax(ax, series, title, min_points=min_points, note=note)
+    handles = _plot_series_on_ax(
+        ax,
+        series,
+        title,
+        min_points=min_points,
+        note=note,
+        full_series=full_series,
+        chart_years=chart_years,
+    )
     if handles and personal:
         _draw_personal_band(ax, series, personal)
     if handles and rcv and len(series) >= 2:
@@ -924,7 +1040,10 @@ def evolution_figure(
 
 
 def comparison_figure(
-    series_by_test: dict[str, list[dict[str, Any]]], min_points: int = DEFAULT_MIN_POINTS
+    series_by_test: dict[str, list[dict[str, Any]]],
+    min_points: int = DEFAULT_MIN_POINTS,
+    full_series_by_test: dict[str, list[dict[str, Any]]] | None = None,
+    chart_years: int = 0,
 ) -> Figure | None:
     """Compara hasta dos pruebas mediante "small multiples": un panel por
     prueba, cada uno con su propio eje Y, apilados y compartiendo el eje X
@@ -945,7 +1064,16 @@ def comparison_figure(
     for i, (label, series) in enumerate(items):
         ax = axes[i][0]
         color = COMPARISON_COLORS[i % len(COMPARISON_COLORS)]
-        handles = _plot_series_on_ax(ax, series, label, base_color=color, min_points=min_points)
+        full_s = (full_series_by_test or {}).get(label)
+        handles = _plot_series_on_ax(
+            ax,
+            series,
+            label,
+            base_color=color,
+            min_points=min_points,
+            full_series=full_s,
+            chart_years=chart_years,
+        )
         _legend_above(ax, handles, label)
 
     for row in axes:

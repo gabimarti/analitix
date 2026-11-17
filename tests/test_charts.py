@@ -217,6 +217,63 @@ def test_series_summary_text():
     assert series_summary(sin_rango) is None  # sin rango no hay nada que resumir
 
 
+def test_series_summary_dual_range():
+    from analitix.charts import series_summary
+
+    serie_hist = [
+        _row("2020-01-01", 11.0, "A"),
+        _row("2021-01-01", 14.0, "A"),
+        _row("2024-01-01", 14.5, "A"),
+        _row("2024-02-01", 15.0, "A"),
+    ]
+    serie_periodo = serie_hist[2:]
+
+    txt_dual = series_summary(serie_periodo, full_series=serie_hist, chart_years=3)
+    assert txt_dual is not None
+    assert "(últimos 3 años)" in txt_dual
+    assert "(total histórico)" in txt_dual
+    assert "Dentro del rango en 2 de 2 analíticas (últimos 3 años)" in txt_dual
+    assert "y en 3 de 4 (total histórico)" in txt_dual
+
+
+def test_calc_series_stats_and_text():
+    from analitix.charts import calc_series_stats, series_stats_text
+
+    serie = [
+        dict(fecha="2024-01-01", value_num=10.0),
+        dict(fecha="2024-02-01", value_num=20.0),
+        dict(fecha="2024-03-01", value_num=30.0),
+    ]
+    st = calc_series_stats(serie)
+    assert st == {"n": 3, "media": 20.0, "min": 10.0, "max": 30.0}
+
+    txt_single = series_stats_text(serie)
+    assert txt_single == "Estadísticas (n=3): media 20, mín 10, máx 30"
+
+    serie_hist = [
+        dict(fecha="2020-01-01", value_num=5.0),
+        dict(fecha="2021-01-01", value_num=15.0),
+    ] + serie
+    txt_dual = series_stats_text(serie, full_series=serie_hist, chart_years=3)
+    assert (
+        txt_dual
+        == "Estadísticas: últimos 3 años (n=3): media 20, mín 10, máx 30 · Total histórico (n=5): media 16, mín 5, máx 30"
+    )
+
+
+def test_pct_change_text_dual():
+    from analitix.charts import _pct_change_text
+
+    vals = [100.0, 110.0]
+    full_vals = [80.0, 90.0, 100.0, 110.0]
+
+    txt = _pct_change_text(vals, full_valores=full_vals, chart_years=3)
+    assert txt is not None
+    assert "último cambio: +10.0% vs. anterior" in txt
+    assert "variación últimos 3 años: +10.0%" in txt
+    assert "total hist.: +37.5%" in txt
+
+
 def test_change_status():
     from analitix.charts import change_status
 
