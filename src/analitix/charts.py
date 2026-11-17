@@ -633,15 +633,11 @@ def _plot_series_on_ax(
     """Dibuja una serie sobre `ax` (línea, banda/límites de referencia, puntos
     coloreados según estén dentro o fuera de rango). Devuelve los handles de
     leyenda propios de esta serie. Aplica el control de pocos datos
-    (`data_sufficiency`): sin gráfico con 1 valor, aviso por debajo de
-    `min_points`."""
+    (`data_sufficiency`): sin gráfico con menos de 2 valores, aviso por debajo
+    de `min_points`."""
+    if len(series) < 2:
+        return []
     suficiencia = data_sufficiency(len(series), min_points)
-    if suficiencia == "sin_datos":
-        ax.set_title(f"{label} (sin datos)")
-        return []
-    if suficiencia == "un_punto":
-        _draw_single_point(ax, series[0])
-        return []
     if suficiencia == "pocos":
         _draw_few_points_warning(ax, len(series), min_points)
 
@@ -896,13 +892,16 @@ def evolution_figure(
     rcv: dict[str, Any] | None = None,
     personal: dict[str, Any] | None = None,
     note: str | None = None,
-) -> Figure:
+) -> Figure | None:
     """Gráfico de evolución de una prueba en el tiempo, con las líneas de
     mínimo/máximo de referencia y los valores fuera de rango resaltados.
+    Si la serie tiene menos de 2 valores, no se dibuja (devuelve None).
     `rcv` (opcional, `rcv.classify_change` de los dos últimos valores):
     añade la banda de variación esperable (`_draw_rcv_band`). `personal`
     (opcional, `rcv.personal_range`): añade la banda del rango personal
     (`_draw_personal_band`)."""
+    if len(series) < 2:
+        return None
     fig = Figure(figsize=(8, 4.5), dpi=100)
     ax = fig.add_subplot(111)
     handles = _plot_series_on_ax(ax, series, title, min_points=min_points, note=note)
@@ -926,13 +925,19 @@ def evolution_figure(
 
 def comparison_figure(
     series_by_test: dict[str, list[dict[str, Any]]], min_points: int = DEFAULT_MIN_POINTS
-) -> Figure:
+) -> Figure | None:
     """Compara hasta dos pruebas mediante "small multiples": un panel por
     prueba, cada uno con su propio eje Y, apilados y compartiendo el eje X
     (mismas fechas alineadas verticalmente). Evita el eje Y doble, que
-    inventa una relación visual arbitraria entre dos escalas distintas."""
-    items = list(series_by_test.items())[:MAX_COMPARISON_TESTS]
-    n = max(1, len(items))
+    inventa una relación visual arbitraria entre dos escalas distintas.
+    Solo incluye pruebas con al menos 2 valores; si ninguna los tiene,
+    devuelve None."""
+    items = [(label, series) for label, series in series_by_test.items() if len(series) >= 2][
+        :MAX_COMPARISON_TESTS
+    ]
+    if not items:
+        return None
+    n = len(items)
 
     fig = Figure(figsize=(8, 4.4 * n), dpi=100)  # sitio para la leyenda encima de cada panel
     axes = fig.subplots(n, 1, sharex=True, squeeze=False)

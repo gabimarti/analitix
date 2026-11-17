@@ -75,7 +75,6 @@ from analitix.charts import (
     changes_figure,
     changes_figure_items,
     comparison_figure,
-    data_sufficiency,
     evolution_figure,
     heatmap_dates,
     heatmap_figure,
@@ -5723,10 +5722,13 @@ class AnalitixApp(ttk.Window):
         (RCV) de los dos últimos valores, si el parámetro tiene variación
         biológica (`rcv.py`; los índices calculados de los paneles no la
         tienen y se dibujan sin banda). El rango personal solo en Evolución
-        (`with_personal`), donde está su interruptor."""
+        (`with_personal`), donde está su interruptor.
+        Con menos de 2 valores filtrados no se genera el gráfico (devuelve None)."""
         hidden = len(series)
         series = self._windowed(series)
         hidden -= len(series)
+        if len(series) < 2:
+            return None
         sex = get_patient_sex(self.con, self.current_patient_id)
         rcv = None
         if len(series) >= 2:
@@ -5768,9 +5770,14 @@ class AnalitixApp(ttk.Window):
         """`charts.comparison_figure` con la misma ventana de años que
         `_evolution_figure` (Comparativa e Inflamación/Tiroides/Glucosa)."""
         hidden = sum(len(s) for s in series_by_test.values())
-        series_by_test = {label: self._windowed(s) for label, s in series_by_test.items()}
+        series_by_test = {
+            label: self._windowed(s)
+            for label, s in series_by_test.items()
+            if len(self._windowed(s)) >= 2
+        }
         hidden -= sum(len(s) for s in series_by_test.values())
-        return self._mark_window(comparison_figure(series_by_test, self.min_points), hidden)
+        fig = comparison_figure(series_by_test, self.min_points)
+        return self._mark_window(fig, hidden)
 
     def _windowed(self, series: list[dict]) -> list[dict]:
         """Los `HISTORY_YEARS` años anteriores a la última analítica de la
@@ -5786,7 +5793,7 @@ class AnalitixApp(ttk.Window):
     def _mark_window(fig, hidden: int, que: str = "analíticas"):
         """Aviso en el gráfico cuando la ventana de años oculta datos
         (`que`: "analíticas" o, en tensión arterial, "mediciones")."""
-        if hidden:
+        if fig is not None and hidden:
             fig.text(
                 0.99,
                 0.005,
@@ -5830,6 +5837,15 @@ class AnalitixApp(ttk.Window):
     def _embed_figure(self, fig, container: ttk.Frame) -> None:
         for child in container.winfo_children():
             child.destroy()
+
+        if fig is None:
+            ttk.Label(
+                container,
+                text="Hacen falta al menos 2 analíticas para mostrar una gráfica de evolución.",
+                bootstyle="secondary",
+                font=("", 10),
+            ).pack(expand=True)
+            return
 
         if len(fig.axes) <= 1 and not getattr(fig, "analitix_scroll", False):
             canvas = FigureCanvasTkAgg(fig, master=container)
@@ -6099,14 +6115,15 @@ class AnalitixApp(ttk.Window):
                 nombre: series[k] for k, nombre in PDF_COMBINED_PANELS[key].items() if series.get(k)
             }
             if combinadas:
-                paginas.append(self._comparison_figure(combinadas))
+                fig = self._comparison_figure(combinadas)
+                if fig is not None:
+                    paginas.append(fig)
             return paginas
         for cid, nombre in getattr(self, f"_{key}_indices"):
-            if cid and data_sufficiency(len(series.get(cid, [])), self.min_points) not in (
-                "sin_datos",
-                "un_punto",
-            ):
-                paginas.append(self._evolution_figure(series[cid], nombre, cid))
+            if cid:
+                fig = self._evolution_figure(series.get(cid, []), nombre, cid)
+                if fig is not None:
+                    paginas.append(fig)
         return paginas
 
     def _export_custom_pdf(self) -> None:
@@ -6378,11 +6395,11 @@ class AnalitixApp(ttk.Window):
                     avanza()
                 for t in seleccion:
                     serie = get_series(self.con, t["canonical_id"], self.current_patient_id)
-                    paginas.append(
-                        self._evolution_figure(
-                            serie, t["raw_name"], t["canonical_id"], with_personal=True
-                        )
+                    fig = self._evolution_figure(
+                        serie, t["raw_name"], t["canonical_id"], with_personal=True
                     )
+                    if fig is not None:
+                        paginas.append(fig)
                     avanza()
                 if periodo_bp is not None:
                     # El periodo elegido manda sobre la ventana de años, como el

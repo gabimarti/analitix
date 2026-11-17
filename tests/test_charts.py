@@ -138,17 +138,21 @@ def test_few_points_control_in_every_series_chart():
     dos = uno + [_row("2024-02-01", 15.0, "A")]
     cuatro = dos + [_row("2024-03-01", 15.0, "A"), _row("2024-04-01", 15.0, "A")]
 
-    ax = evolution_figure(uno, "x", 4).axes[0]
-    assert "Solo hay 1 analítica" in texts(ax) and not scatters(ax)  # sin gráfico
+    # Con menos de 2 valores no se genera figura (M3)
+    assert evolution_figure([], "x", 4) is None
+    assert evolution_figure(uno, "x", 4) is None
+
     ax = evolution_figure(dos, "x", 4).axes[0]
     assert "Solo 2 analíticas" in texts(ax) and scatters(ax)  # gráfico con aviso
     ax = evolution_figure(cuatro, "x", 4).axes[0]
     assert "Solo" not in texts(ax)
 
-    # Comparativa (y paneles combinados): el mismo control en cada subgráfico.
+    # Comparativa (y paneles combinados): si una prueba tiene < 2 valores se omite;
+    # si ninguna alcanza 2 valores devuelve None.
+    assert comparison_figure({"A": uno, "B": uno}, 4) is None
     fig = comparison_figure({"A": uno, "B": cuatro}, 4)
-    assert "Solo hay 1 analítica" in texts(fig.axes[0])
-    assert "Solo" not in texts(fig.axes[1])
+    assert len(fig.axes) == 1
+    assert "Solo" not in texts(fig.axes[0])
 
 
 def test_evolution_rcv_band():

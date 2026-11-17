@@ -27,7 +27,6 @@ from analitix.charts import (
     COLOR_BAJO,
     COLOR_BRUSCO,
     DEFAULT_MIN_POINTS,
-    data_sufficiency,
     evolution_figure,
 )
 from analitix.config import LOGO_PATH
@@ -323,7 +322,7 @@ def export_pdf(
     graficos = []
     for f in filas:
         series = series_by_canonical_id.get(f["canonical_id"])
-        if series and data_sufficiency(len(series), min_points) not in ("sin_datos", "un_punto"):
+        if series and len(series) >= 2:
             graficos.append((f, series))
     total = 3 + len(graficos)
 
@@ -347,11 +346,12 @@ def export_pdf(
 
         for f, series in graficos:
             fig = evolution_figure(series, labels.get(f["canonical_id"], f["raw_name"]), min_points)
-            _add_footer(fig, tipo_informe, pagina, total)
-            pdf.savefig(fig)
-            if on_progress:
-                on_progress(pagina, total)
-            pagina += 1
+            if fig is not None:
+                _add_footer(fig, tipo_informe, pagina, total)
+                pdf.savefig(fig)
+                if on_progress:
+                    on_progress(pagina, total)
+                pagina += 1
     return len(graficos)
 
 
