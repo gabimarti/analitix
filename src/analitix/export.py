@@ -238,10 +238,9 @@ def _table_page(
                 if ref_low is not None and ref_high is not None
                 else "-"
             )
-            estado = _ESTADO_TEXTO.get(f["flag_calc"], "Normal")
-            variacion = (
-                "-" if f["pct"] is None else f"{f['pct']:+.1f}%{' (*)' if f['brusco'] else ''}"
-            )
+            estado = _ESTADO_TEXTO.get(f.get("flag_calc"), "Normal")
+            pct = f.get("pct")
+            variacion = "-" if pct is None else f"{pct:+.1f}%{' (*)' if f.get('brusco') else ''}"
             nombre = f["raw_name"] or ""
             if len(nombre) > _TABLE_NAME_MAX:
                 nombre = nombre[: _TABLE_NAME_MAX - 1] + "…"

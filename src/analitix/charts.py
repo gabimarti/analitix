@@ -514,6 +514,20 @@ def series_stats_text(
     )
 
 
+def is_recently_altered(series: list[dict[str, Any]], n_recent: int = 2) -> bool:
+    """Indica si una serie temporal presenta algún resultado fuera de rango
+    en sus últimas `n_recent` analíticas registradas.
+
+    Si `n_recent <= 0`, evalúa todo el histórico disponible (devuelve True
+    si alguna vez estuvo fuera de rango).
+    Devuelve False si la serie está vacía o si en las últimas `n_recent`
+    analíticas todos los valores estuvieron dentro del rango."""
+    if not series:
+        return False
+    ventana = series[-n_recent:] if n_recent > 0 else series
+    return any(p.get("flag_calc") in ("alto", "bajo") for p in ventana)
+
+
 def series_summary(
     series: list[dict[str, Any]],
     full_series: list[dict[str, Any]] | None = None,

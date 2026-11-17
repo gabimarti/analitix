@@ -525,3 +525,32 @@ def test_kdigo_note_only_for_demonstrable_rapid_egfr_decline():
     assert "progresión rápida" not in " ".join(
         t.get_text() for t in evolution_figure(estable, "FG").axes[0].texts
     )
+
+
+def test_is_recently_altered():
+    from analitix.charts import is_recently_altered
+
+    assert is_recently_altered([]) is False
+    assert is_recently_altered([], n_recent=2) is False
+
+    # Parámetro alterado hace tiempo y normalizado en las 2 últimas
+    serie = [
+        {"flag_calc": "alto"},
+        {"flag_calc": "normal"},
+        {"flag_calc": "normal"},
+    ]
+    assert is_recently_altered(serie, n_recent=2) is False
+    assert is_recently_altered(serie, n_recent=3) is True
+    assert is_recently_altered(serie, n_recent=0) is True
+
+    # Parámetro alterado en la última
+    serie_act = [
+        {"flag_calc": "normal"},
+        {"flag_calc": "alto"},
+    ]
+    assert is_recently_altered(serie_act, n_recent=2) is True
+    assert is_recently_altered(serie_act, n_recent=1) is True
+
+    # Parámetro sin flags
+    serie_sin_flags = [{"flag_calc": None}, {"flag_calc": None}]
+    assert is_recently_altered(serie_sin_flags, n_recent=2) is False

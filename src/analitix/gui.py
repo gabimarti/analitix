@@ -78,6 +78,7 @@ from analitix.charts import (
     evolution_figure,
     heatmap_dates,
     heatmap_figure,
+    is_recently_altered,
     position_figure,
     trend_arrow,
 )
@@ -6099,6 +6100,7 @@ class AnalitixApp(ttk.Window):
             )
             return
 
+        n_recientes = 0
         if modo == "completo":
             summary = get_latest_report_summary(self.con, self.current_patient_id)
             if not summary:
@@ -6118,17 +6120,99 @@ class AnalitixApp(ttk.Window):
                     parent=self,
                 )
                 return
-            tipo_informe = "Informe de parámetros alterados"
+
+            # Diálogo para elegir criterio de inclusión de gráficas (M4)
+            dialog, body = self._new_dialog("Opciones — Informe de alterados")
+            ttk.Label(
+                body,
+                text="El informe incluye la tabla con todos los parámetros que alguna vez han estado "
+                "fuera de rango. Elige qué parámetros deben incluir además gráfica de evolución:",
+                wraplength=520,
+                justify="left",
+            ).pack(anchor="w", pady=(0, 8))
+
+            frame_opciones = ttk.Labelframe(
+                body, text="Gráficas de evolución a incluir", padding=PAD
+            )
+            frame_opciones.pack(fill="x", pady=(0, 8))
+
+            var_criterio = tk.IntVar(value=2)
+
+            ttk.Radiobutton(
+                frame_opciones,
+                text="Solo alterados en las últimas 2 analíticas (recomendado)",
+                variable=var_criterio,
+                value=2,
+            ).pack(anchor="w", padx=8, pady=(2, 4))
+            ttk.Radiobutton(
+                frame_opciones,
+                text="Solo alterados en las últimas 3 analíticas",
+                variable=var_criterio,
+                value=3,
+            ).pack(anchor="w", padx=8, pady=4)
+            ttk.Radiobutton(
+                frame_opciones,
+                text="En cualquier analítica (todo el histórico)",
+                variable=var_criterio,
+                value=0,
+            ).pack(anchor="w", padx=8, pady=(4, 2))
+
+            ttk.Label(
+                body,
+                text="ℹ️ Los parámetros normalizados desde hace tiempo aparecerán en la tabla inicial "
+                "pero no generarán páginas de gráfico innecesarias.",
+                bootstyle="secondary",
+                wraplength=520,
+                justify="left",
+            ).pack(anchor="w", pady=(0, 10))
+
+            resultado = {"confirmado": False}
+
+            def _aceptar():
+                resultado["confirmado"] = True
+                dialog.destroy()
+
+            botones = ttk.Frame(body)
+            botones.pack(fill="x", pady=(PAD, 0))
+            boton_cancelar = ttk.Button(botones, text="Cancelar", command=dialog.destroy)
+            boton_cancelar.pack(side="right")
+            boton_continuar = ttk.Button(
+                botones, text="Continuar...", bootstyle="primary", command=_aceptar
+            )
+            boton_continuar.pack(side="right", padx=(0, 8))
+            self._same_width(boton_cancelar, boton_continuar)
+            self._center_dialog(dialog)
+            self.wait_window(dialog)
+
+            if not resultado["confirmado"]:
+                return
+
+            n_recientes = var_criterio.get()
+            if n_recientes > 0:
+                tipo_informe = (
+                    f"Informe de parámetros alterados · Gráficas: últimas {n_recientes} analíticas"
+                )
+            else:
+                tipo_informe = "Informe de parámetros alterados"
 
         # Gráficas nunca para los parámetros normales. En "completo" eso significa filtrar por
-        # orden (0 = fuera de rango, 1 = cambio brusco); en "alterados" no hace falta filtrar nada
-        # más, porque el propio criterio de selección de `_build_altered_rows` (alguna vez fuera de
-        # rango en todo el histórico) ya es en sí mismo "una alteración importante" para cada fila,
-        # esté o no dentro de rango en el snapshot actual. `export_pdf` descarta además cualquier
+        # orden (0 = fuera de rango, 1 = cambio brusco); en "alterados" se aplica el filtro de
+        # analíticas recientes (M4) o todo el histórico. `export_pdf` descarta además cualquier
         # serie de un solo punto (nada que mostrar como evolución).
-        filas_con_grafico = (
-            filas if modo == "alterados" else [f for f in filas if f["orden"] in (0, 1)]
-        )
+        if modo == "alterados":
+            if n_recientes > 0:
+                filas_con_grafico = [
+                    f
+                    for f in filas
+                    if is_recently_altered(
+                        get_series(self.con, f["canonical_id"], self.current_patient_id),
+                        n_recientes,
+                    )
+                ]
+            else:
+                filas_con_grafico = filas
+        else:
+            filas_con_grafico = [f for f in filas if f["orden"] in (0, 1)]
         full_series_by_canonical_id = {
             f["canonical_id"]: get_series(self.con, f["canonical_id"], self.current_patient_id)
             for f in filas_con_grafico

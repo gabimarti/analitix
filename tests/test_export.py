@@ -266,3 +266,88 @@ def test_variable_height_charts_are_relaid_out_on_a4():
     assert (
         min(e.x0 for e in etiquetas) >= 0 and max(e.x1 for e in etiquetas) <= ancho_px
     )  # nada cortado
+
+
+def test_export_pdf_altered_report_discriminated_charts(tmp_path: Path):
+    from analitix.charts import is_recently_altered
+
+    path = tmp_path / "informe_alterados.pdf"
+    filas = [
+        dict(
+            canonical_id="glucosa",
+            raw_name="Glucosa",
+            value_num=130.0,
+            unit="mg/dL",
+            ref_low=70.0,
+            ref_high=100.0,
+            flag_calc="alto",
+            valor_anterior=95.0,
+            pct=36.8,
+            brusco=True,
+            orden=0,
+        ),
+        dict(
+            canonical_id="colesterol",
+            raw_name="Colesterol",
+            value_num=190.0,
+            unit="mg/dL",
+            ref_low=120.0,
+            ref_high=200.0,
+            flag_calc="normal",
+            valor_anterior=185.0,
+            pct=2.7,
+            brusco=False,
+            orden=2,
+        ),
+    ]
+    series_glucosa = [
+        dict(fecha="2020-01-01", value_num=125.0, ref_low=70.0, ref_high=100.0, flag_calc="alto"),
+        dict(fecha="2024-01-01", value_num=130.0, ref_low=70.0, ref_high=100.0, flag_calc="alto"),
+    ]
+    series_colesterol = [
+        dict(fecha="2020-01-01", value_num=240.0, ref_low=120.0, ref_high=200.0, flag_calc="alto"),
+        dict(
+            fecha="2022-01-01", value_num=185.0, ref_low=120.0, ref_high=200.0, flag_calc="normal"
+        ),
+        dict(
+            fecha="2024-01-01", value_num=190.0, ref_low=120.0, ref_high=200.0, flag_calc="normal"
+        ),
+    ]
+
+    # Glucosa: alterada en las últimas 2 analíticas
+    assert is_recently_altered(series_glucosa, n_recent=2) is True
+    # Colesterol: normalizado en las últimas 2 analíticas
+    assert is_recently_altered(series_colesterol, n_recent=2) is False
+
+    # Filtrar series_by_canonical_id según is_recently_altered
+    todas_series = {"glucosa": series_glucosa, "colesterol": series_colesterol}
+    series_filtradas = {
+        cid: s for cid, s in todas_series.items() if is_recently_altered(s, n_recent=2)
+    }
+
+    paginas = export_pdf(
+        "Paciente de Prueba",
+        "2024-01-01",
+        filas,
+        series_filtradas,
+        {"glucosa": "Glucosa", "colesterol": "Colesterol"},
+        30.0,
+        path,
+        tipo_informe="Informe de parámetros alterados · Gráficas: últimas 2 analíticas",
+    )
+    # Solo glucosa tiene gráfica (1 página de gráfica)
+    assert paginas == 1
+
+    with pdfplumber.open(path) as pdf:
+        assert len(pdf.pages) == 4  # Portada + Fuera de rango + Resto + 1 Gráfico (glucosa)
+        portada = pdf.pages[0].extract_text()
+        assert "Gráficas: últimas 2 analíticas" in portada
+        # En la página de fuera de rango está Glucosa
+        p2 = pdf.pages[1].extract_text()
+        assert "Glucosa" in p2
+        # En la página de resto está Colesterol (normal en la última analítica)
+        p3 = pdf.pages[2].extract_text()
+        assert "Colesterol" in p3
+        # La página de gráfico es de Glucosa
+        p4 = pdf.pages[3].extract_text()
+        assert "Glucosa" in p4 and "Colesterol" not in p4
