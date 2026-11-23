@@ -69,6 +69,7 @@ from analitix.charts import (
     DEFAULT_MIN_POINTS,
     LAB_UNKNOWN,
     MAX_COMPARISON_TESTS,
+    altered_in_period,
     apply_target,
     bp_figure,
     change_status,
@@ -80,7 +81,7 @@ from analitix.charts import (
     heatmap_figure,
     heatmap_out_of_range,
     heatmap_window,
-    is_recently_altered,
+    period_cutoff,
     position_figure,
     trend_arrow,
 )
@@ -3309,6 +3310,21 @@ class AnalitixApp(ttk.Window):
             rows = [r for r in rows if heatmap_out_of_range(r[1])]
         return rows, hidden
 
+    def _period_cutoff(self) -> str | None:
+        """Primera fecha del periodo de las gráficas, contado desde el informe
+        más reciente del paciente (un corte común para todos sus parámetros,
+        como en el mapa de calor); `None` = todo el histórico."""
+        years = self._effective_chart_years()
+        if not years or self.current_patient_id is None:
+            return None
+        summary = get_latest_report_summary(self.con, self.current_patient_id)
+        return period_cutoff(summary["fecha"] if summary else None, years)
+
+    def _period_label(self) -> str:
+        """«últimos N años» o «todo el histórico», para textos de diálogos."""
+        years = self._effective_chart_years()
+        return f"últimos {years} años" if years else "todo el histórico"
+
     def _effective_chart_years(self) -> int:
         """Años del periodo de las gráficas, 0 = todo el histórico (mismo
         criterio que `_windowed`)."""
@@ -6157,12 +6173,18 @@ class AnalitixApp(ttk.Window):
                 )
                 return
 
-            # Diálogo para elegir criterio de inclusión de gráficas
+            # Diálogo para elegir criterio de inclusión de gráficas. Todas las
+            # opciones se limitan al periodo de las gráficas (Configuración →
+            # General), el mismo que se dibuja y que usa el mapa de calor.
+            anios = self._effective_chart_years()
+            periodo = f"de los últimos {anios} años" if anios else "del histórico"
             dialog, body = self._new_dialog("Opciones — Informe de alterados")
             ttk.Label(
                 body,
                 text="El informe incluye la tabla con todos los parámetros que alguna vez han estado "
-                "fuera de rango. Elige qué parámetros deben incluir además gráfica de evolución:",
+                "fuera de rango. Elige qué parámetros deben incluir además gráfica de evolución "
+                f"(solo se cuentan las analíticas {periodo}, el periodo de las gráficas; "
+                "Configuración → General para cambiarlo):",
                 wraplength=520,
                 justify="left",
             ).pack(anchor="w", pady=(0, 8))
@@ -6176,27 +6198,27 @@ class AnalitixApp(ttk.Window):
 
             ttk.Radiobutton(
                 frame_opciones,
-                text="Solo alterados en las últimas 2 analíticas (recomendado)",
+                text=f"Solo alterados en las últimas 2 analíticas {periodo} (recomendado)",
                 variable=var_criterio,
                 value=2,
             ).pack(anchor="w", padx=8, pady=(2, 4))
             ttk.Radiobutton(
                 frame_opciones,
-                text="Solo alterados en las últimas 3 analíticas",
+                text=f"Solo alterados en las últimas 3 analíticas {periodo}",
                 variable=var_criterio,
                 value=3,
             ).pack(anchor="w", padx=8, pady=4)
             ttk.Radiobutton(
                 frame_opciones,
-                text="En cualquier analítica (todo el histórico)",
+                text=f"En cualquier analítica {periodo}",
                 variable=var_criterio,
                 value=0,
             ).pack(anchor="w", padx=8, pady=(4, 2))
 
             ttk.Label(
                 body,
-                text="ℹ️ Los parámetros normalizados desde hace tiempo aparecerán en la tabla inicial "
-                "pero no generarán páginas de gráfico innecesarias.",
+                text="ℹ️ Los parámetros normalizados desde hace tiempo, o que no se han medido en el "
+                "periodo, aparecerán en la tabla inicial pero no generarán páginas de gráfico.",
                 bootstyle="secondary",
                 wraplength=520,
                 justify="left",
@@ -6224,29 +6246,29 @@ class AnalitixApp(ttk.Window):
                 return
 
             n_recientes = var_criterio.get()
+            tipo_informe = "Informe de parámetros alterados"
             if n_recientes > 0:
-                tipo_informe = (
-                    f"Informe de parámetros alterados · Gráficas: últimas {n_recientes} analíticas"
-                )
-            else:
-                tipo_informe = "Informe de parámetros alterados"
+                tipo_informe += f" · Gráficas: últimas {n_recientes} analíticas"
+            if anios:
+                tipo_informe += f" · Periodo: últimos {anios} años"
 
         # Gráficas nunca para los parámetros normales. En "completo" eso significa filtrar por
-        # orden (0 = fuera de rango, 1 = cambio brusco); en "alterados" se aplica el filtro de
-        # analíticas recientes o todo el histórico. `export_pdf` descarta además cualquier
-        # serie de un solo punto (nada que mostrar como evolución).
+        # orden (0 = fuera de rango, 1 = cambio brusco); en "alterados", solo los que tienen
+        # algún valor fuera de rango dentro del periodo de las gráficas (en sus últimas
+        # `n_recientes` analíticas de ese periodo, o en cualquiera si es 0): sin ninguno, la
+        # gráfica no enseñaría nada alterado. `export_pdf` descarta además cualquier serie de
+        # un solo punto (nada que mostrar como evolución).
         if modo == "alterados":
-            if n_recientes > 0:
-                filas_con_grafico = [
-                    f
-                    for f in filas
-                    if is_recently_altered(
-                        get_series(self.con, f["canonical_id"], self.current_patient_id),
-                        n_recientes,
-                    )
-                ]
-            else:
-                filas_con_grafico = filas
+            corte = self._period_cutoff()
+            filas_con_grafico = [
+                f
+                for f in filas
+                if altered_in_period(
+                    get_series(self.con, f["canonical_id"], self.current_patient_id),
+                    corte,
+                    n_recientes,
+                )
+            ]
         else:
             filas_con_grafico = [f for f in filas if f["orden"] in (0, 1)]
         full_series_by_canonical_id = {
@@ -6335,8 +6357,10 @@ class AnalitixApp(ttk.Window):
         dialog, body = self._new_dialog("Informe PDF personalizado", resizable=True)
         ttk.Label(
             body,
-            text="Elige qué incluir en el informe. ⚠ = alguna vez fuera de rango (o por encima del umbral "
-            "orientativo de un panel). El informe usa los mismos laboratorios y ajustes que la pantalla.",
+            text="Elige qué incluir en el informe. ⚠ = fuera de rango (o por encima del umbral "
+            "orientativo de un panel) en el periodo de las gráficas "
+            f"({self._period_label()}; Configuración → General). El informe usa los mismos laboratorios y ajustes que la "
+            "pantalla.",
             wraplength=560,
             justify="left",
         ).pack(anchor="w", pady=(0, 6))
@@ -6397,6 +6421,18 @@ class AnalitixApp(ttk.Window):
             for t in list_canonical_tests(self.con, self.current_patient_id)
             if t["num_points"] >= 2
         ]
+        # ⚠ y «Marcar alterados» = fuera de rango dentro del periodo de las
+        # gráficas (el que se dibuja), no alguna vez en todo el histórico:
+        # así no se marcan gráficas sin nada alterado a la vista. Primer
+        # filtro barato con `out_of_range` (todo el histórico).
+        corte = self._period_cutoff()
+        alterado_test = {
+            t["canonical_id"]: bool(t["out_of_range"])
+            and altered_in_period(
+                get_series(self.con, t["canonical_id"], self.current_patient_id), corte
+            )
+            for t in tests
+        }
         lista = self._scrollable_frame(parametros)
         vars_tests = []
         for t in tests:
@@ -6404,7 +6440,8 @@ class AnalitixApp(ttk.Window):
             vars_tests.append(var)
             ttk.Checkbutton(
                 lista,
-                text=f"{'⚠ ' if t['out_of_range'] else ''}{t['raw_name']} (n={t['num_points']})",
+                text=f"{'⚠ ' if alterado_test[t['canonical_id']] else ''}{t['raw_name']} "
+                f"(n={t['num_points']})",
                 variable=var,
             ).pack(anchor="w", padx=8, pady=1)
 
@@ -6413,9 +6450,7 @@ class AnalitixApp(ttk.Window):
         vars_paneles = {}
         for i, (key, label) in enumerate(PDF_PANELS):
             series = getattr(self, f"_{key}_series")
-            alterado = any(
-                p.get("flag_calc") in ("alto", "bajo") for s in series.values() for p in s
-            )
+            alterado = any(altered_in_period(s, corte) for s in series.values())
             vars_paneles[key] = (tk.BooleanVar(value=False), label, alterado)
             ttk.Checkbutton(
                 paneles,
@@ -6441,7 +6476,7 @@ class AnalitixApp(ttk.Window):
 
         def _marcar_alterados() -> None:
             for t, var in zip(tests, vars_tests):
-                var.set(bool(t["out_of_range"]))
+                var.set(alterado_test[t["canonical_id"]])
             for var, _label, alterado in vars_paneles.values():
                 var.set(alterado)
 

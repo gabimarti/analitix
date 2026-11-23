@@ -670,3 +670,36 @@ def test_heatmap_out_of_range_in_period():
     assert [label for label, s in filas if heatmap_out_of_range(s)] == ["Reciente"]
     filas, _ = heatmap_window(rows, 0)
     assert [label for label, s in filas if heatmap_out_of_range(s)] == ["Antiguo", "Reciente"]
+
+
+def test_period_cutoff():
+    from analitix.charts import period_cutoff
+
+    assert period_cutoff("2026-03-01 10:00:00", 5) == "2021-03-01"
+    assert period_cutoff("2026-03-01", 0) is None
+    assert period_cutoff(None, 5) is None
+
+
+def test_altered_in_period_ignores_old_and_stopped_parameters():
+    """Gráficas del informe de alterados y «Marcar alterados»: solo si hay
+    algún valor fuera de rango dentro del periodo (y, con `n_recent`, en las
+    últimas analíticas de ese periodo)."""
+    from analitix.charts import altered_in_period
+
+    corte = "2021-03-01"
+    antiguo = [_punto_mapa("2016-01-01", "alto"), _punto_mapa("2024-01-01")]
+    reciente = [_punto_mapa("2022-01-01", "bajo"), _punto_mapa("2025-01-01")]
+    # Dejó de pedirse en 2018: sus 2 últimas analíticas estaban alteradas,
+    # pero ninguna cae en el periodo.
+    dejado = [_punto_mapa("2017-01-01", "alto"), _punto_mapa("2018-01-01", "alto")]
+    ultimo = [_punto_mapa("2022-01-01"), _punto_mapa("2025-01-01", "alto")]
+
+    assert not altered_in_period(antiguo, corte)
+    assert altered_in_period(reciente, corte)
+    assert not altered_in_period(dejado, corte)
+    assert not altered_in_period(dejado, corte, 2)
+    # Últimas 1 del periodo: «reciente» ya se normalizó, «ultimo» no.
+    assert not altered_in_period(reciente, corte, 1)
+    assert altered_in_period(ultimo, corte, 1)
+    # Sin periodo (todo el histórico): como antes.
+    assert altered_in_period(antiguo, None) and altered_in_period(dejado, None, 2)

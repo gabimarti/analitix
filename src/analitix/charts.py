@@ -558,6 +558,30 @@ def series_stats_text(
     )
 
 
+def period_cutoff(last_fecha: str | None, years: int) -> str | None:
+    """Primera fecha (AAAA-MM-DD) del periodo de `years` años que acaba en
+    `last_fecha` (la misma aritmética que `gui._windowed`: mismo día y mes,
+    `years` años antes). `None` = sin recorte (todo el histórico, o sin
+    fecha)."""
+    if years <= 0 or not last_fecha:
+        return None
+    last = last_fecha[:10]
+    return f"{int(last[:4]) - years}{last[4:]}"
+
+
+def altered_in_period(series: list[dict[str, Any]], cutoff: str | None, n_recent: int = 0) -> bool:
+    """Si la serie tiene algún valor fuera de rango dentro del periodo que
+    empieza en `cutoff` (`period_cutoff`; `None` = todo el histórico).
+    Con `n_recent > 0`, solo mira sus últimas `n_recent` analíticas DENTRO
+    del periodo (`is_recently_altered`): un parámetro que dejó de pedirse
+    antes del periodo no cuenta aunque sus dos últimas analíticas estuvieran
+    alteradas. Decide qué gráficas de evolución se generan (informe de
+    alterados, «Marcar alterados» del informe personalizado), con el mismo
+    corte común que el mapa de calor (`heatmap_window`)."""
+    ventana = [s for s in series if cutoff is None or s["fecha"][:10] >= cutoff]
+    return is_recently_altered(ventana, n_recent)
+
+
 def is_recently_altered(series: list[dict[str, Any]], n_recent: int = 2) -> bool:
     """Indica si una serie temporal presenta algún resultado fuera de rango
     en sus últimas `n_recent` analíticas registradas.
@@ -1266,8 +1290,7 @@ def heatmap_window(
     rows = [(label, series) for label, series in rows if series]
     if years <= 0 or not rows:
         return rows, 0
-    last = max(s["fecha"][:10] for _, series in rows for s in series)
-    cutoff = f"{int(last[:4]) - years}{last[4:]}"
+    cutoff = period_cutoff(max(s["fecha"][:10] for _, series in rows for s in series), years)
     hidden = sum(1 for d in heatmap_dates(rows) if d < cutoff)
     recortadas = [
         (label, [s for s in series if s["fecha"][:10] >= cutoff]) for label, series in rows

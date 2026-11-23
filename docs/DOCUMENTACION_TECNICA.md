@@ -1498,7 +1498,12 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
   casillas dentro de `_scrollable_frame`, no una `Listbox` con Ctrl+clic
   (igual que Comparativa);
   "Marcar alterados" y "Desmarcar todo", con `_same_width` en cada grupo
-  de botones:
+  de botones. La ⚠ y "Marcar alterados" usan `charts.altered_in_period`
+  con el corte común `_period_cutoff()` (periodo de las gráficas contado
+  desde el informe más reciente, `charts.period_cutoff`), el mismo que el
+  informe de alterados de `_export_pdf` usa para decidir qué parámetros
+  llevan gráfica (con `n_recent` = últimas 2/3 analíticas del periodo, o 0)
+  y que `charts.heatmap_window` usa en el mapa de calor:
   - secciones (tabla, "Qué ha cambiado" vía `_changes_rows`, compartido
     con la pestaña Resumen, y mapa de calor de `HEATMAP_OUT_OF_RANGE`);
   - casillas con las pruebas de 2 o más analíticas;

@@ -1514,6 +1514,15 @@ respecto al informe anterior, marcada con "(*)" si es un cambio brusco.
   valor más reciente (que puede venir de un informe distinto al último,
   si ese parámetro concreto no se repitió en él). Útil para un
   seguimiento centrado solo en lo que alguna vez dio problema.
+  Antes de generarlo se elige qué parámetros llevan además **gráfica de
+  evolución**: los alterados en sus **últimas 2** analíticas
+  (recomendado), en sus **últimas 3**, o en **cualquier** analítica, siempre
+  **dentro del periodo de las gráficas** (Configuración → General; por
+  ejemplo, los últimos 5 años, contados desde tu analítica más reciente).
+  Un parámetro que solo estuvo alterado antes de ese periodo, o que no se
+  ha medido desde entonces, sigue en la tabla pero no genera gráfica: no
+  enseñaría nada alterado. Con «Todo el histórico» se cuenta toda tu
+  historia. La portada indica el periodo usado.
 
 Ejemplo de **informe de alterados** con el paciente ficticio (portada, tabla
 de parámetros fuera de rango y uno de los gráficos de evolución). El PDF
@@ -1549,9 +1558,11 @@ panel clínico para llevar a una consulta:
   aparecen las pruebas con al menos 2 analíticas.
 - **Paneles clínicos**: cada panel incluye su resumen, tal como lo ves en
   pantalla, y sus gráficos. Los paneles sin datos aparecen desactivados.
-- **⚠ marca lo alterado**: los parámetros que alguna vez han estado fuera
-  de rango y los paneles con algún índice por encima del umbral
-  orientativo. **Marcar alterados** los selecciona todos de una vez y
+- **⚠ marca lo alterado**: los parámetros que han estado fuera de rango
+  y los paneles con algún índice por encima del umbral orientativo,
+  **dentro del periodo de las gráficas** (Configuración → General), que es
+  lo que se dibuja: así no se proponen gráficos sin nada alterado a la
+  vista. Con «Todo el histórico», cualquier vez. **Marcar alterados** los selecciona todos de una vez y
   **Desmarcar todo** deja el informe en blanco para empezar de cero.
 - El informe usa **los mismos ajustes que la pantalla**: los laboratorios
   incluidos (el filtro aparece en la portada y en el pie), el aviso de
