@@ -3,7 +3,7 @@
 #   venv-tests\Scripts\python.exe -m pre_commit run --all-files
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.0  # igual que ruff en requirements-dev.txt
+    rev: v0.17.5  # igual que ruff en requirements-dev.txt
     hooks:
       - id: ruff-check
         args: [--fix]
