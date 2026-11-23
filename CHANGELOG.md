@@ -16,6 +16,7 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 - Ventana de contraseña más amplia, con el texto en varias líneas; al crear una contraseña (base de datos nueva o «Cambiar contraseña...») se escribe dos veces en la misma ventana.
 - «Acerca de», la portada de los informes PDF, el README y el manual incluyen la página personal del autor, [gabimarti.github.io](https://gabimarti.github.io/).
 - Instalación desde el código fuente: ahora necesita Python 3.14 o superior (antes 3.11), la misma versión con la que se compila el instalador. Los scripts de instalación avisan si el `python` disponible es más antiguo. El instalador de Windows no cambia: lleva su propio Python.
+- Instalación desde el código fuente: ahora exige Pillow 13 o superior y ttkbootstrap 2.2.7 o superior (antes Pillow 10 y ttkbootstrap 1.10), para que no se puedan instalar versiones de Pillow con vulnerabilidades conocidas. El instalador de Windows se genera con estas mismas versiones.
 - Evolución y Comparativa: el recuadro de resumen bajo cada gráfico tiene la letra algo mayor y líneas más anchas.
 - Mapa de calor: con muchos parámetros se reparte en páginas (botones ◀ ▶, como mucho 20 filas por página, todas con las mismas fechas) en vez de mostrarlos todos a la vez, para que las casillas se lean bien.
 
