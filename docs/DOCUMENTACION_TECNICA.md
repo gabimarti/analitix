@@ -1428,6 +1428,25 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
     sin caber entera (sin paginación automática dentro de una misma
     categoría).
 
+**Comparativa con la analítica anterior** en los informes completo y
+personalizado:
+
+- `report_detail.DELTA_MODES`: `delta` (todas las filas con variación),
+  `alterados` (`filter_rows_for_mode`: estado fuera de rango o
+  `range_alert` distinto de normal, incluidas las normalizadas) y `ultima`
+  (sin comparar; `delta_mode_compares` es falso).
+- `gui._delta_pages(modo)`: última analítica de
+  `get_latest_report_summary` (con el filtro de laboratorios; devuelve
+  también `report_id`), anterior con `get_previous_report`, filas de
+  `match_and_compare_results` filtradas por modo, y páginas con
+  `export.report_detail_pages` (las mismas del detalle exportado por sí
+  solo, `report_detail_subtitle` para el subtítulo). Sin filas, una
+  `text_page` lo indica.
+- Informe completo: `gui._ask_delta_mode` (casilla + tres modos; `False` =
+  cancelar) y `export_pdf(..., extra_pages=...)`, que las pone tras las dos
+  tablas y antes de los gráficos. Informe personalizado: sección con
+  desplegable de modo.
+
 **Informe PDF personalizado** (Exportar → "Informe PDF personalizado..."):
 
 - `export.py` solo monta el documento:

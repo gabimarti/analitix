@@ -427,3 +427,23 @@ def test_export_report_detail(tmp_path):
     )
     assert pdf_comp_path.exists()
     assert pags_comp >= 2
+
+
+def _fila(nombre, status="Normal", alerta=report_detail.ALERT_NORMAL):
+    return {"raw_name": nombre, "status": status, "range_alert": alerta, "section": "S"}
+
+
+def test_filter_rows_for_mode():
+    filas = [
+        _fila("normal"),
+        _fila("alto", "↑ Alto", report_detail.ALERT_STILL_HIGH),
+        _fila("normalizado", "Normal", report_detail.ALERT_NORMALIZED),
+        _fila("pdf", "⚠ Fuera de rango"),
+    ]
+    alterados = report_detail.filter_rows_for_mode(filas, report_detail.DELTA_MODE_ALTERED)
+    assert [f["raw_name"] for f in alterados] == ["alto", "normalizado", "pdf"]
+    for modo in (report_detail.DELTA_MODE_FULL, report_detail.DELTA_MODE_LATEST):
+        assert report_detail.filter_rows_for_mode(filas, modo) == filas
+    assert report_detail.delta_mode_compares(report_detail.DELTA_MODE_FULL)
+    assert report_detail.delta_mode_compares(report_detail.DELTA_MODE_ALTERED)
+    assert not report_detail.delta_mode_compares(report_detail.DELTA_MODE_LATEST)

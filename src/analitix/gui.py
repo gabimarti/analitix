@@ -108,6 +108,8 @@ from analitix.export import (
     export_report_detail_csv,
     export_report_detail_excel,
     export_report_detail_pdf,
+    report_detail_pages,
+    report_detail_subtitle,
     table_page,
     text_page,
 )
@@ -153,7 +155,11 @@ from analitix.renal_risk import (
     get_renal_index_series,
 )
 from analitix.report_detail import (
+    DELTA_MODE_FULL,
+    DELTA_MODES,
     build_comparison_summary,
+    delta_mode_compares,
+    filter_rows_for_mode,
     format_diff as _format_diff_detail,
     group_results_by_section,
     match_and_compare_results,
@@ -6168,6 +6174,7 @@ class AnalitixApp(ttk.Window):
             return
 
         n_recientes = 0
+        modo_delta = None  # comparativa con la analítica anterior (solo "completo")
         if modo == "completo":
             summary = get_latest_report_summary(self.con, self.current_patient_id)
             if not summary:
@@ -6175,9 +6182,14 @@ class AnalitixApp(ttk.Window):
                     "Sin datos", "No hay resultados numéricos para exportar.", parent=self
                 )
                 return
+            modo_delta = self._ask_delta_mode()
+            if modo_delta is False:
+                return
             filas = self._classify_latest_report(summary)
             fecha = summary["fecha"]
             tipo_informe = "Informe completo"
+            if modo_delta:
+                tipo_informe += " · Con comparativa con la analítica anterior"
         else:
             filas, fecha = self._build_altered_rows(self.current_patient_id)
             if not filas:
@@ -6308,6 +6320,7 @@ class AnalitixApp(ttk.Window):
         if filtro:
             tipo_informe = f"{tipo_informe} · {filtro}"  # portada y pie de cada página
         with self._progress("Generando informe PDF") as paso:
+            extra = self._delta_pages(modo_delta) if modo_delta else None
             paginas = export_pdf(
                 patient_name,
                 fecha,
@@ -6322,12 +6335,109 @@ class AnalitixApp(ttk.Window):
                 full_series_by_canonical_id=full_series_by_canonical_id,
                 chart_years=self.chart_years,
                 min_chart_points=self.min_chart_points,
+                extra_pages=extra,
             )
         messagebox.showinfo(
             "Exportado",
             f"Informe generado con {len(filas)} parámetros y {paginas} gráficos en:\n{path}",
             parent=self,
         )
+
+    def _delta_pages(self, mode: str) -> list:
+        """Páginas de la comparativa con la analítica anterior para los
+        informes PDF completo y personalizado: la tabla del detalle de
+        analítica (`report_detail`, por secciones y en el orden del PDF) de
+        la última analítica — la misma que usan las tablas del informe, con
+        el filtro de laboratorios —, con la variación respecto a la anterior
+        salvo en el modo "solo la última analítica". Con "alterados", solo
+        las filas fuera de rango o que entran/salen de rango."""
+        summary = get_latest_report_summary(self.con, self.current_patient_id)
+        if not summary:
+            return []
+        report_id = summary["report_id"]
+        meta = get_report_meta(self.con, report_id) or {"fecha": summary["fecha"]}
+        anterior = (
+            get_previous_report(self.con, self.current_patient_id, report_id)
+            if delta_mode_compares(mode)
+            else None
+        )
+        meta_anterior = get_report_meta(self.con, anterior["id"]) if anterior else None
+        filas = filter_rows_for_mode(
+            match_and_compare_results(
+                get_report_results(self.con, report_id),
+                get_report_results(self.con, anterior["id"]) if anterior else None,
+            ),
+            mode,
+        )
+        titulo = (
+            "Comparativa con la analítica anterior"
+            if anterior
+            else f"Detalle de la última analítica ({summary['fecha'][:10]})"
+        )
+        if not filas:
+            return [
+                text_page(
+                    titulo,
+                    "Ningún parámetro de la última analítica está fuera de rango ni ha "
+                    "entrado o salido de rango respecto a la anterior.",
+                )
+            ]
+        return report_detail_pages(
+            titulo, report_detail_subtitle(meta, meta_anterior), filas, anterior is not None
+        )
+
+    def _ask_delta_mode(self) -> str | None | bool:
+        """Opciones del informe completo: si se añade la comparativa con la
+        analítica anterior y en qué modo. Devuelve el modo (`DELTA_MODES`),
+        None si no se añade, o False si se cancela."""
+        dialog, body = self._new_dialog("Opciones — Informe completo")
+        ttk.Label(
+            body,
+            text="El informe incluye las tablas de la última analítica y las gráficas de los "
+            "parámetros alterados o con cambios bruscos. Puedes añadir, tras las tablas, la "
+            "comparativa con la analítica anterior, por secciones como en «Detalle de "
+            "analítica»:",
+            wraplength=520,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 8))
+        var_incluir = tk.BooleanVar(value=False)
+        var_modo = tk.StringVar(value=DELTA_MODE_FULL)
+        marco = ttk.Labelframe(body, text="Comparativa con la analítica anterior", padding=PAD)
+        marco.pack(fill="x", pady=(0, 8))
+        radios = [
+            ttk.Radiobutton(marco, text=texto, variable=var_modo, value=modo)
+            for modo, texto in DELTA_MODES.items()
+        ]
+
+        def _activar() -> None:
+            for radio in radios:
+                radio.configure(state="normal" if var_incluir.get() else "disabled")
+
+        ttk.Checkbutton(
+            marco, text="Añadir la comparativa", variable=var_incluir, command=_activar
+        ).pack(anchor="w", pady=(0, 4))
+        for radio in radios:
+            radio.pack(anchor="w", padx=(24, 0), pady=2)
+        _activar()
+
+        resultado: dict = {"valor": False}
+
+        def _aceptar() -> None:
+            resultado["valor"] = var_modo.get() if var_incluir.get() else None
+            dialog.destroy()
+
+        botones = ttk.Frame(body)
+        botones.pack(fill="x", pady=(PAD, 0))
+        boton_cancelar = ttk.Button(botones, text="Cancelar", command=dialog.destroy)
+        boton_cancelar.pack(side="right")
+        boton_continuar = ttk.Button(
+            botones, text="Continuar...", bootstyle="primary", command=_aceptar
+        )
+        boton_continuar.pack(side="right", padx=(0, 8))
+        self._same_width(boton_cancelar, boton_continuar)
+        self._center_dialog(dialog)
+        self.wait_window(dialog)
+        return resultado["valor"]
 
     def _panel_pdf_pages(self, key: str, label: str) -> list:
         """Páginas de un panel clínico para el PDF personalizado: su
@@ -6401,6 +6511,22 @@ class AnalitixApp(ttk.Window):
             (var_cambios, "Qué ha cambiado (respecto al informe anterior)"),
         ):
             ttk.Checkbutton(secciones, text=texto, variable=var).pack(anchor="w", padx=8, pady=1)
+        # Comparativa con la analítica anterior (tabla por secciones, como el
+        # detalle de analítica), en uno de los tres modos de `DELTA_MODES`.
+        var_delta = tk.BooleanVar(value=False)
+        var_modo_delta = tk.StringVar(value=DELTA_MODES[DELTA_MODE_FULL])
+        fila_delta = ttk.Frame(secciones)
+        fila_delta.pack(anchor="w", padx=8, pady=1)
+        ttk.Checkbutton(
+            fila_delta, text="Comparativa con la analítica anterior:", variable=var_delta
+        ).pack(side="left")
+        ttk.Combobox(
+            fila_delta,
+            textvariable=var_modo_delta,
+            values=list(DELTA_MODES.values()),
+            state="readonly",
+            width=58,
+        ).pack(side="left", padx=(6, 0))
         # Periodo de la tensión arterial en el informe: por defecto, el
         # último año (los mismos 365 días que el botón "Último año" del panel).
         hoy = dt.date.today()
@@ -6504,6 +6630,7 @@ class AnalitixApp(ttk.Window):
             for var in [
                 var_tabla,
                 var_cambios,
+                var_delta,
                 var_mapa,
                 var_tension,
                 *vars_tests,
@@ -6517,6 +6644,7 @@ class AnalitixApp(ttk.Window):
             if not (
                 var_tabla.get()
                 or var_cambios.get()
+                or var_delta.get()
                 or var_mapa.get()
                 or var_tension.get()
                 or seleccion
@@ -6552,6 +6680,7 @@ class AnalitixApp(ttk.Window):
             pasos = (
                 var_tabla.get()
                 + var_cambios.get()
+                + var_delta.get()
                 + var_mapa.get()
                 + (periodo_bp is not None)
                 + len(seleccion)
@@ -6622,6 +6751,12 @@ class AnalitixApp(ttk.Window):
                             )
                         ]
                     )
+                    avanza()
+                if var_delta.get():
+                    modo_delta = next(
+                        k for k, v in DELTA_MODES.items() if v == var_modo_delta.get()
+                    )
+                    paginas.extend(self._delta_pages(modo_delta))
                     avanza()
                 if var_mapa.get():
                     conjunto = var_conjunto_mapa.get()

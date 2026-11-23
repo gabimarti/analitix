@@ -427,3 +427,51 @@ def test_long_report_type_fits_cover_and_footer(tmp_path: Path):
         portada = pdf.pages[0].extract_text()
         assert "Informe de parámetros alterados" in portada
         assert "Laboratorio Ficticio Dos" in portada
+
+
+def test_report_detail_pages_and_extra_pages_in_full_report(tmp_path: Path):
+    """La comparativa con la analítica anterior (páginas de detalle) va en
+    el informe completo después de las dos tablas y antes de los gráficos."""
+    from analitix.export import report_detail_pages, report_detail_subtitle
+
+    filas = [
+        {
+            "section": f"Sección {i // 30}",
+            "raw_name": f"Parámetro {i}",
+            "value_raw": "10",
+            "prev_value_raw": "8",
+            "diff_num": 2.0,
+            "diff_pct": 25.0,
+            "trend": "↑",
+            "status": "Normal",
+            "ref_text": "5 - 15",
+            "unit": "u",
+        }
+        for i in range(40)
+    ]
+    subtitulo = report_detail_subtitle(
+        {"fecha": "2024-06-01", "report_number": "R2", "lab": "Lab ficticio"},
+        {"fecha": "2023-06-01", "report_number": "R1", "lab": "Lab ficticio"},
+    )
+    assert "Comparado con analítica anterior: R1 (2023-06-01" in subtitulo
+    paginas = report_detail_pages("Comparativa con la analítica anterior", subtitulo, filas, True)
+    assert len(paginas) == 2  # 40 filas + 2 cabeceras de sección, 26 por página
+    path = tmp_path / "completo.pdf"
+    export_pdf(
+        "Paciente de Prueba",
+        "2024-06-01",
+        _filas_prueba(),
+        _series_prueba(),
+        {"glucosa_serum": "Glucosa", "potassi": "Potassi"},
+        30.0,
+        path,
+        tipo_informe="Informe completo",
+        min_chart_points=2,
+        extra_pages=paginas,
+    )
+    with pdfplumber.open(path) as pdf:
+        textos = [p.extract_text() for p in pdf.pages]
+    assert len(textos) == 6  # portada + 2 tablas + 2 de comparativa + 1 gráfico
+    assert "Resto de parámetros" in textos[2]
+    assert "Comparativa con la analítica anterior" in textos[3]
+    assert "(parte 2 de 2)" in textos[4] and "Página 5 de 6" in textos[4]

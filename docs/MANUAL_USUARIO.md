@@ -1509,7 +1509,18 @@ respecto al informe anterior, marcada con "(*)" si es un cambio brusco.
 
 - **Exportar informe completo (PDF)...**: **todos** los parámetros del
   **último informe** — mismo contenido y orden que la pestaña Resumen
-  (§2.6).
+  (§2.6). Antes de generarlo puedes añadir, tras las dos tablas, la
+  **comparativa con la analítica anterior**: la misma tabla por secciones
+  (en el orden del PDF del laboratorio) que el «Detalle de analítica»
+  (§2.6), en uno de estos modos:
+  - **con su variación** respecto a la anterior (todas las filas, con
+    valor anterior, actual, variación, tendencia y estado);
+  - **solo alterados**: las filas fuera de rango en la última analítica
+    o que han entrado o salido de rango respecto a la anterior (también
+    las que se han normalizado), con su variación;
+  - **solo la última analítica**, sin comparar (como el cotejo del
+    detalle de analítica).
+  Sin marcarla, el informe queda como siempre.
 - **Exportar informe de alterados (PDF)...**: solo los parámetros que
   **alguna vez** han estado fuera de rango en **todo el histórico** del
   paciente, aunque en el informe más reciente ya estén normales — con su
@@ -1551,6 +1562,9 @@ panel clínico para llevar a una consulta:
   - la tabla del último informe (alterados y resto, como en los informes
     anteriores);
   - **Qué ha cambiado** respecto al informe anterior;
+  - la **comparativa con la analítica anterior**, eligiendo el modo en el
+    desplegable (los mismos tres que en el informe completo: con su
+    variación, solo alterados o solo la última analítica);
   - el **mapa de calor**, eligiendo en el desplegable qué parámetros
     incluye: los fuera de rango en el periodo, todos, o los de un panel
     concreto (igual que en la pantalla Mapa de calor, con el mismo

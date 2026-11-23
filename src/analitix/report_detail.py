@@ -335,3 +335,36 @@ def build_comparison_summary(comparison_rows: list[dict[str, Any]]) -> dict[str,
         "a_la_baja": a_la_baja,
         "estables": estables,
     }
+
+
+# Comparativa con la analítica anterior dentro de los informes PDF completo y
+# personalizado: qué filas del detalle de la última analítica se incluyen y si
+# llevan la variación respecto a la anterior.
+DELTA_MODE_FULL = "delta"  # toda la última analítica, con su variación
+DELTA_MODE_ALTERED = "alterados"  # solo fuera de rango o que entran/salen de rango
+DELTA_MODE_LATEST = "ultima"  # toda la última analítica, sin comparar
+DELTA_MODES: dict[str, str] = {
+    DELTA_MODE_FULL: "Última analítica con su variación respecto a la anterior",
+    DELTA_MODE_ALTERED: "Solo parámetros alterados o que entran/salen de rango (con variación)",
+    DELTA_MODE_LATEST: "Solo la última analítica, sin comparar con la anterior",
+}
+_OUT_OF_RANGE_STATUSES = ("↑ Alto", "↓ Bajo", "⚠ Fuera de rango")
+
+
+def delta_mode_compares(mode: str) -> bool:
+    """Si el modo lleva las columnas de variación (necesita la analítica anterior)."""
+    return mode != DELTA_MODE_LATEST
+
+
+def filter_rows_for_mode(rows: list[dict[str, Any]], mode: str) -> list[dict[str, Any]]:
+    """Filas de `match_and_compare_results` que entran en la comparativa del
+    informe según `mode`: con "alterados", las que están fuera de rango en la
+    última analítica o han cambiado de situación respecto a la anterior
+    (incluidas las que se han normalizado); con los otros modos, todas."""
+    if mode != DELTA_MODE_ALTERED:
+        return list(rows)
+    return [
+        r
+        for r in rows
+        if r.get("status") in _OUT_OF_RANGE_STATUSES or r.get("range_alert") != ALERT_NORMAL
+    ]

@@ -328,6 +328,7 @@ def export_pdf(
     full_series_by_canonical_id: dict[str, list[dict[str, Any]]] | None = None,
     chart_years: int = 0,
     min_chart_points: int = DEFAULT_MIN_CHART_POINTS,
+    extra_pages: list[Figure] | None = None,
 ) -> int:
     """Informe de seguimiento en PDF (ampliado 2026-09-21 en dos pasos:
     primero con dos tipos de informe — "completo"/"de alterados", ver
@@ -349,7 +350,9 @@ def export_pdf(
        `min_points` (el mismo ajuste de Configuración que la pantalla) el
        gráfico lleva el aviso de pocos datos de `charts.data_sufficiency`.
 
-    Todas las páginas llevan pie (`_add_footer`). `on_progress(n, total)`
+    `extra_pages` (opcional, p. ej. la comparativa con la analítica anterior
+    de `report_detail_pages`) van después de las dos tablas y antes de los
+    gráficos. Todas las páginas llevan pie (`_add_footer`). `on_progress(n, total)`
     se llama tras escribir cada página (barra de progreso de `gui.py`).
     Devuelve el nº de páginas de gráfico añadidas."""
     fuera_de_rango = [f for f in filas if f["flag_calc"] in ("alto", "bajo")]
@@ -360,7 +363,8 @@ def export_pdf(
         series = series_by_canonical_id.get(f["canonical_id"])
         if series and enough_for_chart(series, min_chart_points):
             graficos.append((f, series))
-    total = 3 + len(graficos)
+    extra_pages = list(extra_pages or [])
+    total = 3 + len(extra_pages) + len(graficos)
 
     pagina = 1
     with PdfPages(path) as pdf:
@@ -373,6 +377,7 @@ def export_pdf(
                 "Parámetros alterados en la última analítica",
             ),
             _table_page(fecha, resto, cambio_brusco_pct, "Resto de parámetros"),
+            *extra_pages,
         ):
             _add_footer(fig, tipo_informe, pagina, total)
             pdf.savefig(fig)
@@ -841,47 +846,74 @@ def export_report_detail_pdf(
         else "Detalle de analítica (cotejo con informe original)"
     )
     fecha = report_meta.get("fecha") or "—"
-    lab = report_meta.get("lab") or "—"
-    num_inf = report_meta.get("report_number") or "—"
-    subtitulo = f"Informe: {num_inf} · Laboratorio: {lab} · Fecha: {fecha[:10]}"
-    if is_comparison:
-        fecha_prev = prev_report_meta.get("fecha") or "—"
-        num_prev = prev_report_meta.get("report_number") or "—"
-        subtitulo += f"\nComparado con analítica anterior: {num_prev} ({fecha_prev[:10]}, {prev_report_meta.get('lab') or '—'})"
+    subtitulo = report_detail_subtitle(report_meta, prev_report_meta)
 
-    # Intercalar filas de cabecera de sección para que no ocupen una columna dedicada
-    filas_con_seccion: list[dict[str, Any]] = []
-    sec_actual = None
-    for r in comparison_rows:
-        sec = r.get("section") or "General"
-        if sec != sec_actual:
-            sec_actual = sec
-            filas_con_seccion.append({"is_section_header": True, "section": sec})
-        filas_con_seccion.append(r)
-
-    filas_por_pagina = 26
-    chunks = [
-        filas_con_seccion[i : i + filas_por_pagina]
-        for i in range(0, max(len(filas_con_seccion), 1), filas_por_pagina)
-    ]
-    total_paginas = 1 + len(chunks)
+    paginas = report_detail_pages(tipo, subtitulo, comparison_rows, is_comparison)
+    total_paginas = 1 + len(paginas)
 
     with PdfPages(path) as pdf:
-        portada = _cover_page(patient_name, tipo, fecha)
-        _add_footer(portada, tipo, 1, total_paginas)
-        pdf.savefig(portada)
-        if on_progress:
-            on_progress(1, total_paginas)
-
-        for i, chunk in enumerate(chunks, start=1):
-            num_pag = 1 + i
-            pag_subtitulo = (
-                f"{subtitulo} (parte {i} de {len(chunks)})" if len(chunks) > 1 else subtitulo
-            )
-            fig = _report_detail_table_page(tipo, pag_subtitulo, chunk, is_comparison)
+        for num_pag, fig in enumerate([_cover_page(patient_name, tipo, fecha), *paginas], start=1):
             _add_footer(fig, tipo, num_pag, total_paginas)
             pdf.savefig(fig)
             if on_progress:
                 on_progress(num_pag, total_paginas)
 
     return total_paginas
+
+
+_DETAIL_ROWS_PER_PAGE = 26
+
+
+def report_detail_subtitle(
+    report_meta: dict[str, Any], prev_report_meta: dict[str, Any] | None = None
+) -> str:
+    """Subtítulo de las páginas de detalle: informe, laboratorio y fecha, y
+    con qué analítica anterior se compara (si se compara)."""
+    fecha = report_meta.get("fecha") or "—"
+    subtitulo = (
+        f"Informe: {report_meta.get('report_number') or '—'} · "
+        f"Laboratorio: {report_meta.get('lab') or '—'} · Fecha: {fecha[:10]}"
+    )
+    if prev_report_meta is not None:
+        fecha_prev = prev_report_meta.get("fecha") or "—"
+        subtitulo += (
+            f"\nComparado con analítica anterior: {prev_report_meta.get('report_number') or '—'} "
+            f"({fecha_prev[:10]}, {prev_report_meta.get('lab') or '—'})"
+        )
+    return subtitulo
+
+
+def report_detail_pages(
+    titulo: str,
+    subtitulo: str,
+    rows: list[dict[str, Any]],
+    is_comparison: bool,
+) -> list[Figure]:
+    """Páginas A4 de la tabla de detalle (cotejo o comparativa delta) de una
+    analítica, con las filas agrupadas por sección (una fila de cabecera por
+    sección, no una columna) y repartidas en páginas de
+    `_DETAIL_ROWS_PER_PAGE` filas. Las usan el detalle exportado por sí solo
+    (`export_report_detail_pdf`) y la comparativa de los informes completo y
+    personalizado."""
+    filas_con_seccion: list[dict[str, Any]] = []
+    sec_actual = None
+    for r in rows:
+        sec = r.get("section") or "General"
+        if sec != sec_actual:
+            sec_actual = sec
+            filas_con_seccion.append({"is_section_header": True, "section": sec})
+        filas_con_seccion.append(r)
+
+    chunks = [
+        filas_con_seccion[i : i + _DETAIL_ROWS_PER_PAGE]
+        for i in range(0, max(len(filas_con_seccion), 1), _DETAIL_ROWS_PER_PAGE)
+    ]
+    return [
+        _report_detail_table_page(
+            titulo,
+            f"{subtitulo} (parte {i} de {len(chunks)})" if len(chunks) > 1 else subtitulo,
+            chunk,
+            is_comparison,
+        )
+        for i, chunk in enumerate(chunks, start=1)
+    ]

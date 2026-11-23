@@ -1065,7 +1065,7 @@ def get_latest_report_summary(con, patient_id: int) -> dict[str, Any] | None:
         resultado["lab"] = serie[-1]["lab"] if serie else None
         resultado["lab_anterior"] = serie[-2]["lab"] if len(serie) >= 2 else None
 
-    return {"fecha": fecha, "resultados": resultados}
+    return {"fecha": fecha, "report_id": report_id, "resultados": resultados}
 
 
 def get_all_results(con, patient_id: int | None = None) -> list[dict[str, Any]]:
