@@ -574,6 +574,8 @@ class AnalitixApp(ttk.Window):
             2,
             int(get_setting(self.con, "min_points_grafica", str(DEFAULT_MIN_CHART_POINTS))),
         )
+        # El aviso de pocos datos nunca por debajo del mínimo para dibujar.
+        self.min_points = max(self.min_points, self.min_chart_points)
         # Rango personal (`rcv.personal_range`) en el gráfico de Evolución:
         # desactivado por defecto, se activa con su interruptor en esa pantalla.
         self.var_personal_range = tk.BooleanVar(
@@ -7048,42 +7050,43 @@ class AnalitixApp(ttk.Window):
 
         graficos = ttk.Labelframe(frame, text="Gráficos", padding=PAD)
         graficos.pack(fill="x", padx=PAD, pady=6)
+        # Dos umbrales de analíticas (en fechas distintas, dentro del periodo
+        # de las gráficas), juntos y con un solo «Guardar»: por debajo del
+        # primero no hay gráfica; entre los dos, gráfica con aviso.
         ttk.Label(
             graficos,
-            text="Nº mínimo de analíticas para que una evolución se considere representativa. Se "
-            "aplica a todos los gráficos de evolución (Evolución, Comparativa, paneles clínicos y "
-            "PDF): por debajo se dibujan con un aviso, y con menos de 2 analíticas no se dibuja "
-            "el gráfico. En Evolución/Comparativa, esas pruebas se agrupan además al final de la "
-            "lista. Los cambios se ven al volver a abrir el gráfico:",
+            text="Analíticas necesarias (en fechas distintas, dentro del periodo de las "
+            "gráficas) para las gráficas de evolución, en pantalla (Evolución, Comparativa, "
+            "paneles clínicos) y en los informes PDF:",
             wraplength=700,
         ).pack(anchor="w")
-        fila_min_puntos = ttk.Frame(graficos)
-        fila_min_puntos.pack(anchor="w", pady=(6, 0))
-        self.var_min_points = tk.IntVar(value=self.min_points)
-        ttk.Spinbox(
-            fila_min_puntos, from_=2, to=20, textvariable=self.var_min_points, width=5
-        ).pack(side="left")
-        ttk.Button(fila_min_puntos, text="Guardar", command=self._change_min_points).pack(
-            side="left", padx=(8, 0)
-        )
-
-        ttk.Label(
-            graficos,
-            text="Nº mínimo de analíticas (en fechas distintas, dentro del periodo de las "
-            "gráficas) para dibujar la gráfica de evolución de un parámetro, en pantalla "
-            "(Evolución, Comparativa, paneles clínicos) y en los informes PDF. Con menos, en "
-            "pantalla se indica que faltan analíticas y en los informes el parámetro sigue en "
-            "las tablas pero sin gráfica:",
-            wraplength=700,
-        ).pack(anchor="w", pady=(12, 0))
-        fila_min_pdf = ttk.Frame(graficos)
-        fila_min_pdf.pack(anchor="w", pady=(6, 0))
+        minimos = ttk.Frame(graficos)
+        minimos.pack(anchor="w", pady=(6, 0))
         self.var_min_chart_points = tk.IntVar(value=self.min_chart_points)
-        ttk.Spinbox(
-            fila_min_pdf, from_=2, to=20, textvariable=self.var_min_chart_points, width=5
-        ).pack(side="left")
-        ttk.Button(fila_min_pdf, text="Guardar", command=self._change_min_chart_points).pack(
-            side="left", padx=(8, 0)
+        self.var_min_points = tk.IntVar(value=self.min_points)
+        filas_minimos = (
+            (
+                "Mínimo para dibujar una gráfica:",
+                self.var_min_chart_points,
+                "con menos, no hay gráfica (en los informes, el parámetro sigue en las tablas)",
+            ),
+            (
+                "Mínimo para no mostrar el aviso de pocos datos:",
+                self.var_min_points,
+                "con menos, la gráfica lleva el aviso «⚠ Solo N analíticas» y en "
+                "Evolución/Comparativa la prueba va al final de la lista",
+            ),
+        )
+        for fila, (texto, variable, ayuda) in enumerate(filas_minimos):
+            ttk.Label(minimos, text=texto).grid(row=fila, column=0, sticky="w", pady=2)
+            ttk.Spinbox(minimos, from_=2, to=20, textvariable=variable, width=5).grid(
+                row=fila, column=1, sticky="w", padx=(8, 8), pady=2
+            )
+            ttk.Label(minimos, text=ayuda, bootstyle="secondary", wraplength=420).grid(
+                row=fila, column=2, sticky="w", pady=2
+            )
+        ttk.Button(graficos, text="Guardar", command=self._save_chart_minimums).pack(
+            anchor="w", pady=(6, 0)
         )
 
         ttk.Label(
@@ -7580,27 +7583,39 @@ class AnalitixApp(ttk.Window):
             self.vars_bp_limits[clave][1].set(maximo)
         self._save_bp_limits()
 
-    def _change_min_points(self) -> None:
-        self.min_points = max(2, self.var_min_points.get())
-        self.var_min_points.set(self.min_points)
-        set_setting(self.con, "min_points_evolucion", str(self.min_points))
-        self._refresh_test_lists()
-        messagebox.showinfo("Analitix", "Preferencia guardada.", parent=self)
+    def _save_chart_minimums(self) -> None:
+        """Guarda los dos mínimos de analíticas de Configuración → General →
+        Gráficos. El del aviso nunca es menor que el de dibujar (no tendría
+        sentido avisar de pocos datos en una gráfica que no se dibuja): si lo
+        es, se sube al de dibujar y se avisa."""
 
-    def _change_min_chart_points(self) -> None:
-        try:
-            valor = int(self.var_min_chart_points.get())
-        except (tk.TclError, ValueError):
-            valor = self.min_chart_points
-        self.min_chart_points = max(2, valor)
+        def _leer(variable: tk.IntVar, actual: int) -> int:
+            try:
+                return max(2, int(variable.get()))
+            except (tk.TclError, ValueError):
+                return actual
+
+        self.min_chart_points = _leer(self.var_min_chart_points, self.min_chart_points)
+        aviso_pedido = _leer(self.var_min_points, self.min_points)
+        self.min_points = max(aviso_pedido, self.min_chart_points)
         self.var_min_chart_points.set(self.min_chart_points)
+        self.var_min_points.set(self.min_points)
         set_setting(self.con, "min_points_grafica", str(self.min_chart_points))
-        # Redibuja los gráficos abiertos (los paneles, al volver a elegir un índice).
+        set_setting(self.con, "min_points_evolucion", str(self.min_points))
+        # Redibuja los gráficos abiertos (los paneles, al volver a elegir un
+        # índice) antes de rehacer las listas, que pierden la selección.
         if self.list_tests_evolucion.curselection():
             self._show_evolution()
         if self._comparativa_selection():
             self._show_comparison()
-        messagebox.showinfo("Analitix", "Preferencia guardada.", parent=self)
+        self._refresh_test_lists()
+        mensaje = "Preferencia guardada."
+        if aviso_pedido < self.min_points:
+            mensaje += (
+                f"\n\nEl mínimo del aviso de pocos datos no puede ser menor que el de dibujar "
+                f"la gráfica: se ha puesto en {self.min_points}."
+            )
+        messagebox.showinfo("Analitix", mensaje, parent=self)
 
     def _chart_ok(self, series: list[dict]) -> bool:
         """Si una serie (recortada al periodo de las gráficas) tiene
