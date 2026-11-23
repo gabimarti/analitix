@@ -2687,9 +2687,7 @@ class AnalitixApp(ttk.Window):
             "≥ 140/90). Solo se clasifica una media que cumple el protocolo. Más detalle en Ayuda → "
             'Referencias científicas ("referencias_tension_arterial").',
         )
-        self.text_bp_summary = tk.Text(frame, height=5, wrap="word", relief="flat")
-        self.text_bp_summary.pack(fill="x", padx=PAD, pady=(0, 4))
-        self._style_plain_widget(self.text_bp_summary)
+        self.text_bp_summary = self._summary_text(frame, 5, (0, 4))
         self.text_bp_summary.configure(state="disabled")
 
         # Intervalo a ver y periodo de comparación (fechas AAAA-MM-DD; en
@@ -4184,9 +4182,7 @@ class AnalitixApp(ttk.Window):
             'sexo, tensión, tabaquismo) que Analitix no calcula hoy. Ver "ℹ ¿Qué es este '
             'índice?" para el detalle completo con fuentes.',
         )
-        self.text_lipid_summary = tk.Text(frame, height=11, wrap="word", relief="flat")
-        self.text_lipid_summary.pack(fill="x", padx=PAD, pady=(0, PAD))
-        self._style_plain_widget(self.text_lipid_summary)
+        self.text_lipid_summary = self._summary_text(frame, 11, (0, PAD))
         self.text_lipid_summary.configure(state="disabled")
 
         body = ttk.Frame(frame)
@@ -4355,9 +4351,7 @@ class AnalitixApp(ttk.Window):
             '2023) en vez de los del estudio original de 2006. Ver "ℹ ¿Qué es este índice?" '
             "para la cita completa (DOI/PMID) y los límites de cada índice.",
         )
-        self.text_hepatic_summary = tk.Text(frame, height=11, wrap="word", relief="flat")
-        self.text_hepatic_summary.pack(fill="x", padx=PAD, pady=(0, PAD))
-        self._style_plain_widget(self.text_hepatic_summary)
+        self.text_hepatic_summary = self._summary_text(frame, 11, (0, PAD))
         self.text_hepatic_summary.configure(state="disabled")
 
         body = ttk.Frame(frame)
@@ -4522,9 +4516,7 @@ class AnalitixApp(ttk.Window):
             "al., Nephrol Dial Transplant 2015) — señal débil, no una detección de fallo renal "
             'agudo. Ver "ℹ ¿Qué es este índice?" para la cita completa (DOI/PMID) de cada uno.',
         )
-        self.text_renal_summary = tk.Text(frame, height=11, wrap="word", relief="flat")
-        self.text_renal_summary.pack(fill="x", padx=PAD, pady=(0, PAD))
-        self._style_plain_widget(self.text_renal_summary)
+        self.text_renal_summary = self._summary_text(frame, 11, (0, PAD))
         self.text_renal_summary.configure(state="disabled")
 
         body = ttk.Frame(frame)
@@ -4698,9 +4690,7 @@ class AnalitixApp(ttk.Window):
             '2018). Ver "ℹ ¿Qué es este índice?" para la cita completa (DOI/PMID) y una '
             "explicación en lenguaje sencillo de cada uno.",
         )
-        self.text_hemogram_summary = tk.Text(frame, height=13, wrap="word", relief="flat")
-        self.text_hemogram_summary.pack(fill="x", padx=PAD, pady=(0, PAD))
-        self._style_plain_widget(self.text_hemogram_summary)
+        self.text_hemogram_summary = self._summary_text(frame, 13, (0, PAD))
         self.text_hemogram_summary.configure(state="disabled")
 
         body = ttk.Frame(frame)
@@ -4822,20 +4812,33 @@ class AnalitixApp(ttk.Window):
             'índice?").',
         ]
         if alerta_linfocitosis:
-            lineas += ["", self._format_lymphocytosis_alert(alerta_linfocitosis)]
+            # El aviso, lo primero (antes quedaba al final, fuera de la parte
+            # visible del cuadro); su explicación larga con las fuentes, al final.
+            aviso = self._lymphocytosis_alert_line(alerta_linfocitosis)
+            lineas = [
+                f"{aviso} Explicación al final de este resumen.",
+                "",
+                *lineas,
+                "",
+                get_description("aviso_linfocitosis") or "",
+            ]
         return "\n".join(lineas)
 
-    def _format_lymphocytosis_alert(self, alerta: dict) -> str:
-        """Texto del aviso de linfocitosis sostenida (`hemogram_risk.
-        get_sustained_lymphocytosis_alert`); la explicación con citas
-        completas vive en `data/descripciones/aviso_linfocitosis.txt`
-        (`catalog.get_description`), nunca embebida aquí."""
+    def _lymphocytosis_alert_line(self, alerta: dict) -> str:
+        """Línea del aviso de linfocitosis sostenida (`hemogram_risk.
+        get_sustained_lymphocytosis_alert`)."""
         fechas = ", ".join(f[:10] for f in alerta["fechas"])
-        descripcion = get_description("aviso_linfocitosis") or ""
         return (
             f"⚠ Linfocitos por encima de {LYMPHOCYTOSIS_HIGH:g} x10⁹/L en {len(alerta['fechas'])} "
-            f"informes ({fechas}), último valor {alerta['ultimo_valor']:g} x10⁹/L.\n\n{descripcion}"
+            f"informes ({fechas}), último valor {alerta['ultimo_valor']:g} x10⁹/L."
         )
+
+    def _format_lymphocytosis_alert(self, alerta: dict) -> str:
+        """Texto del aviso de linfocitosis sostenida con su explicación; las
+        citas completas viven en `data/descripciones/aviso_linfocitosis.txt`
+        (`catalog.get_description`), nunca embebidas aquí."""
+        descripcion = get_description("aviso_linfocitosis") or ""
+        return f"{self._lymphocytosis_alert_line(alerta)}\n\n{descripcion}"
 
     def _refresh_hemogram_panel(self) -> None:
         self._hemogram_series = (
@@ -4907,9 +4910,7 @@ class AnalitixApp(ttk.Window):
             'activo, dato imprescindible para esa distinción. Ver "ℹ ¿Qué es este índice?" para '
             "la cita completa y una explicación en lenguaje sencillo de cada uno.",
         )
-        self.text_iron_summary = tk.Text(frame, height=13, wrap="word", relief="flat")
-        self.text_iron_summary.pack(fill="x", padx=PAD, pady=(0, PAD))
-        self._style_plain_widget(self.text_iron_summary)
+        self.text_iron_summary = self._summary_text(frame, 13, (0, PAD))
         self.text_iron_summary.configure(state="disabled")
 
         body = ttk.Frame(frame)
@@ -5069,9 +5070,7 @@ class AnalitixApp(ttk.Window):
             "de referencia de su propio informe, y se avisa si discrepan entre sí. Ver "
             '"ℹ️ ¿Qué es esto?" para la cita completa y una explicación en lenguaje sencillo.',
         )
-        self.text_inflammation_summary = tk.Text(frame, height=8, wrap="word", relief="flat")
-        self.text_inflammation_summary.pack(fill="x", padx=PAD, pady=(0, 6))
-        self._style_plain_widget(self.text_inflammation_summary)
+        self.text_inflammation_summary = self._summary_text(frame, 8, (0, 6))
         self.text_inflammation_summary.configure(state="disabled")
 
         body = ttk.Frame(frame)
@@ -5188,9 +5187,7 @@ class AnalitixApp(ttk.Window):
             'ACR/EULAR 2015, que no viven en una analítica de sangre. Ver "ℹ ¿Qué es este '
             'índice?" para la cita completa y una explicación en lenguaje sencillo.',
         )
-        self.text_uric_acid_summary = tk.Text(frame, height=6, wrap="word", relief="flat")
-        self.text_uric_acid_summary.pack(fill="x", padx=PAD, pady=(0, PAD))
-        self._style_plain_widget(self.text_uric_acid_summary)
+        self.text_uric_acid_summary = self._summary_text(frame, 6, (0, PAD))
         self.text_uric_acid_summary.configure(state="disabled")
 
         body = ttk.Frame(frame)
@@ -5320,9 +5317,7 @@ class AnalitixApp(ttk.Window):
             'calcio total, sin inventar ningún umbral nuevo. Ver "ℹ ¿Qué es este índice?" para '
             "la cita completa y una explicación en lenguaje sencillo.",
         )
-        self.text_calcio_summary = tk.Text(frame, height=6, wrap="word", relief="flat")
-        self.text_calcio_summary.pack(fill="x", padx=PAD, pady=(0, PAD))
-        self._style_plain_widget(self.text_calcio_summary)
+        self.text_calcio_summary = self._summary_text(frame, 6, (0, PAD))
         self.text_calcio_summary.configure(state="disabled")
 
         body = ttk.Frame(frame)
@@ -5464,9 +5459,7 @@ class AnalitixApp(ttk.Window):
             "como tendencia, sin umbral: los puntos de corte publicados dependen de la población. "
             "Usa glucosa y triglicéridos del mismo informe; la fórmula se validó en ayunas.",
         )
-        self.text_glucemia_summary = tk.Text(frame, height=6, wrap="word", relief="flat")
-        self.text_glucemia_summary.pack(fill="x", padx=PAD, pady=(0, 6))
-        self._style_plain_widget(self.text_glucemia_summary)
+        self.text_glucemia_summary = self._summary_text(frame, 6, (0, 6))
         self.text_glucemia_summary.configure(state="disabled")
 
         body = ttk.Frame(frame)
@@ -5647,9 +5640,7 @@ class AnalitixApp(ttk.Window):
             '"Clinical Thyroidology for the Public") clasificadas cada una contra el rango de '
             'referencia de su propio informe. Ver "ℹ️ ¿Qué es esto?" para la cita completa.',
         )
-        self.text_thyroid_summary = tk.Text(frame, height=2, wrap="word", relief="flat")
-        self.text_thyroid_summary.pack(fill="x", padx=PAD, pady=(0, 6))
-        self._style_plain_widget(self.text_thyroid_summary)
+        self.text_thyroid_summary = self._summary_text(frame, 2, (0, 6))
         self.text_thyroid_summary.configure(state="disabled")
 
         body = ttk.Frame(frame)
@@ -7840,6 +7831,29 @@ class AnalitixApp(ttk.Window):
             self.list_review.insert("end", f"  {item['filename']} — {item['error_message']}")
 
     # -- utilidades de estilo -----------------------------------------------
+    def _summary_text(self, parent: tk.Widget, height: int, pady: tuple[int, int]) -> tk.Text:
+        """Cuadro de texto de resumen de un panel (solo lectura, lo rellena
+        cada `_refresh_*`), con barra de desplazamiento vertical que solo
+        aparece si el texto no cabe: sin ella, lo que quedaba por debajo de
+        las `height` líneas (p. ej. el aviso de linfocitosis sostenida) no se
+        veía ni había pista de que existiera."""
+        marco = ttk.Frame(parent)
+        marco.pack(fill="x", padx=PAD, pady=pady)
+        texto = tk.Text(marco, height=height, wrap="word", relief="flat")
+        barra = ttk.Scrollbar(marco, orient="vertical", command=texto.yview)
+
+        def _ajustar_barra(primero: str, ultimo: str) -> None:
+            if float(primero) <= 0.0 and float(ultimo) >= 1.0:
+                barra.pack_forget()
+            elif not barra.winfo_ismapped():
+                barra.pack(side="right", fill="y", before=texto)
+            barra.set(primero, ultimo)
+
+        texto.configure(yscrollcommand=_ajustar_barra)
+        texto.pack(side="left", fill="x", expand=True)
+        self._style_plain_widget(texto)
+        return texto
+
     def _style_plain_widget(self, widget: tk.Widget) -> None:
         """Colorea un widget clásico de Tk (Listbox/Text) acorde al tema ttk activo."""
         colors = self.style.colors
