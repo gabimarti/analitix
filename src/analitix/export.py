@@ -26,9 +26,9 @@ from analitix.charts import (
     COLOR_ALTO,
     COLOR_BAJO,
     COLOR_BRUSCO,
-    DEFAULT_MIN_PDF_CHART_POINTS,
+    DEFAULT_MIN_CHART_POINTS,
     DEFAULT_MIN_POINTS,
-    enough_for_pdf_chart,
+    enough_for_chart,
     evolution_figure,
 )
 from analitix.config import LOGO_PATH
@@ -327,7 +327,7 @@ def export_pdf(
     on_progress: Callable[[int, int], None] | None = None,
     full_series_by_canonical_id: dict[str, list[dict[str, Any]]] | None = None,
     chart_years: int = 0,
-    min_chart_points: int = DEFAULT_MIN_PDF_CHART_POINTS,
+    min_chart_points: int = DEFAULT_MIN_CHART_POINTS,
 ) -> int:
     """Informe de seguimiento en PDF (ampliado 2026-09-21 en dos pasos:
     primero con dos tipos de informe — "completo"/"de alterados", ver
@@ -358,7 +358,7 @@ def export_pdf(
     graficos = []
     for f in filas:
         series = series_by_canonical_id.get(f["canonical_id"])
-        if series and enough_for_pdf_chart(series, min_chart_points):
+        if series and enough_for_chart(series, min_chart_points):
             graficos.append((f, series))
     total = 3 + len(graficos)
 

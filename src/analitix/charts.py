@@ -764,12 +764,12 @@ def data_sufficiency(n_points: int, min_points: int = DEFAULT_MIN_POINTS) -> str
     return "pocos" if n_points < max(2, min_points) else "suficiente"
 
 
-# Mínimo de analíticas para que un informe PDF incluya la gráfica de
-# evolución de un parámetro (ajuste "min_points_grafica_pdf" de
+# Mínimo de analíticas para dibujar la gráfica de evolución de un parámetro,
+# en pantalla y en los informes PDF (ajuste "min_points_grafica" de
 # Configuración, nunca menos de 2). Por defecto 3: con 2 puntos solo hay una
 # recta y la tendencia necesita `MIN_POINTS_FOR_TREND`. Elección de
 # interfaz, no un umbral clínico.
-DEFAULT_MIN_PDF_CHART_POINTS = 3
+DEFAULT_MIN_CHART_POINTS = 3
 
 
 def chart_dates(series: list[dict[str, Any]]) -> int:
@@ -778,9 +778,9 @@ def chart_dates(series: list[dict[str, Any]]) -> int:
     return len({(s.get("fecha") or "")[:10] for s in series})
 
 
-def enough_for_pdf_chart(series: list[dict[str, Any]], min_chart_points: int) -> bool:
+def enough_for_chart(series: list[dict[str, Any]], min_chart_points: int) -> bool:
     """Si la serie tiene analíticas suficientes (fechas distintas) para
-    incluir su gráfica en un informe PDF."""
+    dibujar su gráfica de evolución, en pantalla o en un informe PDF."""
     return chart_dates(series) >= max(2, min_chart_points)
 
 

@@ -705,8 +705,8 @@ def test_altered_in_period_ignores_old_and_stopped_parameters():
     assert altered_in_period(antiguo, None) and altered_in_period(dejado, None, 2)
 
 
-def test_enough_for_pdf_chart_counts_distinct_dates():
-    from analitix.charts import chart_dates, enough_for_pdf_chart
+def test_enough_for_chart_counts_distinct_dates():
+    from analitix.charts import chart_dates, enough_for_chart
 
     serie = [
         {"fecha": "2024-01-01 10:00:00", "value_num": 2.0},
@@ -714,7 +714,7 @@ def test_enough_for_pdf_chart_counts_distinct_dates():
         {"fecha": "2025-01-01", "value_num": 31.0},
     ]
     assert chart_dates(serie) == 2
-    assert enough_for_pdf_chart(serie, 2)
-    assert not enough_for_pdf_chart(serie, 3)
+    assert enough_for_chart(serie, 2)
+    assert not enough_for_chart(serie, 3)
     # Nunca menos de 2 analíticas, aunque el ajuste diga 1.
-    assert not enough_for_pdf_chart(serie[:1], 1)
+    assert not enough_for_chart(serie[:1], 1)

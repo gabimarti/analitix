@@ -642,9 +642,11 @@ anota (ver "🎯 Objetivo indicado por mi médico" más abajo).
 - El mismo número mínimo se aplica a **todos** los gráficos de evolución
   (Evolución, Comparativa, cada panel clínico y el informe PDF): por debajo,
   el gráfico se dibuja con el aviso "⚠ Solo N analíticas (mínimo
-  recomendado: M): evolución poco representativa"; con **una sola**
-  analítica no se dibuja ningún gráfico (un punto suelto parecería una
-  evolución), solo el valor, su fecha y su rango.
+  recomendado: M): evolución poco representativa". Por debajo de otro
+  mínimo, el de **Gráficas** de Configuración (por defecto 3 analíticas en
+  fechas distintas dentro del periodo, nunca menos de 2), no se dibuja el
+  gráfico: se indica cuántas analíticas hacen falta. Ese mismo ajuste decide
+  qué parámetros llevan gráfica en los informes PDF.
 - Selecciona una prueba y pulsa **Ver evolución**. El gráfico muestra:
   - La línea de valores en el tiempo, con un punto por análisis.
   - Las líneas discontinuas de mínimo y máximo del rango de referencia (más
@@ -1555,7 +1557,9 @@ panel clínico para llevar a una consulta:
     periodo de las gráficas).
 - **Evolución de parámetros**: marca las casillas de los que quieras, en
   una lista que se desplaza con la barra o con la rueda del ratón. Solo
-  aparecen las pruebas con al menos 2 analíticas.
+  aparecen las pruebas con al menos el mínimo de analíticas de **Gráficas**
+  (Configuración, §2.20); si alguna no lo alcanza dentro del periodo, se
+  queda sin gráfica y se indica al terminar.
 - **Paneles clínicos**: cada panel incluye su resumen, tal como lo ves en
   pantalla, y sus gráficos. Los paneles sin datos aparecen desactivados.
 - **⚠ marca lo alterado**: los parámetros que han estado fuera de rango
@@ -1802,17 +1806,18 @@ desplazamiento.
 - **Gráficos**: nº mínimo de analíticas para que una evolución se
   considere representativa (por defecto 4, mínimo 2). Se aplica a todos los
   gráficos de evolución, incluidos los paneles clínicos y el PDF: por debajo
-  llevan un aviso y con una sola analítica no se dibuja el gráfico (ver
-  §2.4). En Evolución/Comparativa, esas pruebas se agrupan además al final
+  llevan un aviso (ver §2.4). En Evolución/Comparativa, esas pruebas se agrupan además al final
   de la lista. Cambia el número y pulsa **Guardar**; se aplica al volver a
   abrir el gráfico.
-- **Gráficas en los informes PDF**: nº mínimo de analíticas (en fechas
-  distintas, dentro del periodo de las gráficas) para que un informe PDF
-  incluya la gráfica de evolución de un parámetro (por defecto 3, mínimo
-  2). Con menos, el parámetro sigue en las tablas del informe pero sin
-  gráfica; en el informe personalizado, el mensaje final indica qué
-  parámetros elegidos se han quedado sin ella. En pantalla los gráficos se
-  siguen dibujando desde 2 analíticas.
+- **Gráficas**: nº mínimo de analíticas (en fechas distintas, dentro del
+  periodo de las gráficas) para dibujar la gráfica de evolución de un
+  parámetro (por defecto 3, mínimo 2). Es el mismo para la pantalla
+  (Evolución, Comparativa, paneles clínicos) y para los informes PDF. Con
+  menos, en pantalla se indica cuántas analíticas hacen falta y en los
+  informes el parámetro sigue en las tablas pero sin gráfica; en el informe
+  personalizado, el mensaje final indica qué parámetros elegidos se han
+  quedado sin ella. Al pulsar **Guardar** se redibujan Evolución y
+  Comparativa.
 - **Actualizaciones**: activa **Comprobar al iniciar** para que Analitix
   mire si hay una versión nueva cada vez que se abre (desactivado por
   defecto), o pulsa **Buscar ahora** para comprobarlo en el momento (ver
