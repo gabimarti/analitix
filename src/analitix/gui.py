@@ -4686,9 +4686,12 @@ class AnalitixApp(ttk.Window):
             "(PMID 4123424); orientación de anemia por VCM/RDW — StatPearls NBK499994. No hay "
             "ningún score combinado de riesgo de leucemia u otras neoplasias hematológicas (no "
             "existe ninguno validado en la literatura) — solo el aviso puntual de linfocitosis "
-            "sostenida > 5×10⁹/L en ≥2 informes descrito en el resumen de abajo (ESMO 2021/iwCLL "
-            '2018). Ver "ℹ ¿Qué es este índice?" para la cita completa (DOI/PMID) y una '
-            "explicación en lenguaje sencillo de cada uno.",
+            "sostenida > 5×10⁹/L en ≥2 informes (ESMO 2021/iwCLL 2018), explicado más abajo. "
+            'Ver "ℹ ¿Qué es este índice?" para la cita completa (DOI/PMID) y una '
+            "explicación en lenguaje sencillo de cada índice.\n\n"
+            "Aviso de linfocitosis sostenida\n\n" + (get_description("aviso_linfocitosis") or ""),
+            # La explicación completa del aviso vive aquí y no en el resumen,
+            # que solo muestra la línea del aviso cuando se cumple.
         )
         self.text_hemogram_summary = self._summary_text(frame, 13, (0, PAD))
         self.text_hemogram_summary.configure(state="disabled")
@@ -4813,15 +4816,9 @@ class AnalitixApp(ttk.Window):
         ]
         if alerta_linfocitosis:
             # El aviso, lo primero (antes quedaba al final, fuera de la parte
-            # visible del cuadro); su explicación larga con las fuentes, al final.
-            aviso = self._lymphocytosis_alert_line(alerta_linfocitosis)
-            lineas = [
-                f"{aviso} Explicación al final de este resumen.",
-                "",
-                *lineas,
-                "",
-                get_description("aviso_linfocitosis") or "",
-            ]
+            # visible del cuadro). Su explicación larga con las fuentes no se
+            # repite aquí: está en «Aviso e información científica».
+            lineas = [self._format_lymphocytosis_alert(alerta_linfocitosis), "", *lineas]
         return "\n".join(lineas)
 
     def _lymphocytosis_alert_line(self, alerta: dict) -> str:
@@ -4834,11 +4831,14 @@ class AnalitixApp(ttk.Window):
         )
 
     def _format_lymphocytosis_alert(self, alerta: dict) -> str:
-        """Texto del aviso de linfocitosis sostenida con su explicación; las
-        citas completas viven en `data/descripciones/aviso_linfocitosis.txt`
-        (`catalog.get_description`), nunca embebidas aquí."""
-        descripcion = get_description("aviso_linfocitosis") or ""
-        return f"{self._lymphocytosis_alert_line(alerta)}\n\n{descripcion}"
+        """Aviso de linfocitosis sostenida para el resumen del panel: la línea
+        del aviso y dónde está la explicación. La explicación completa con
+        las citas (`data/descripciones/aviso_linfocitosis.txt`) se muestra en
+        el botón «Aviso e información científica» del panel."""
+        return (
+            f"{self._lymphocytosis_alert_line(alerta)} Qué significa y en qué se basa: botón "
+            "«⚠️ Aviso e información científica»."
+        )
 
     def _refresh_hemogram_panel(self) -> None:
         self._hemogram_series = (
@@ -4881,6 +4881,7 @@ class AnalitixApp(ttk.Window):
         self.text_hemogram_summary.delete("1.0", "end")
         self.text_hemogram_summary.insert("end", texto)
         self.text_hemogram_summary.configure(state="disabled")
+        self.text_hemogram_summary.yview_moveto(0)  # el aviso, si lo hay, siempre a la vista
 
     def _build_tab_hierro(self) -> None:
         """Metabolismo del hierro orientativo (ver `iron_risk.py` para las

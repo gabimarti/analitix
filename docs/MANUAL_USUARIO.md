@@ -1170,10 +1170,11 @@ lenguaje sencillo como en detalle técnico con sus citas**.
     llano y técnico (con las citas científicas europeas en las que se
     basa) de por qué vale la pena comentarlo con el médico — nunca una
     sospecha de leucemia ni ningún otro diagnóstico. Se muestra incluso
-    si ese informe no tiene VCM. Va en la **primera línea** del resumen,
-    y su explicación con las fuentes, al final. Si el resumen de un panel
-    no cabe en su recuadro, aparece una barra de desplazamiento a la
-    derecha para ver el resto.
+    si ese informe no tiene VCM. Va en la **primera línea** del resumen;
+    la explicación completa con las fuentes está en el botón **⚠️ Aviso e
+    información científica** del panel. Si el resumen de un panel no cabe
+    en su recuadro, aparece una barra de desplazamiento a la derecha para
+    ver el resto.
 - Abajo, igual que en Evolución (§2.4), una lista con el histórico de cada
   índice y su gráfico de evolución.
 - **ℹ️ ¿Qué es este índice?**: para cada índice, primero una explicación en
