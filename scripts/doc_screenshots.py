@@ -331,7 +331,16 @@ def export_pdf_example(app) -> None:
     `export.export_pdf` para el orden de las páginas)."""
     PDF_EJEMPLO.parent.mkdir(parents=True, exist_ok=True)
     gui.filedialog.asksaveasfilename = lambda *a, **k: str(PDF_EJEMPLO)
+
+    # El informe de alterados pregunta antes qué gráficas incluir: se acepta
+    # la opción recomendada (la marcada por defecto) sin esperar al usuario.
+    def _aceptar_opciones(dialog) -> None:
+        app.update()
+        _button(dialog, "Continuar...").invoke()
+
+    app.wait_window = _aceptar_opciones
     app._export_pdf("alterados")
+    del app.wait_window
     print("  ", PDF_EJEMPLO.relative_to(ROOT))
     with pdfplumber.open(PDF_EJEMPLO) as pdf:
         for index, name in ((0, "portada"), (1, "tabla"), (3, "grafico")):
