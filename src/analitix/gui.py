@@ -4818,16 +4818,17 @@ class AnalitixApp(ttk.Window):
             # El aviso, lo primero (antes quedaba al final, fuera de la parte
             # visible del cuadro). Su explicación larga con las fuentes no se
             # repite aquí: está en «Aviso e información científica».
-            lineas = [self._format_lymphocytosis_alert(alerta_linfocitosis), "", *lineas]
+            # Sin línea en blanco detrás: así el resumen cabe en el cuadro.
+            lineas = [self._format_lymphocytosis_alert(alerta_linfocitosis), *lineas]
         return "\n".join(lineas)
 
     def _lymphocytosis_alert_line(self, alerta: dict) -> str:
         """Línea del aviso de linfocitosis sostenida (`hemogram_risk.
-        get_sustained_lymphocytosis_alert`)."""
-        fechas = ", ".join(f[:10] for f in alerta["fechas"])
+        get_sustained_lymphocytosis_alert`): número de informes y último
+        valor, sin la lista de fechas, para que quepa en una línea."""
         return (
             f"⚠ Linfocitos por encima de {LYMPHOCYTOSIS_HIGH:g} x10⁹/L en {len(alerta['fechas'])} "
-            f"informes ({fechas}), último valor {alerta['ultimo_valor']:g} x10⁹/L."
+            f"informes (último valor: {alerta['ultimo_valor']:g} x10⁹/L)."
         )
 
     def _format_lymphocytosis_alert(self, alerta: dict) -> str:
@@ -4836,8 +4837,8 @@ class AnalitixApp(ttk.Window):
         las citas (`data/descripciones/aviso_linfocitosis.txt`) se muestra en
         el botón «Aviso e información científica» del panel."""
         return (
-            f"{self._lymphocytosis_alert_line(alerta)} Qué significa y en qué se basa: botón "
-            "«⚠️ Aviso e información científica»."
+            f"{self._lymphocytosis_alert_line(alerta)} Más información: botón «⚠️ Aviso e "
+            "información científica»."
         )
 
     def _refresh_hemogram_panel(self) -> None:
