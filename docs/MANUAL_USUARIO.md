@@ -935,12 +935,21 @@ valor respecto al rango de referencia de ese informe:
 - **Gris oscuro con un punto** = hay valor, pero el informe no traía rango.
 - **En blanco** = ese día no se midió ese parámetro.
 
-Arriba se elige qué mostrar: los parámetros que **alguna vez** han estado
-fuera de rango (por defecto), **todos**, o los de **un panel clínico**
-concreto (Hemograma, Hierro, Función renal...). En este último caso el mapa
-enseña exactamente los datos con los que calcula ese panel, lo que ayuda a
-ver si le falta algún dato o si alguno no encaja. Pasa el ratón por una
-casilla para ver el valor, la fecha, el rango y el laboratorio.
+Arriba se elige qué mostrar: los parámetros que han estado **fuera de
+rango en el periodo** (por defecto), **todos**, o los de **un panel
+clínico** concreto (Hemograma, Hierro, Función renal...). En este último
+caso el mapa enseña exactamente los datos con los que calcula ese panel, lo
+que ayuda a ver si le falta algún dato o si alguno no encaja. Pasa el ratón
+por una casilla para ver el valor, la fecha, el rango y el laboratorio.
+
+El mapa respeta el **periodo de las gráficas** (Configuración → General,
+apartado «Gráficos»; por ejemplo, los últimos 5 años): solo enseña las
+analíticas de ese periodo, contado desde la más reciente, y arriba a la
+derecha indica cuántas anteriores quedan ocultas. Un parámetro que estuvo
+fuera de rango hace años pero que en el periodo ha estado siempre bien ya no
+aparece en «fuera de rango en el periodo», y uno que no se ha medido en ese
+tiempo no aparece en ninguna opción. Con «Todo el histórico» se ve el
+historial completo. Al cambiar el periodo, el mapa se redibuja solo.
 
 Si hay muchos parámetros, el mapa se reparte en **páginas** (como mucho 20
 filas cada una) para que las casillas se lean bien: usa los botones **◀** y
@@ -1532,8 +1541,9 @@ panel clínico para llevar a una consulta:
     anteriores);
   - **Qué ha cambiado** respecto al informe anterior;
   - el **mapa de calor**, eligiendo en el desplegable qué parámetros
-    incluye: los alguna vez fuera de rango, todos, o los de un panel
-    concreto (igual que en la pantalla Mapa de calor).
+    incluye: los fuera de rango en el periodo, todos, o los de un panel
+    concreto (igual que en la pantalla Mapa de calor, con el mismo
+    periodo de las gráficas).
 - **Evolución de parámetros**: marca las casillas de los que quieras, en
   una lista que se desplaza con la barra o con la rueda del ratón. Solo
   aparecen las pruebas con al menos 2 analíticas.

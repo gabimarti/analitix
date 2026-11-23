@@ -78,6 +78,8 @@ from analitix.charts import (
     evolution_figure,
     heatmap_dates,
     heatmap_figure,
+    heatmap_out_of_range,
+    heatmap_window,
     is_recently_altered,
     position_figure,
     trend_arrow,
@@ -226,7 +228,7 @@ logger = logging.getLogger("analitix.gui")
 # Filas del mapa de calor por panel clínico: las mismas tuplas de
 # `canonical_id` que usa cada panel, así el mapa enseña exactamente los datos
 # con los que ese panel calcula (una fila por tupla, variantes ya fusionadas).
-HEATMAP_OUT_OF_RANGE = "Parámetros alguna vez fuera de rango"
+HEATMAP_OUT_OF_RANGE = "Parámetros fuera de rango en el periodo"
 HEATMAP_ALL = "Todos los parámetros"
 # Cada fila lleva un nombre fijo y legible, en vez del nombre crudo del
 # último informe (que cambia de laboratorio a laboratorio: "San-Hematies,
@@ -3262,7 +3264,8 @@ class AnalitixApp(ttk.Window):
             frame,
             text="Cada fila es un parámetro y cada columna una analítica. Azul = por debajo del rango de "
             "referencia de ese informe, rojo = por encima (más intenso cuanto más lejos del rango), gris = "
-            "dentro del rango. Pasa el ratón por una casilla para ver el valor, el rango y el laboratorio.",
+            "dentro del rango. Pasa el ratón por una casilla para ver el valor, el rango y el laboratorio. "
+            "Solo se muestran las analíticas del periodo de las gráficas (Configuración → General).",
             bootstyle="secondary",
             wraplength=1000,
             justify="left",
@@ -3271,6 +3274,16 @@ class AnalitixApp(ttk.Window):
         self.chart_canvas_mapa_calor.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
 
     def _heatmap_rows(self, choice: str) -> list[tuple[str, list[dict]]]:
+        """Filas del mapa de calor ya recortadas al periodo de las gráficas
+        (ver `_heatmap_rows_and_hidden`)."""
+        return self._heatmap_rows_and_hidden(choice)[0]
+
+    def _heatmap_rows_and_hidden(self, choice: str) -> tuple[list[tuple[str, list[dict]]], int]:
+        """(filas, nº de analíticas anteriores ocultas) del conjunto `choice`
+        dentro del periodo configurado de las gráficas (`charts.heatmap_window`,
+        el mismo para pantalla e informe PDF). Con `HEATMAP_OUT_OF_RANGE`,
+        solo los parámetros fuera de rango alguna vez DENTRO del periodo:
+        uno que lo estuvo hace años y se normalizó deja de aparecer."""
         pid = self.current_patient_id
         if choice in HEATMAP_SETS:
             rows = []
@@ -3280,19 +3293,37 @@ class AnalitixApp(ttk.Window):
                 )
                 if series:
                     rows.append((label, series))
-            return rows
-        tests = list_canonical_tests(self.con, pid)
+        else:
+            tests = list_canonical_tests(self.con, pid)
+            if choice == HEATMAP_OUT_OF_RANGE:
+                # Primer filtro barato (fuera de rango en todo el histórico,
+                # sin leer las series); el del periodo, tras recortar.
+                tests = [t for t in tests if t.get("out_of_range")]
+            rows = [(t["raw_name"], get_series(self.con, t["canonical_id"], pid)) for t in tests]
+            rows.sort(key=lambda r: strip_accents(r[0]).casefold())
+        # La ventana se calcula sobre todas las filas del conjunto, antes de
+        # filtrar por fuera de rango, para que «ocultas» y el corte no
+        # dependan de qué parámetros estuvieron alterados.
+        rows, hidden = heatmap_window(rows, self._effective_chart_years())
         if choice == HEATMAP_OUT_OF_RANGE:
-            tests = [t for t in tests if t.get("out_of_range")]
-        rows = [(t["raw_name"], get_series(self.con, t["canonical_id"], pid)) for t in tests]
-        return sorted(rows, key=lambda r: strip_accents(r[0]).casefold())
+            rows = [r for r in rows if heatmap_out_of_range(r[1])]
+        return rows, hidden
+
+    def _effective_chart_years(self) -> int:
+        """Años del periodo de las gráficas, 0 = todo el histórico (mismo
+        criterio que `_windowed`)."""
+        years = getattr(self, "chart_years", DEFAULT_CHART_YEARS)
+        var_full = getattr(self, "var_full_history", None)
+        if (var_full is not None and var_full.get()) or years <= 0:
+            return 0
+        return years
 
     def _show_heatmap(self, page: int | None = None) -> None:
         """Muestra la página `page` del mapa (la actual si es `None`)."""
         if self.current_patient_id is None:
             return
         choice = self.var_mapa_calor_set.get()
-        rows = [r for r in self._heatmap_rows(choice) if r[1]]
+        rows, hidden = self._heatmap_rows_and_hidden(choice)
         container = self.chart_canvas_mapa_calor
         pages = _heatmap_pages(rows)
         if page is not None:
@@ -3311,13 +3342,19 @@ class AnalitixApp(ttk.Window):
         if not rows:
             for child in container.winfo_children():
                 child.destroy()
-            ttk.Label(container, text="Sin datos para esta selección.", bootstyle="secondary").pack(
-                anchor="w"
-            )
+            texto = "Sin datos para esta selección."
+            if hidden:
+                texto = (
+                    f"Sin datos para esta selección en los últimos {self._effective_chart_years()} "
+                    f"años ({hidden} analíticas anteriores ocultas; Configuración → General "
+                    "para cambiar el periodo)."
+                )
+            ttk.Label(container, text=texto, bootstyle="secondary").pack(anchor="w")
             return
         trozo, sufijo = pages[self._heatmap_page]
         # Mismas columnas (fechas) en todas las páginas, para poder compararlas.
         fig = heatmap_figure(trozo, choice + sufijo, heatmap_dates(rows))
+        self._mark_window(fig, hidden, arriba=True)
         fig.analitix_scroll = len(trozo) > HEATMAP_SCROLL_ROWS
         self._embed_figure(fig, container)
         self._attach_heatmap_hover(fig)
@@ -5868,25 +5905,24 @@ class AnalitixApp(ttk.Window):
         cutoff = f"{int(last[:4]) - years}{last[4:]}"
         return [s for s in series if s["fecha"][:10] >= cutoff]
 
-    def _mark_window(self, fig, hidden: int, que: str = "analíticas"):
+    def _mark_window(self, fig, hidden: int, que: str = "analíticas", arriba: bool = False):
         """Aviso en el gráfico cuando la ventana de años oculta datos
-        (`que`: "analíticas" o, en tensión arterial, "mediciones")."""
+        (`que`: "analíticas" o, en tensión arterial, "mediciones"). Abajo a
+        la derecha, salvo `arriba=True` (mapa de calor: su leyenda ocupa el
+        pie de la figura)."""
         years = getattr(self, "chart_years", DEFAULT_CHART_YEARS)
         if fig is not None and hidden and years > 0:
             fig.text(
                 0.99,
-                0.005,
+                0.995 if arriba else 0.005,
                 f"Últimos {years} años · {hidden} {que} anteriores ocultas "
                 "(Configuración → General para cambiar el periodo)",
                 ha="right",
-                va="bottom",
+                va="top" if arriba else "bottom",
                 fontsize=7,
                 color="#777777",
             )
         return fig
-        if self._comparativa_selection():
-            self._show_comparison()
-        self._refresh_bp_panel()
 
     def _toggle_personal_range(self) -> None:
         """Interruptor "Mostrar mi rango personal" de Evolución: se recuerda
@@ -6533,11 +6569,19 @@ class AnalitixApp(ttk.Window):
                     avanza()
                 if var_mapa.get():
                     conjunto = var_conjunto_mapa.get()
+                    # Mismo periodo y filtro que en pantalla; mismas columnas
+                    # (fechas) en todas las páginas, como en pantalla.
+                    filas_mapa, ocultas_mapa = self._heatmap_rows_and_hidden(conjunto)
+                    fechas_mapa = heatmap_dates(filas_mapa)
                     paginas.extend(
                         _same_size(
                             [
-                                heatmap_figure(trozo, conjunto + sufijo)
-                                for trozo, sufijo in _pages_of(self._heatmap_rows(conjunto))
+                                self._mark_window(
+                                    heatmap_figure(trozo, conjunto + sufijo, fechas_mapa),
+                                    ocultas_mapa,
+                                    arriba=True,
+                                )
+                                for trozo, sufijo in _pages_of(filas_mapa)
                             ]
                         )
                     )
@@ -7493,8 +7537,14 @@ class AnalitixApp(ttk.Window):
             self.lbl_chart_years_info.configure(
                 text=f"Periodo: {'Todo el histórico' if self.chart_years == 0 else f'Últimos {self.chart_years} años'}"
             )
+        # Redibuja lo que ya estaba a la vista con el periodo nuevo.
         if self.list_tests_evolucion.curselection():
             self._show_evolution()
+        if self._comparativa_selection():
+            self._show_comparison()
+        self._refresh_bp_panel()
+        if self.current_patient_id is not None and self.chart_canvas_mapa_calor.winfo_children():
+            self._show_heatmap(page=0)
         messagebox.showinfo("Analitix", "Preferencia guardada.", parent=self)
 
     def _change_password(self) -> None:

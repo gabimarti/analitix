@@ -1253,6 +1253,35 @@ def heatmap_dates(rows: list[tuple[str, list[dict[str, Any]]]]) -> list[str]:
     return sorted({s["fecha"][:10] for _, series in rows for s in series})
 
 
+def heatmap_window(
+    rows: list[tuple[str, list[dict[str, Any]]]], years: int
+) -> tuple[list[tuple[str, list[dict[str, Any]]]], int]:
+    """Recorta las filas del mapa de calor al periodo configurado de las
+    gráficas: los `years` años anteriores a la analítica más reciente de
+    TODAS las filas (no de cada una, como en Evolución), para que las
+    columnas sigan alineadas y un parámetro que dejó de pedirse no arrastre
+    fechas antiguas. Quita las filas que se quedan sin valores. Devuelve
+    (filas, nº de fechas de analítica que quedan fuera). `years <= 0` =
+    todo el histórico (sin recorte)."""
+    rows = [(label, series) for label, series in rows if series]
+    if years <= 0 or not rows:
+        return rows, 0
+    last = max(s["fecha"][:10] for _, series in rows for s in series)
+    cutoff = f"{int(last[:4]) - years}{last[4:]}"
+    hidden = sum(1 for d in heatmap_dates(rows) if d < cutoff)
+    recortadas = [
+        (label, [s for s in series if s["fecha"][:10] >= cutoff]) for label, series in rows
+    ]
+    return [(label, series) for label, series in recortadas if series], hidden
+
+
+def heatmap_out_of_range(series: list[dict[str, Any]]) -> bool:
+    """Si algún valor de la serie está fuera de su rango (`flag_calc` alto
+    o bajo). Aplicado a la serie ya recortada por `heatmap_window`, decide
+    qué parámetros entran en «fuera de rango en el periodo»."""
+    return any(s.get("flag_calc") in ("alto", "bajo") for s in series)
+
+
 def heatmap_figure(
     rows: list[tuple[str, list[dict[str, Any]]]], title: str, dates: list[str] | None = None
 ) -> Figure:

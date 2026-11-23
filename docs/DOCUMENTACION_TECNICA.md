@@ -1503,8 +1503,9 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
     con la pestaña Resumen, y mapa de calor de `HEATMAP_OUT_OF_RANGE`);
   - casillas con las pruebas de 2 o más analíticas;
   - un desplegable para el conjunto del mapa de calor (los mismos de la
-    pantalla: alguna vez fuera de rango, todos o un panel de
-    `HEATMAP_SETS`);
+    pantalla: fuera de rango en el periodo, todos o un panel de
+    `HEATMAP_SETS`; mismo recorte por periodo que en pantalla, vía
+    `_heatmap_rows_and_hidden`);
   - "Qué ha cambiado" (ordenado por magnitud de cambio antes de partirlo)
     y el mapa de calor se reparten en páginas de `PDF_ROWS_PER_PAGE` (25)
     filas con `_pages_of` (título "(n/total)"), y `_same_size` da a todas
@@ -2349,8 +2350,15 @@ parámetros excluidos a propósito.
   en la barra inferior y en la cabecera de los paneles, y a `tipo_informe`
   en `_export_pdf` (portada y pie de página).
 - Pestaña "Mapa de calor" (menú Análisis, requiere paciente):
-  `_build_tab_mapa_calor` / `_heatmap_rows` / `_show_heatmap`. Conjuntos:
-  alguna vez fuera de rango (por defecto), todos, o uno por panel
+  `_build_tab_mapa_calor` / `_heatmap_rows_and_hidden` / `_show_heatmap`.
+  Las filas se recortan al periodo de las gráficas (`chart_years`, vía
+  `_effective_chart_years`) con `charts.heatmap_window`: un único corte
+  para todas las filas, contado desde la analítica más reciente del
+  conjunto (columnas alineadas), sin las filas que quedan vacías; las
+  fechas ocultas se avisan con `_mark_window(..., arriba=True)` (arriba
+  a la derecha: la leyenda ocupa el pie). Conjuntos:
+  fuera de rango en el periodo (por defecto; `heatmap_out_of_range` sobre
+  la serie ya recortada), todos, o uno por panel
   (`HEATMAP_SETS`: pares (etiqueta legible, tupla `*_IDS` del panel),
   fusionados con `get_merged_series`, así el mapa enseña exactamente los
   datos con los que calcula cada panel). En pantalla el mapa se reparte en

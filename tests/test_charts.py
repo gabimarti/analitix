@@ -628,3 +628,45 @@ def test_is_recently_altered():
     # Parámetro sin flags
     serie_sin_flags = [{"flag_calc": None}, {"flag_calc": None}]
     assert is_recently_altered(serie_sin_flags, n_recent=2) is False
+
+
+def _punto_mapa(fecha, flag="normal", v=1.0):
+    return {"fecha": fecha, "value_num": v, "ref_low": 0.0, "ref_high": 2.0, "flag_calc": flag}
+
+
+def test_heatmap_window_uses_one_cutoff_for_all_rows():
+    """El periodo del mapa de calor se cuenta desde la analítica más
+    reciente de todas las filas (columnas alineadas); las filas sin valores
+    en el periodo desaparecen y se cuentan las fechas que quedan fuera."""
+    from analitix.charts import heatmap_window
+
+    rows = [
+        ("A", [_punto_mapa("2015-01-10"), _punto_mapa("2022-06-01"), _punto_mapa("2026-03-01")]),
+        # Dejó de pedirse: su última analítica es antigua -> fuera entera.
+        ("B", [_punto_mapa("2016-05-05"), _punto_mapa("2019-02-01")]),
+        ("C", []),
+    ]
+    filas, ocultas = heatmap_window(rows, 5)
+    assert [label for label, _ in filas] == ["A"]
+    assert [s["fecha"] for s in filas[0][1]] == ["2022-06-01", "2026-03-01"]
+    assert ocultas == 3  # 2015-01-10, 2016-05-05, 2019-02-01
+
+    # Todo el histórico: sin recorte (solo se quitan filas vacías).
+    filas, ocultas = heatmap_window(rows, 0)
+    assert [label for label, _ in filas] == ["A", "B"] and ocultas == 0
+    assert heatmap_window([], 5) == ([], 0)
+
+
+def test_heatmap_out_of_range_in_period():
+    """«Fuera de rango en el periodo»: un parámetro alterado hace años y
+    normal en el periodo ya no entra; uno alterado dentro, sí."""
+    from analitix.charts import heatmap_out_of_range, heatmap_window
+
+    rows = [
+        ("Antiguo", [_punto_mapa("2016-01-01", "alto"), _punto_mapa("2025-01-01")]),
+        ("Reciente", [_punto_mapa("2016-01-01"), _punto_mapa("2025-01-01", "bajo")]),
+    ]
+    filas, _ = heatmap_window(rows, 5)
+    assert [label for label, s in filas if heatmap_out_of_range(s)] == ["Reciente"]
+    filas, _ = heatmap_window(rows, 0)
+    assert [label for label, s in filas if heatmap_out_of_range(s)] == ["Antiguo", "Reciente"]
