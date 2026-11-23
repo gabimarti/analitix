@@ -1806,6 +1806,13 @@ desplazamiento.
   §2.4). En Evolución/Comparativa, esas pruebas se agrupan además al final
   de la lista. Cambia el número y pulsa **Guardar**; se aplica al volver a
   abrir el gráfico.
+- **Gráficas en los informes PDF**: nº mínimo de analíticas (en fechas
+  distintas, dentro del periodo de las gráficas) para que un informe PDF
+  incluya la gráfica de evolución de un parámetro (por defecto 3, mínimo
+  2). Con menos, el parámetro sigue en las tablas del informe pero sin
+  gráfica; en el informe personalizado, el mensaje final indica qué
+  parámetros elegidos se han quedado sin ella. En pantalla los gráficos se
+  siguen dibujando desde 2 analíticas.
 - **Actualizaciones**: activa **Comprobar al iniciar** para que Analitix
   mire si hay una versión nueva cada vez que se abre (desactivado por
   defecto), o pulsa **Buscar ahora** para comprobarlo en el momento (ver

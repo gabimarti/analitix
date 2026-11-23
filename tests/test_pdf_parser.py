@@ -699,3 +699,18 @@ def test_maresme_urine_section_gets_its_own_test_names():
     ]
     names = [r["raw_name"] for r in _parse_lines(lines, _maresme_profile())["results"]]
     assert names == ["Glucosa sèrum", "Glucosa orina", "Densitat orina"]
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        # "." decimal: el rango de la misma línea decide (pH de gasometría).
+        ("pH 7.349 7.32 - 7.43", 7.349),
+        # "." de millares: sigue siendo 1000 con un rango de millares.
+        ("Leucocitos 1.000 /uL 4.000 - 10.000", 1000.0),
+        # Sin rango, la lectura de siempre (millares).
+        ("Plaquetas 2.534", 2534.0),
+    ],
+)
+def test_ambiguous_dot_value_uses_reference_range(line, expected):
+    assert parse_result_line(line)["value_num"] == pytest.approx(expected)

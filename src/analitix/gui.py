@@ -66,6 +66,7 @@ from analitix.charts import (
     COLOR_ALTO,
     COLOR_BAJO,
     COLOR_BRUSCO,
+    DEFAULT_MIN_PDF_CHART_POINTS,
     DEFAULT_MIN_POINTS,
     LAB_UNKNOWN,
     MAX_COMPARISON_TESTS,
@@ -76,6 +77,7 @@ from analitix.charts import (
     changes_figure,
     changes_figure_items,
     comparison_figure,
+    enough_for_pdf_chart,
     evolution_figure,
     heatmap_dates,
     heatmap_figure,
@@ -565,6 +567,12 @@ class AnalitixApp(ttk.Window):
         )
         self.min_points = int(
             get_setting(self.con, "min_points_evolucion", str(DEFAULT_MIN_POINTS))
+        )
+        # Mínimo de analíticas para incluir una gráfica de evolución en los
+        # informes PDF (`charts.enough_for_pdf_chart`).
+        self.min_pdf_chart_points = max(
+            2,
+            int(get_setting(self.con, "min_points_grafica_pdf", str(DEFAULT_MIN_PDF_CHART_POINTS))),
         )
         # Rango personal (`rcv.personal_range`) en el gráfico de Evolución:
         # desactivado por defecto, se activa con su interruptor en esa pantalla.
@@ -6217,8 +6225,10 @@ class AnalitixApp(ttk.Window):
 
             ttk.Label(
                 body,
-                text="ℹ️ Los parámetros normalizados desde hace tiempo, o que no se han medido en el "
-                "periodo, aparecerán en la tabla inicial pero no generarán páginas de gráfico.",
+                text="ℹ️ Los parámetros normalizados desde hace tiempo, los que no se han medido en "
+                f"el periodo y los que tienen menos de {self.min_pdf_chart_points} analíticas en "
+                "él (Configuración → General) aparecerán en la tabla inicial pero no generarán "
+                "páginas de gráfico.",
                 bootstyle="secondary",
                 wraplength=520,
                 justify="left",
@@ -6256,8 +6266,8 @@ class AnalitixApp(ttk.Window):
         # orden (0 = fuera de rango, 1 = cambio brusco); en "alterados", solo los que tienen
         # algún valor fuera de rango dentro del periodo de las gráficas (en sus últimas
         # `n_recientes` analíticas de ese periodo, o en cualquiera si es 0): sin ninguno, la
-        # gráfica no enseñaría nada alterado. `export_pdf` descarta además cualquier serie de
-        # un solo punto (nada que mostrar como evolución).
+        # gráfica no enseñaría nada alterado. `export_pdf` descarta además las series con menos
+        # analíticas que el mínimo de Configuración (`min_pdf_chart_points`).
         if modo == "alterados":
             corte = self._period_cutoff()
             filas_con_grafico = [
@@ -6304,6 +6314,7 @@ class AnalitixApp(ttk.Window):
                 on_progress=lambda n, t: paso(f"Escribiendo página {n} de {t}...", n, t),
                 full_series_by_canonical_id=full_series_by_canonical_id,
                 chart_years=self.chart_years,
+                min_chart_points=self.min_pdf_chart_points,
             )
         messagebox.showinfo(
             "Exportado",
@@ -6319,7 +6330,9 @@ class AnalitixApp(ttk.Window):
         series = getattr(self, f"_{key}_series")
         if key in PDF_COMBINED_PANELS:
             combinadas = {
-                nombre: series[k] for k, nombre in PDF_COMBINED_PANELS[key].items() if series.get(k)
+                nombre: series[k]
+                for k, nombre in PDF_COMBINED_PANELS[key].items()
+                if series.get(k) and self._pdf_chart_ok(series[k])
             }
             if combinadas:
                 fig = self._comparison_figure(combinadas)
@@ -6327,7 +6340,7 @@ class AnalitixApp(ttk.Window):
                     paginas.append(fig)
             return paginas
         for cid, nombre in getattr(self, f"_{key}_indices"):
-            if cid:
+            if cid and self._pdf_chart_ok(series.get(cid, [])):
                 fig = self._evolution_figure(series.get(cid, []), nombre, cid)
                 if fig is not None:
                     paginas.append(fig)
@@ -6538,6 +6551,7 @@ class AnalitixApp(ttk.Window):
                 + len(elegidos)
             )
             total = 0
+            sin_grafica: list[str] = []  # parámetros elegidos con pocas analíticas
             with self._progress("Generando informe PDF", dialog) as paso:
                 hechos = 0
 
@@ -6623,11 +6637,14 @@ class AnalitixApp(ttk.Window):
                     avanza()
                 for t in seleccion:
                     serie = get_series(self.con, t["canonical_id"], self.current_patient_id)
-                    fig = self._evolution_figure(
-                        serie, t["raw_name"], t["canonical_id"], with_personal=True
-                    )
-                    if fig is not None:
-                        paginas.append(fig)
+                    if self._pdf_chart_ok(serie):
+                        fig = self._evolution_figure(
+                            serie, t["raw_name"], t["canonical_id"], with_personal=True
+                        )
+                        if fig is not None:
+                            paginas.append(fig)
+                    else:
+                        sin_grafica.append(t["raw_name"])
                     avanza()
                 if periodo_bp is not None:
                     # El periodo elegido manda sobre la ventana de años, como el
@@ -6674,8 +6691,16 @@ class AnalitixApp(ttk.Window):
                 )
                 return
             dialog.destroy()
+            aviso = ""
+            if sin_grafica:
+                aviso = (
+                    f"\n\nSin gráfica por tener menos de {self.min_pdf_chart_points} analíticas "
+                    f"en el periodo (Configuración → General): {', '.join(sin_grafica)}."
+                )
             messagebox.showinfo(
-                "Exportado", f"Informe personalizado de {total} páginas en:\n{path}", parent=self
+                "Exportado",
+                f"Informe personalizado de {total} páginas en:\n{path}{aviso}",
+                parent=self,
             )
 
         botones = ttk.Frame(body)
@@ -7034,6 +7059,24 @@ class AnalitixApp(ttk.Window):
             fila_min_puntos, from_=2, to=20, textvariable=self.var_min_points, width=5
         ).pack(side="left")
         ttk.Button(fila_min_puntos, text="Guardar", command=self._change_min_points).pack(
+            side="left", padx=(8, 0)
+        )
+
+        ttk.Label(
+            graficos,
+            text="Nº mínimo de analíticas (en fechas distintas, dentro del periodo de las "
+            "gráficas) para que un informe PDF incluya la gráfica de evolución de un "
+            "parámetro. Con menos, el parámetro sigue en las tablas del informe pero sin "
+            "gráfica. En pantalla los gráficos se dibujan desde 2 analíticas:",
+            wraplength=700,
+        ).pack(anchor="w", pady=(12, 0))
+        fila_min_pdf = ttk.Frame(graficos)
+        fila_min_pdf.pack(anchor="w", pady=(6, 0))
+        self.var_min_pdf_chart_points = tk.IntVar(value=self.min_pdf_chart_points)
+        ttk.Spinbox(
+            fila_min_pdf, from_=2, to=20, textvariable=self.var_min_pdf_chart_points, width=5
+        ).pack(side="left")
+        ttk.Button(fila_min_pdf, text="Guardar", command=self._change_min_pdf_chart_points).pack(
             side="left", padx=(8, 0)
         )
 
@@ -7537,6 +7580,21 @@ class AnalitixApp(ttk.Window):
         set_setting(self.con, "min_points_evolucion", str(self.min_points))
         self._refresh_test_lists()
         messagebox.showinfo("Analitix", "Preferencia guardada.", parent=self)
+
+    def _change_min_pdf_chart_points(self) -> None:
+        try:
+            valor = int(self.var_min_pdf_chart_points.get())
+        except (tk.TclError, ValueError):
+            valor = self.min_pdf_chart_points
+        self.min_pdf_chart_points = max(2, valor)
+        self.var_min_pdf_chart_points.set(self.min_pdf_chart_points)
+        set_setting(self.con, "min_points_grafica_pdf", str(self.min_pdf_chart_points))
+        messagebox.showinfo("Analitix", "Preferencia guardada.", parent=self)
+
+    def _pdf_chart_ok(self, series: list[dict]) -> bool:
+        """Si una serie (recortada al periodo de las gráficas) tiene
+        analíticas suficientes para incluir su gráfica en un informe PDF."""
+        return enough_for_pdf_chart(self._windowed(series), self.min_pdf_chart_points)
 
     def _chart_years_options(self) -> list[str]:
         max_years = 20

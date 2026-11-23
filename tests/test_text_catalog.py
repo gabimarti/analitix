@@ -92,3 +92,17 @@ def test_user_aliases_layer_over_bundled_ones(tmp_path: Path, monkeypatch: pytes
     assert "hierro" not in user.read_text(encoding="utf-8")  # no copia los de la app
     assert "glucosa plasma,glucosa_serum" in user.read_text(encoding="utf-8")
     assert "glucosa" not in bundled.read_text(encoding="utf-8")
+
+
+def test_globulines_percent_and_mass_get_separate_ids(monkeypatch: pytest.MonkeyPatch):
+    """El proteinograma trae «Globulines %» y «Globulines» (g/dL) en el
+    mismo informe: con el mismo id se mezclaban en una sola serie. Usa el
+    CSV de alias de la aplicación (el autouse de conftest lo sustituye)."""
+    from analitix.config import BUNDLED_CATALOG_PATH
+
+    monkeypatch.setattr(catalog, "CATALOG_PATH", BUNDLED_CATALOG_PATH)
+    monkeypatch.setattr(catalog, "BUNDLED_CATALOG_PATH", BUNDLED_CATALOG_PATH)
+    catalog.reload_overrides()
+    assert catalog.canonical_id_for("Globulines %") == "globulines_pct"
+    assert catalog.canonical_id_for("Globulines") == "globulines"
+    assert catalog.canonical_id_for("Globulines totals %") == "globulines_totals_pct"

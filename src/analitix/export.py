@@ -26,7 +26,9 @@ from analitix.charts import (
     COLOR_ALTO,
     COLOR_BAJO,
     COLOR_BRUSCO,
+    DEFAULT_MIN_PDF_CHART_POINTS,
     DEFAULT_MIN_POINTS,
+    enough_for_pdf_chart,
     evolution_figure,
 )
 from analitix.config import LOGO_PATH
@@ -106,7 +108,7 @@ _PDF_DISCLAIMER = (
 # Versión con la que se generó el informe, en la portada y en el pie de cada
 # página, para saber de dónde sale cualquier página suelta.
 _ANALITIX_VERSION = f"Analitix {__version__} ({__version_date__})"
-_FOOTER_STRIP_IN = 0.4  # franja propia del pie en las páginas que no eran A4
+_FOOTER_STRIP_IN = 0.5  # franja propia del pie en las páginas que no eran A4
 # Tabla de parámetros: el nombre ocupa casi la mitad (antes las cinco
 # columnas medían igual y el nombre se cortaba); el estado es una palabra.
 _TABLE_COL_WIDTHS = (0.46, 0.15, 0.15, 0.09, 0.15)
@@ -156,19 +158,41 @@ def _fit_page_a4(fig: Figure) -> None:
         leyenda.set_bbox_to_anchor((0, desplazamiento, 1, escala), transform=fig.transFigure)
 
 
+# Caracteres que caben en una línea del pie (8 pt, todo el ancho de una
+# página A4 vertical) y en una línea de detalle de la portada (11 pt).
+_FOOTER_LINE_CHARS = 110
+_COVER_LINE_CHARS = 72
+
+
+def _wrap_segments(texto: str, ancho: int) -> list[str]:
+    """Parte un texto «a · b · c» en líneas de como mucho `ancho`
+    caracteres sin cortar ningún tramo entre « · » (salvo un tramo que por
+    sí solo ya no quepa)."""
+    lineas: list[str] = []
+    for tramo in texto.split(" · "):
+        if lineas and len(lineas[-1]) + 3 + len(tramo) <= ancho:
+            lineas[-1] += " · " + tramo
+        else:
+            lineas.extend(textwrap.wrap(tramo, width=ancho) or [""])
+    return lineas
+
+
 def _add_footer(fig: Figure, tipo_informe: str, pagina: int, total: int) -> None:
     """Pie de página en todas las páginas del PDF, incluida la portada, en
     una franja propia que no tapa el contenido, en una página A4
-    (`_fit_page_a4`): tipo de informe a la izquierda y "Página n de N" a la
-    derecha; debajo, centrada, la versión de Analitix (en su propia línea
-    porque el tipo de informe puede ser largo, p. ej. con el filtro de
-    laboratorios)."""
+    (`_fit_page_a4`): arriba, el tipo de informe a todo el ancho (en dos
+    líneas si es largo, p. ej. con el periodo y el filtro de laboratorios);
+    debajo, la versión de Analitix centrada y "Página n de N" a la derecha,
+    para que el número de página nunca se solape con el tipo de informe."""
     _fit_page_a4(fig)
     alto = fig.get_size_inches()[1]
-    y = 0.2 / alto  # a 0,2 pulgadas del borde inferior
-    fig.text(0.06, y, tipo_informe, fontsize=8, color="#777777")
+    lineas = _wrap_segments(tipo_informe, _FOOTER_LINE_CHARS)[:2]
+    for i, linea in enumerate(reversed(lineas)):
+        y = (0.2 + 0.13 * i) / alto  # la última línea, a 0,2 pulgadas del borde
+        fig.text(0.06, y, linea, fontsize=8, color="#777777")
+    y = 0.06 / alto
+    fig.text(0.5, y, _ANALITIX_VERSION, fontsize=7, color="#777777", ha="center")
     fig.text(0.94, y, f"Página {pagina} de {total}", fontsize=8, color="#777777", ha="right")
-    fig.text(0.5, 0.06 / alto, _ANALITIX_VERSION, fontsize=7, color="#777777", ha="center")
 
 
 def _cover_page(patient_name: str, tipo_informe: str, fecha: str) -> Figure:
@@ -184,11 +208,20 @@ def _cover_page(patient_name: str, tipo_informe: str, fecha: str) -> Figure:
     except OSError:
         pass  # sin el fichero de logo no se bloquea la generación del informe
     fig.text(0.5, 0.56, "Informe de seguimiento", fontsize=20, weight="bold", ha="center")
-    fig.text(0.5, 0.50, tipo_informe, fontsize=14, ha="center", color="#555555")
-    fig.text(0.5, 0.44, f"Paciente: {patient_name}", fontsize=12, ha="center")
+    # El tipo de informe puede ser largo («Informe de parámetros alterados ·
+    # Gráficas: ... · Periodo: ... · Datos solo de: ...»): el primer tramo va
+    # en grande y el resto debajo, en líneas que caben en la página.
+    principal, _, detalle = tipo_informe.partition(" · ")
+    fig.text(0.5, 0.50, principal, fontsize=14, ha="center", color="#555555")
+    y = 0.50
+    for linea in _wrap_segments(detalle, _COVER_LINE_CHARS) if detalle else []:
+        y -= 0.024
+        fig.text(0.5, y, linea, fontsize=11, ha="center", color="#555555")
+    y_paciente = min(0.44, y - 0.045)
+    fig.text(0.5, y_paciente, f"Paciente: {patient_name}", fontsize=12, ha="center")
     fig.text(
         0.5,
-        0.40,
+        y_paciente - 0.04,
         f"Último informe de laboratorio: {fecha[:10]}  ·  Generado: {dt.date.today().isoformat()}",
         fontsize=10,
         ha="center",
@@ -294,6 +327,7 @@ def export_pdf(
     on_progress: Callable[[int, int], None] | None = None,
     full_series_by_canonical_id: dict[str, list[dict[str, Any]]] | None = None,
     chart_years: int = 0,
+    min_chart_points: int = DEFAULT_MIN_PDF_CHART_POINTS,
 ) -> int:
     """Informe de seguimiento en PDF (ampliado 2026-09-21 en dos pasos:
     primero con dos tipos de informe — "completo"/"de alterados", ver
@@ -307,10 +341,11 @@ def export_pdf(
        informe más reciente (`flag_calc in ("alto", "bajo")`).
     3. Tabla del resto de `filas` (dentro de rango, o sin `flag_calc`).
     4. Un gráfico de evolución (`charts.evolution_figure`) por cada
-       parámetro de `filas` con **al menos 2 puntos** en
+       parámetro de `filas` con al menos `min_chart_points` analíticas
+       (fechas distintas, nunca menos de 2; ajuste de Configuración) en
        `series_by_canonical_id` — nunca para los parámetros "normales"
-       (el llamador ya decide qué incluir ahí) ni para uno con un único
-       valor (no hay nada que mostrar como evolución). Con menos de
+       (el llamador ya decide qué incluir ahí) ni para uno con menos
+       analíticas (no hay evolución que mostrar). Con menos de
        `min_points` (el mismo ajuste de Configuración que la pantalla) el
        gráfico lleva el aviso de pocos datos de `charts.data_sufficiency`.
 
@@ -323,7 +358,7 @@ def export_pdf(
     graficos = []
     for f in filas:
         series = series_by_canonical_id.get(f["canonical_id"])
-        if series and len(series) >= 2:
+        if series and enough_for_pdf_chart(series, min_chart_points):
             graficos.append((f, series))
     total = 3 + len(graficos)
 

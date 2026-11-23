@@ -129,8 +129,10 @@ def test_export_pdf_fixed_page_structure(tmp_path: Path):
         30.0,
         path,
         tipo_informe="Informe completo",
+        min_chart_points=2,
     )
-    # Solo Glucosa (2 puntos) genera gráfico; Potassi (1 punto) y Sodi (sin serie) no.
+    # Con mínimo 2, solo Glucosa (2 puntos) genera gráfico; Potassi (1 punto) y Sodi (sin
+    # serie) no.
     assert paginas == 1
     with pdfplumber.open(path) as pdf:
         assert len(pdf.pages) == 4  # portada + fuera de rango + resto + 1 gráfico
@@ -213,7 +215,7 @@ def test_custom_pdf_pages_fit_a4_with_footer_room(tmp_path: Path):
     leyenda = fig.legend(handles=[], loc="lower center")
     _fit_page_a4(fig)
     assert tuple(round(v, 2) for v in fig.get_size_inches()) == (11.69, 8.27)
-    assert ax.get_position().y0 == pytest.approx(0.4 / 8.27)
+    assert ax.get_position().y0 == pytest.approx(0.5 / 8.27)
     assert leyenda.get_bbox_to_anchor().y0 > 0
     # Uno más alto que ancho pasa a A4 vertical.
     alta = Figure(figsize=(9, 15))
@@ -334,6 +336,7 @@ def test_export_pdf_altered_report_discriminated_charts(tmp_path: Path):
         30.0,
         path,
         tipo_informe="Informe de parámetros alterados · Gráficas: últimas 2 analíticas",
+        min_chart_points=2,
     )
     # Solo glucosa tiene gráfica (1 página de gráfica)
     assert paginas == 1
@@ -351,3 +354,76 @@ def test_export_pdf_altered_report_discriminated_charts(tmp_path: Path):
         # La página de gráfico es de Glucosa
         p4 = pdf.pages[3].extract_text()
         assert "Glucosa" in p4 and "Colesterol" not in p4
+
+
+def test_export_pdf_min_chart_points_counts_distinct_dates(tmp_path: Path):
+    """Con el mínimo por defecto (3) una serie de 2 analíticas no tiene
+    gráfica, y dos valores del mismo día cuentan como una sola analítica."""
+    filas, series = _filas_prueba(), _series_prueba()
+    labels = {"glucosa_serum": "Glucosa", "potassi": "Potassi"}
+    assert (
+        export_pdf(
+            "Paciente de Prueba",
+            "2024-06-01",
+            filas,
+            series,
+            labels,
+            30.0,
+            tmp_path / "a.pdf",
+            tipo_informe="Informe completo",
+        )
+        == 0
+    )
+    mismo_dia = {**series, "potassi": series["potassi"] * 2}
+    assert (
+        export_pdf(
+            "Paciente de Prueba",
+            "2024-06-01",
+            filas,
+            mismo_dia,
+            labels,
+            30.0,
+            tmp_path / "b.pdf",
+            tipo_informe="Informe completo",
+            min_chart_points=2,
+        )
+        == 1  # solo Glucosa
+    )
+
+
+def test_long_report_type_fits_cover_and_footer(tmp_path: Path):
+    """Un tipo de informe largo (periodo + filtro de laboratorios) se parte
+    en varias líneas en la portada y en el pie, y el número de página va en
+    su propia línea, sin solaparse."""
+    tipo = (
+        "Informe de parámetros alterados · Gráficas: últimas 3 analíticas · Periodo: últimos "
+        "5 años · Datos solo de: Laboratorio Ficticio Uno, Laboratorio Ficticio Dos"
+    )
+    path = tmp_path / "informe.pdf"
+    export_pdf(
+        "Paciente de Prueba",
+        "2024-06-01",
+        _filas_prueba(),
+        _series_prueba(),
+        {"glucosa_serum": "Glucosa", "potassi": "Potassi"},
+        30.0,
+        path,
+        tipo_informe=tipo,
+    )
+    with pdfplumber.open(path) as pdf:
+        for page in pdf.pages:
+            ancho = page.width
+            palabras = page.extract_words()
+            assert all(0 <= w["x0"] and w["x1"] <= ancho for w in palabras)
+            numero = [w for w in palabras if w["text"] == "Página"]
+            assert len(numero) == 1
+            misma_linea = " ".join(
+                w["text"]
+                for w in palabras
+                if abs(w["bottom"] - numero[0]["bottom"]) < 3 and w["x1"] < numero[0]["x0"]
+            )
+            # En la línea del número de página solo está la versión, centrada.
+            assert misma_linea == f"Analitix {__version__} ({__version_date__})"
+        portada = pdf.pages[0].extract_text()
+        assert "Informe de parámetros alterados" in portada
+        assert "Laboratorio Ficticio Dos" in portada

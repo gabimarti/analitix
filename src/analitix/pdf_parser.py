@@ -31,6 +31,7 @@ manual en vez de arriesgarse a guardar datos mal interpretados.
 
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -227,6 +228,39 @@ def _to_float(text: str) -> float | None:
     return None
 
 
+# "7.349" es ambiguo: 7349 con "." de millares (Echevarne) o 7,349 con "."
+# decimal (p. ej. un pH de gasometría con rango "7.32 - 7.43"). `_to_float`
+# lo lee como millares.
+_AMBIGUOUS_THOUSANDS_RE = re.compile(r"[-+]?\d{1,3}\.\d{3}")
+
+
+def _value_to_float(
+    value_raw: str | None, ref_low: float | None, ref_high: float | None
+) -> float | None:
+    """Valor numérico de un resultado. Si es ambiguo ("7.349") y la línea
+    trae rango de referencia, se elige la lectura (millares o decimal) más
+    próxima al rango en escala logarítmica: un "1.000" con rango
+    "4.000 - 10.000" sigue siendo 1000 y un pH "7.349" con rango
+    "7.32 - 7.43" pasa a 7.349 (no 7349). Sin rango, se mantiene la
+    lectura de `_to_float`."""
+    if not value_raw:
+        return None
+    value = _to_float(value_raw)
+    candidate = value_raw.strip()
+    if value is None or not _AMBIGUOUS_THOUSANDS_RE.fullmatch(candidate):
+        return value
+    limites = [b for b in (ref_low, ref_high) if b is not None and b > 0]
+    if not limites:
+        return value
+    centro = math.sqrt(limites[0] * limites[-1])
+    decimal = float(candidate)
+    if decimal <= 0 or value <= 0:
+        return value
+    if abs(math.log(decimal / centro)) < abs(math.log(value / centro)):
+        return decimal
+    return value
+
+
 # HUGTIP escribe la fecha con el mes en catalán y la hora pegada sin
 # separador ("13 de nov. 202411:23:16"), en vez de con barras o guiones.
 # Con el nombre del mes abreviado a sus 3 primeras letras basta para cubrir
@@ -349,7 +383,7 @@ def _parse_interfaced_value_line(content: str) -> dict[str, Any]:
     return {
         "loinc_code": None,
         "value_raw": value_raw,
-        "value_num": _to_float(value_raw) if value_raw else None,
+        "value_num": _value_to_float(value_raw, ref_low, ref_high),
         "unit": unit,
         "ref_low": ref_low,
         "ref_high": ref_high,
@@ -484,7 +518,6 @@ def parse_result_line(
     # ("* Colesterol LDL"); sin quitarlo, la misma prueba tendría dos ids.
     name = re.sub(r"^\*\s*", "", name)
     flag_pdf, value_raw, unit = _extract_value_unit(rest)
-    value_num = _to_float(value_raw) if value_raw else None
 
     # Algunas revisiones del informe pierden el símbolo "<"/">" de un rango
     # (queda solo el número, pegado a la unidad); si no se ha detectado
@@ -505,6 +538,7 @@ def parse_result_line(
                 ref_high = bound
                 ref_text = f"< {unit_tokens[-1]}"
             unit = " ".join(unit_tokens[:-1]) or None
+    value_num = _value_to_float(value_raw, ref_low, ref_high)
     return {
         "raw_name": name,
         "loinc_code": loinc_code,
@@ -785,7 +819,7 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
                             "raw_name": name,
                             "loinc_code": None,
                             "value_raw": value_raw,
-                            "value_num": _to_float(value_raw) if value_raw else None,
+                            "value_num": _value_to_float(value_raw, ref_low, ref_high),
                             "unit": unit,
                             "ref_low": ref_low,
                             "ref_high": ref_high,
