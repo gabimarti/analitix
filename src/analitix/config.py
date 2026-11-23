@@ -96,7 +96,7 @@ PATIENTS_DIR = DATA_DIR / "pacientes"
 DB_LIST_PATH = DATA_DIR / "bases_de_datos.json"
 APP_CONFIG_PATH = DATA_DIR / "config.json"
 
-# Parámetros generales de visualización de gráficas (M1)
+# Parámetros generales de visualización de gráficas
 DEFAULT_CHART_YEARS = 5
 MIN_CHART_YEARS = 3
 

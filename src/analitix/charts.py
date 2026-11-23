@@ -137,9 +137,11 @@ DEFAULT_MIN_POINTS = 4
 # del área de datos ni se solapen con la leyenda.
 Y_MARGIN_RATIO = 0.15
 # Ancho máximo, en caracteres, de cada línea del recuadro bajo el gráfico, y
-# su tamaño de letra: 120 caracteres a 9 puntos caben en la figura de 8
-# pulgadas de `evolution_figure` (la del PDF), con margen.
-INFO_BOX_WIDTH = 120
+# su tamaño de letra. A 9 puntos cada carácter ocupa ~6,6 px a 100 ppp: con
+# 120 el recuadro (~800 px) llegaba a los bordes de la figura de 8 pulgadas
+# (800 px) de `evolution_figure` y se recortaba; 108 (~715 px) deja margen
+# (verificado renderizando a PNG).
+INFO_BOX_WIDTH = 108
 INFO_BOX_FONTSIZE = 9
 
 
@@ -290,10 +292,15 @@ def _trend_text(
     valores: list[float],
     ref_low: float | None,
     ref_high: float | None,
+    etiqueta: str = "Tendencia",
+    proyectar: bool = True,
 ) -> str | None:
     """Texto "↑ Tendencia: subiendo (...)" a partir del ajuste de
     `_fit_trend`, o `None` si no hay suficientes puntos para uno (ver
-    `MIN_POINTS_FOR_TREND`)."""
+    `MIN_POINTS_FOR_TREND`). `etiqueta` permite distinguir el periodo
+    configurado del total histórico (`_dual_trend_lines`); `proyectar=False`
+    omite la proyección a 3 meses (solo tiene sentido para la recta que se
+    dibuja en el gráfico)."""
     direction = _trend_direction(fit, valores, ref_low, ref_high)
     if direction is None:
         return None
@@ -301,16 +308,53 @@ def _trend_text(
     _, intercept, x, ic_bajo, ic_alto = fit
     if palabra == POCOS_DATOS_TENDENCIA:
         return (
-            f"{arrow} Tendencia: {palabra} (hacen falta ≥ {MIN_POINTS_CONFIRM_TREND} analíticas "
+            f"{arrow} {etiqueta}: {palabra} (hacen falta ≥ {MIN_POINTS_CONFIRM_TREND} analíticas "
             f"en ≥ {MIN_DAYS_CONFIRM_TREND // 365} años)"
         )
     ritmo = (
         f"~{slope * 365.25:+.2g}/año (IC 95 %: {ic_bajo * 365.25:+.2g} a {ic_alto * 365.25:+.2g})"
     )
     if palabra == SIN_TENDENCIA:
-        return f"{arrow} Tendencia: {palabra}, ritmo {ritmo}"
+        return f"{arrow} {etiqueta}: {palabra}, ritmo {ritmo}"
+    if not proyectar:
+        return f"{arrow} {etiqueta}: {palabra} {ritmo}"
     proyeccion = slope * (x[-1] + TREND_PROJECTION_DAYS) + intercept
-    return f"{arrow} Tendencia: {palabra} {ritmo} · proy. 3 meses: {proyeccion:.3g}"
+    return f"{arrow} {etiqueta}: {palabra} {ritmo} · proy. 3 meses: {proyeccion:.3g}"
+
+
+def _dual_trend_lines(
+    fit: tuple[float, float, Any] | None,
+    valores: list[float],
+    ref_low: float | None,
+    ref_high: float | None,
+    full_series: list[dict[str, Any]] | None = None,
+    chart_years: int = 0,
+) -> list[str]:
+    """Líneas de tendencia del recuadro informativo. Si el periodo
+    configurado (`chart_years > 0`) deja fuera analíticas de `full_series`,
+    dos líneas: la tendencia del periodo (la recta dibujada, con proyección)
+    y la del total histórico (mismo método Theil-Sen y mismos criterios de
+    `_trend_direction`, sin proyección). Si no, la línea única de siempre."""
+    full_pts = [s for s in (full_series or []) if s.get("value_num") is not None]
+    if not (chart_years > 0 and len(full_pts) > len(valores)):
+        texto = _trend_text(fit, valores, ref_low, ref_high)
+        return [texto] if texto else []
+    full_vals = [s["value_num"] for s in full_pts]
+    full_fit = _fit_trend([_parse_fecha(s["fecha"]) for s in full_pts], full_vals)
+    lineas = [
+        _trend_text(
+            fit, valores, ref_low, ref_high, etiqueta=f"Tendencia últimos {chart_years} años"
+        ),
+        _trend_text(
+            full_fit,
+            full_vals,
+            ref_low,
+            ref_high,
+            etiqueta=f"Tendencia total histórico (n={len(full_pts)})",
+            proyectar=False,
+        ),
+    ]
+    return [t for t in lineas if t]
 
 
 def _kdigo_note(series: list[dict[str, Any]], fit) -> str | None:
@@ -622,20 +666,24 @@ def _draw_info_box(
     full_valores: list[float] | None = None,
     chart_years: int = 0,
     extra: str | None = None,
+    full_series: list[dict[str, Any]] | None = None,
 ) -> None:
     """Recuadro de texto bajo el eje con el resumen en texto de la serie
     (`series_summary`), estadísticas descriptivas (`series_stats_text`),
-    la tendencia (si hay suficientes puntos) y la variación porcentual (si hay
-    al menos 2) en líneas separadas. Anclado a `ax` (no a la figura), para que
-    funcione igual en Evolución como en cada panel de la Comparativa;
-    `annotation_clip=False` evita que se recorte al quedar fuera del área de
-    datos."""
+    la tendencia (si hay suficientes puntos; del periodo y del total
+    histórico si el periodo recorta la serie, `_dual_trend_lines`) y la
+    variación porcentual (si hay al menos 2) en líneas separadas. Anclado a
+    `ax` (no a la figura), para que funcione igual en Evolución como en cada
+    panel de la Comparativa; `annotation_clip=False` evita que se recorte al
+    quedar fuera del área de datos."""
     lineas = [
         t
         for t in (
             summary,
             stats_text,
-            _trend_text(fit, valores, ref_low, ref_high),
+            *_dual_trend_lines(
+                fit, valores, ref_low, ref_high, full_series=full_series, chart_years=chart_years
+            ),
             _pct_change_text(valores, full_valores=full_valores, chart_years=chart_years),
             extra,
         )
@@ -916,6 +964,7 @@ def _plot_series_on_ax(
         full_valores=full_vals,
         chart_years=chart_years,
         extra="\n".join(t for t in (_kdigo_note(series, fit), note) if t) or None,
+        full_series=full_series,
     )
     _apply_y_margin(ax, y_extent)
 
@@ -1094,13 +1143,25 @@ def comparison_figure(
         row[0].label_outer()
     axes[-1][0].tick_params(axis="x", rotation=30, labelbottom=True)
     fig.tight_layout()
-    # Sitio para el recuadro de tendencia/variación de cada panel (hasta dos
-    # líneas, se dibuja debajo de cada eje) y, en el último, también para las
-    # fechas rotadas. `hspace` reserva ese mismo hueco entre paneles
-    # intermedios: 0.8 es lo justo para las tres líneas (resumen en texto,
-    # tendencia y variación) más el título del panel siguiente sin dejar un
-    # espacio en blanco excesivo entre paneles.
-    fig.subplots_adjust(bottom=0.34 / n, hspace=1.25)
+    # Sitio para el recuadro de cada panel (se dibuja debajo de cada eje) y,
+    # en el último, también para las fechas rotadas; entre paneles, además,
+    # para el título y la leyenda del panel siguiente. Antes era un margen
+    # fijo (`bottom=0.34/n`, `hspace=1.25`) pensado para 3 líneas: con las
+    # estadísticas y la tendencia en dos rangos el recuadro del último
+    # panel quedaba cortado. Ahora, igual que en `evolution_figure`, se mide
+    # en pulgadas a partir de las líneas reales del recuadro más largo y la
+    # figura crece en altura en vez de aplastar los paneles.
+    lineas = max(getattr(row[0], "analitix_info_lines", 0) for row in axes)
+    alto_texto = 0.95 + 0.18 * lineas  # pulgadas: fechas + recuadro
+    alto_titulo = 0.75  # pulgadas: título + leyenda encima de cada panel
+    alto_eje = 2.6  # pulgadas de área de datos por panel
+    alto_total = n * (alto_titulo + alto_eje + alto_texto)
+    fig.set_figheight(alto_total)
+    fig.subplots_adjust(
+        top=1 - alto_titulo / alto_total,
+        bottom=alto_texto / alto_total,
+        hspace=(alto_texto + alto_titulo) / alto_eje,
+    )
     return fig
 
 

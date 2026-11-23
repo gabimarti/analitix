@@ -491,7 +491,7 @@ AVISO_ENTRADA_MANUAL = (
 
 # Años que muestran por defecto los gráficos de evolución (contados hacia
 # atrás desde la última analítica de cada parámetro); configurable en
-# Configuración → General (M1, mínimo 3 años, o todo el histórico). Elección
+# Configuración → General (mínimo 3 años, o todo el histórico). Elección
 # de interfaz para que el estado actual no quede comprimido por valores muy
 # antiguos (recomendación de Zikmund-Fisher, AHRQ 2017, no revisada por pares).
 HISTORY_YEARS = DEFAULT_CHART_YEARS
@@ -568,7 +568,7 @@ class AnalitixApp(ttk.Window):
         self.var_personal_range = tk.BooleanVar(
             value=get_setting(self.con, "personal_range", "0") == "1"
         )
-        # Periodo en años para gráficas (M1): 0 = todo el histórico, o entero >= 3.
+        # Periodo en años para gráficas: 0 = todo el histórico, o entero >= 3.
         raw_anios = get_setting(self.con, "anios_graficas")
         if raw_anios is None:
             self.chart_years = (
@@ -6121,7 +6121,7 @@ class AnalitixApp(ttk.Window):
                 )
                 return
 
-            # Diálogo para elegir criterio de inclusión de gráficas (M4)
+            # Diálogo para elegir criterio de inclusión de gráficas
             dialog, body = self._new_dialog("Opciones — Informe de alterados")
             ttk.Label(
                 body,
@@ -6197,7 +6197,7 @@ class AnalitixApp(ttk.Window):
 
         # Gráficas nunca para los parámetros normales. En "completo" eso significa filtrar por
         # orden (0 = fuera de rango, 1 = cambio brusco); en "alterados" se aplica el filtro de
-        # analíticas recientes (M4) o todo el histórico. `export_pdf` descarta además cualquier
+        # analíticas recientes o todo el histórico. `export_pdf` descarta además cualquier
         # serie de un solo punto (nada que mostrar como evolución).
         if modo == "alterados":
             if n_recientes > 0:
@@ -6960,7 +6960,7 @@ class AnalitixApp(ttk.Window):
 
         ttk.Label(
             graficos,
-            text="Periodo de tiempo a mostrar en las gráficas de evolución (M1). El valor mínimo "
+            text="Periodo de tiempo a mostrar en las gráficas de evolución. El valor mínimo "
             "es 3 años, o «Todo el histórico» para mostrar todas las analíticas disponibles:",
             wraplength=700,
         ).pack(anchor="w", pady=(12, 0))

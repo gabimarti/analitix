@@ -138,7 +138,7 @@ def test_few_points_control_in_every_series_chart():
     dos = uno + [_row("2024-02-01", 15.0, "A")]
     cuatro = dos + [_row("2024-03-01", 15.0, "A"), _row("2024-04-01", 15.0, "A")]
 
-    # Con menos de 2 valores no se genera figura (M3)
+    # Con menos de 2 valores no se genera figura
     assert evolution_figure([], "x", 4) is None
     assert evolution_figure(uno, "x", 4) is None
 
@@ -323,7 +323,7 @@ def test_changes_figure_items_excludes_empty_and_zero_delta():
 
 def test_changes_figure_height_scales_with_items():
     """La altura de la figura crece con el número de ítems para que las
-    barras tengan el mismo grosor visual en todas las páginas (fix M6)."""
+    barras tengan el mismo grosor visual en todas las páginas."""
     import math
 
     from analitix.charts import _CHANGES_BAR_HEIGHT_IN, _CHANGES_HEADER_IN, changes_figure
@@ -494,6 +494,80 @@ def test_theil_sen_is_robust_and_ci_says_if_trend_is_demonstrable():
     assert abs(slope * 365.25 - 2) < 0.1 and 0 < bajo <= slope <= alto
     plano = [10, 12, 9, 11, 10, 12, 9, 11]
     assert "sin tendencia demostrable" in _trend_text(_fit_trend(fechas, plano), plano, 0, 20)
+
+
+def _serie_sintetica(valores, anio_inicio=2014):
+    """Serie semestral ficticia con rango 0-200 (tests de tendencia en dos rangos)."""
+    return [
+        {
+            "fecha": f"{anio_inicio + i // 2}-{1 + 6 * (i % 2):02d}-01",
+            "value_num": float(v),
+            "ref_low": 0.0,
+            "ref_high": 200.0,
+            "unit": "mg/dL",
+            "flag_calc": "normal",
+        }
+        for i, v in enumerate(valores)
+    ]
+
+
+def test_dual_trend_lines_period_and_history():
+    """Con periodo configurado que recorta la serie, una línea de
+    tendencia del periodo (con proyección) y otra del total histórico (sin
+    ella), cada una con su propia dirección."""
+    import datetime as dt
+
+    from analitix.charts import _dual_trend_lines, _fit_trend
+
+    # 7 años bajando fuerte y 5 subiendo: direcciones opuestas.
+    full = _serie_sintetica([150 - 8 * i for i in range(14)] + [46 + 6 * i for i in range(11)])
+    ventana = full[-11:]
+    fechas = [dt.datetime.strptime(s["fecha"], "%Y-%m-%d") for s in ventana]
+    valores = [s["value_num"] for s in ventana]
+    fit = _fit_trend(fechas, valores)
+
+    lineas = _dual_trend_lines(fit, valores, 0.0, 200.0, full_series=full, chart_years=5)
+    assert len(lineas) == 2
+    assert lineas[0].startswith("↑ Tendencia últimos 5 años: subiendo")
+    assert "proy. 3 meses" in lineas[0]
+    assert lineas[1].startswith("↓ Tendencia total histórico (n=25): bajando")
+    assert "proy." not in lineas[1]
+
+    # Sin periodo configurado, o si la ventana no recorta nada: una sola línea
+    # con el formato de siempre.
+    for kwargs in (
+        {"full_series": full, "chart_years": 0},
+        {"full_series": ventana, "chart_years": 5},
+    ):
+        unica = _dual_trend_lines(fit, valores, 0.0, 200.0, **kwargs)
+        assert len(unica) == 1 and unica[0].startswith("↑ Tendencia: subiendo")
+
+
+def test_dual_trend_lines_history_only_when_period_too_short():
+    """Si el periodo tiene menos de 3 analíticas no hay recta del periodo,
+    pero la tendencia histórica sigue mostrándose."""
+    from analitix.charts import _dual_trend_lines
+
+    full = _serie_sintetica([100 + 5 * i for i in range(12)])
+    lineas = _dual_trend_lines(None, [150.0, 155.0], 0.0, 200.0, full_series=full, chart_years=3)
+    assert len(lineas) == 1 and lineas[0].startswith("↑ Tendencia total histórico (n=12)")
+
+
+def test_comparison_figure_reserves_room_for_info_box():
+    """El recuadro de cada panel de la Comparativa no debe quedar cortado:
+    el margen inferior crece con sus líneas (antes era fijo, `0.34/n`)."""
+    from analitix.charts import comparison_figure
+
+    full = _serie_sintetica([150 - 8 * i for i in range(14)] + [46 + 6 * i for i in range(11)])
+    ventana = full[-11:]
+    fig = comparison_figure(
+        {"A": ventana, "B": ventana}, full_series_by_test={"A": full, "B": full}, chart_years=5
+    )
+    lineas = max(ax.analitix_info_lines for ax in fig.axes)
+    assert lineas >= 6  # resumen, estadísticas, 2 tendencias, variación...
+    alto = fig.get_figheight()
+    bottom = fig.subplotpars.bottom * alto  # pulgadas bajo el último panel
+    assert bottom >= 0.95 + 0.18 * lineas - 1e-9
 
 
 def test_time_in_range_interpolates_and_skips_long_gaps():

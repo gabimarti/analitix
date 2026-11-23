@@ -744,6 +744,12 @@ anota (ver "🎯 Objetivo indicado por mi médico" más abajo).
     demostrable"**: con esos datos no se puede afirmar que cambie. Con
     menos de 5 analíticas o menos de 2 años dice **"pocos datos para
     confirmarla"**. Si hay tendencia, añade una proyección a 3 meses vista.
+    Si el gráfico muestra solo los últimos años (Configuración → General,
+    apartado «Gráficos») y hay analíticas más antiguas, aparecen **dos líneas**:
+    la tendencia de esos últimos años (la línea punteada del gráfico, con
+    su proyección) y la del **total histórico**, calculada igual pero con
+    todas las analíticas y sin proyección. Así se ve si el comportamiento
+    reciente coincide con el de siempre o ha cambiado de sentido.
     Es una orientación, **no un diagnóstico ni una predicción médica**.
   - Solo para el **filtrado glomerular estimado** (FG) existe un umbral de
     ritmo de cambio respaldado por una guía clínica: si el FG baja de forma
