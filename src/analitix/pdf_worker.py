@@ -384,10 +384,12 @@ class PdfWorker:
                 continue
             elapsed = last - start
             if kind == "done":
+                # Duración de cada PDF (sin nombre ni contenido) para detectar
+                # los lentos; por encima de SLOW_PDF_S, como aviso.
                 if elapsed > SLOW_PDF_S:
                     logger.warning("PDF lento: %.1f s, %s páginas", elapsed, pages)
                 else:
-                    logger.debug("PDF leído en %.1f s, %s páginas", elapsed, pages)
+                    logger.info("PDF leído en %.1f s, %s páginas", elapsed, pages)
                 return message[1]
             if kind == "rejected":
                 raise PdfRejectedError(message[1])

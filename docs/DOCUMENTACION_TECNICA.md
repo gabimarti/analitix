@@ -1294,8 +1294,9 @@ aplicación no parsea los PDF en su propio proceso sino en un hijo
   de Importar).
 - El hijo recibe las rutas de `config.USER_PARSER_PROFILES_DIR` y
   `config.APP_CONFIG_PATH` del padre (usa las mismas plantillas) y solo
-  devuelve datos simples. Al log van tiempos y nº de páginas; los PDF de
-  más de `SLOW_PDF_S` quedan anotados, sin nombre.
+  devuelve datos simples. Al log van la duración y el nº de páginas de
+  cada PDF, sin nombre (nivel INFO; aviso «PDF lento» por encima de
+  `SLOW_PDF_S`).
 - `parse_report_isolated(pdf_path, ...)`: un PDF suelto con su propio hijo.
 - En el ejecutable de PyInstaller el hijo es el propio `Analitix.exe`
   relanzado: `packaging/analitix_launcher.py` llama a

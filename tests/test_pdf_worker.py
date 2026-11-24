@@ -49,6 +49,14 @@ def test_parses_a_pdf_in_the_child_process(tmp_path):
     assert progresos and progresos[-1].page == 1 and progresos[-1].pages == 1
 
 
+def test_logs_the_time_of_each_pdf_without_its_name(tmp_path, caplog):
+    pdf = _pdf(tmp_path / "PACIENTE_FICTICIO.pdf", HUGTIP_PAGE)
+    with caplog.at_level("INFO", logger="analitix"):
+        parse_report_isolated(pdf)
+    assert "PDF leído en" in caplog.text and "1 páginas" in caplog.text
+    assert "PACIENTE_FICTICIO" not in caplog.text and "GARCIA" not in caplog.text
+
+
 def test_child_uses_the_same_user_templates_as_the_parent(tmp_path):
     folder = config.USER_PARSER_PROFILES_DIR
     folder.mkdir(parents=True)
