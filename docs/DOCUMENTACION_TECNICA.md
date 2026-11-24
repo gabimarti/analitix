@@ -811,6 +811,12 @@ motor de parseo compartido.
   de `pdf_parser._value_to_float`. `_parse_lines` lo aplica con
   `pdf_parser.decimal_convention` y `ingest` también al resolver después
   las franjas por edad (`parse_report` lo devuelve en `decimal_separator`).
+- `required_fields` (opcional, lista): campos de cabecera (`HEADER_FIELDS`)
+  que la plantilla tiene que leer siempre; la prueba de una plantilla
+  (`profile_assistant.evaluate`) señala los que falten. No cambia la
+  importación.
+- `profile_from_data(data, origin="usuario")`: plantilla a partir de sus
+  datos ya leídos (una en edición), con la validación de las del usuario.
 
 **Añadir un centro nuevo cuya gramática de línea sea idéntica a la ya
 soportada** (marcador `"(n)"` o rango entre paréntesis) es tan sencillo como
@@ -865,6 +871,9 @@ Los `canonical_id` se asignan al importar: tras cambiar alias hay que
   realidad son la misma prueba — reescribe el fichero completo (lee todo,
   actualiza el dict, vuelve a escribir ordenado), no hace falta que el CSV
   sea grande para que esto sea razonable.
+- `known_canonical_ids() -> set[str]`: `canonical_id` a los que apunta algún
+  alias (aplicación o usuario); el asistente de plantillas lo usa para decir
+  si un parámetro ya lo conoce el catálogo.
 - `get_description(canonical_id) -> str | None`: lee
   `src/analitix/data/descripciones/<canonical_id>.txt` (texto plano, sin
   ningún formato especial); `None` si el fichero no existe todavía.
@@ -1268,6 +1277,88 @@ Además lista ids que ya mezclan dimensiones de unidad (alias sospechoso) y
 nombres con valor/unidad pegados (`noisy_names`, fallo del parser). Salida
 sin nombres de fichero (llevan el CIP). Ampliar `TRANSLATE`/`ABBREV` cuando
 aparezca un laboratorio nuevo.
+
+### `profile_assistant.py` — asistente de plantillas de laboratorio (lógica)
+
+La parte sin interfaz del asistente que crea o ajusta una plantilla a
+partir de las líneas de un PDF (`pdf_parser.extract_lines`). Todo son
+**propuestas** que el usuario acepta o corrige; nada se guarda hasta
+`save_user_template`. Las líneas y los valores solo están en memoria; las
+propuestas de cabecera guardan el **tipo** de valor, nunca el valor.
+
+- **Cabecera:** `header_label_candidates(lines)` busca las etiquetas
+  «texto:» (también varias por línea, pegadas o bilingües; una hora
+  «08:00» no es una etiqueta). La etiqueta se alarga hacia atrás mientras
+  las palabras sean de etiqueta (`_BASE_LABEL_WORDS` más los
+  `boundary_terms` de las plantillas de la aplicación), así el valor del
+  campo anterior la corta. `suggested_key` sale de `KEY_HINTS` y del tipo
+  de valor (`fecha`, `documento`, `número`, `texto`): una fecha solo puede
+  ir a un campo de fecha. Las que no tienen campo van a `boundary_terms`.
+  `label_pattern(label)` da el patrón sin acentos, con `\s+` entre palabras.
+- **Firma:** `signature_candidates(lines, other_documents)`: líneas con el
+  nombre del centro, su web o «ENAC» (`ORG_HINTS`), primero las que no usa
+  ninguna plantilla instalada ni aparecen en documentos de otros
+  laboratorios. **Nunca** una línea con un tratamiento («Sr.», «Sra.»,
+  «Dr.») o con la forma «Apellidos, Nombre» (`_PERSON_RE`): puede llevar el
+  nombre del paciente junto al del centro.
+- **Secciones:** `section_candidates` (marcador «Secció / Sección» del
+  motor, mayúsculas sin valores, línea anterior a una cabecera de columna)
+  y `column_header_lines`. `base_settings` decide `section_after_anchor`
+  (con `detect_headings = false`) o, si la cabecera de columna va en
+  mayúsculas, `ignore_line_patterns` con `ignore_pattern_for` (palabras
+  literales y tokens con cifras por su forma, `_token_shape`).
+- **Fila de metadatos:** `metadata_row_candidates` y
+  `metadata_row_pattern(line, roles)` (un campo o `None` por token).
+- **Gramáticas:** `try_grammars` prueba sobre `base_settings` la básica
+  (marcador «(n)» y rangos entre paréntesis o corchetes, siempre activa),
+  rango suelto, puntos de relleno (con `detect_placeholder`), fila partida
+  (`detect_interfaced_prefix`) y una fila genérica sin rango, cada una con
+  su traza y las líneas que parecen resultados y no se capturan
+  (`near_misses`). `base_settings` también propone `strip_trailing_flags`,
+  `strip_mid_tokens`, `unranged_result_re` cuando una marca delata la fila
+  sin rango (`detect_unranged_marker`, la « ü » de Synlab, con
+  `following_range_labels`) y `known_text_values` (`TEXT_VALUES`).
+  `best_trial` cuenta solo filas limpias (`GrammarTrial.n_clean`) y se
+  queda con la básica salvo que otra capture claramente más; la genérica
+  sin rango, solo si ninguna otra captura nada (con informes reales
+  capturaba notas y comentarios). `skip_marker_candidates` lista marcas
+  como «(AE)» para `bare_range_skip_if_contains`, sin aplicarlas (una
+  abreviatura real tiene la misma forma). `detect_section_suffixes`
+  propone `section_name_suffixes` para las secciones de otra muestra
+  (orina, heces) que repiten nombres de otra sección.
+- **Números:** `number_convention(rows)` (coma decimal frente a punto
+  decimal claros; un «7.349» no cuenta) y `ambiguous_values(rows,
+  separator)`, con la lectura propuesta, el motivo y si hay que confirmarla.
+- **Unidades:** `classify_units(rows)`: conocida (con la dimensión de
+  `alias_audit.unit_dimension`), desconocida o sospechosa (termina en un
+  número, parece parte del rango o empieza por una marca suelta).
+- **Parámetros:** `parameter_matches(rows, known_rows)` (filas de
+  `repository.get_all_results`): «base de datos», «catálogo» o «nuevo»; para
+  los nuevos, candidatos de `alias_audit.find_proposals` con unidades
+  compatibles y **nunca** uno que aparezca en el mismo informe.
+  `aliases_for` da las entradas para `catalog.add_aliases`.
+- **Prueba y cotejo:** `evaluate(lines, profile)` (plantilla instalada o en
+  edición): resultados, qué campos de cabecera lee (solo sí/no),
+  `required_fields` que faltan, motivos de revisión como los de `ingest`,
+  si su firma aparece y qué otras plantillas coinciden, y `coverage`.
+  `compare_results(reference, candidate)` (falta / sobra / cambia, por
+  nombre y orden) y `compare_header_fields(lines, profiles)`.
+- **Propuesta:** `analyze(lines)` lo reúne todo y `propose_template(lines,
+  id, name)` arma los datos de una plantilla completa, con avisos (sin
+  firma propia, sin etiqueta del nombre, ninguna gramática, valores
+  dudosos, fila de fechas sin etiquetas).
+- **Guardado:** `render_toml(data)` (escritor propio para el esquema
+  conocido: cadenas literales `'…'` para los patrones, sin caracteres de
+  control ni guion blando). `check_template_text(text, private_values)`
+  la vuelve a leer con `tomllib`, la valida como plantilla del usuario y
+  comprueba la privacidad (`check_privacy`): ningún valor de
+  `private_values(lines, data)` (los de las etiquetas de datos del paciente
+  y del informe, y lo que leen las plantillas que reconocen el documento),
+  ningún DNI/NIE válido y ninguna fecha concreta; el mensaje nunca dice el
+  valor. `save_user_template(text, private_values, overwrite)` la guarda
+  en `config.USER_PARSER_PROFILES_DIR` (nunca en la de la aplicación),
+  copia antes la anterior en `copias/` (que no se carga) y dice si su `id`
+  coincide con uno de la aplicación (`same_id_as_app`).
 
 ### `pdf_worker.py` — lectura de PDF en un proceso aparte
 
