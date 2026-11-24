@@ -150,6 +150,32 @@ Puntos que se suelen pasar por alto:
   nombre exacto de la sección y la palabra a añadir (`"orina"`), como en
   `consorci_sanitari_maresme.toml`; si no, las dos pruebas se mezclarían.
 
+### 4.1 Sin tocar el programa: plantillas del usuario
+
+Con la aplicación **instalada** no hace falta el código fuente: guarda el
+`.toml` en la carpeta `plantillas_laboratorio` dentro de tu carpeta de
+datos (la que elegiste al instalar; por defecto
+`Documentos\Analitix\data\plantillas_laboratorio\`, créala si no existe) y
+vuelve a abrir Analitix. Desde el código fuente es `data\plantillas_laboratorio\`.
+
+Como estas plantillas no se revisan con el código, se comprueban al cargar
+y una que no cumpla las reglas **no se usa** (el resto sigue funcionando):
+
+- Solo las claves de `plantilla_perfil.toml`; un nombre mal escrito es un
+  error, no se ignora.
+- `id` solo con minúsculas sin acentos, cifras y `_`, y **igual que el
+  nombre del fichero** (`id = "mi_lab"` en `mi_lab.toml`).
+- Tiene que tener firma (`[signature]`).
+- Patrones de 300 caracteres como mucho y **sin una repetición dentro de
+  otra** (`(a+)+`, `(\s*x)*`): en algunas líneas tardan muchísimo. Una
+  repetición de longitud fija dentro sí vale (`\d{1,3}(\.\d{3})*`).
+- En `line_substitutions`, el reemplazo solo puede usar grupos que tenga el
+  patrón (`\1`, `\g<nombre>`).
+
+Si tu plantilla usa el mismo `id` que una de la aplicación (p. ej.
+`hugtip`), **no la sustituye en silencio**: se sigue usando la de la
+aplicación y se avisa del conflicto, para que decidas.
+
 ## 5. Probar el perfil contra tu PDF real
 
 Sin escribir nada en la base de datos todavía, puedes comprobar qué

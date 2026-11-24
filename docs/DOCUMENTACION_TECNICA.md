@@ -569,8 +569,17 @@ ver la red de seguridad `status="review"` en `ingest.py` (§5).
   `dedupe_chars(extra_attrs=())` pdfplumber intercala los caracteres de
   ambas copias (p. ej. "14.97" sale como "1144..9977"). `extra_attrs=()`
   fuerza a ignorar que las dos copias usan fuentes distintas y las fusiona
-  por posición.
-- `parse_report(pdf_path) -> {"header": {...}, "results": [...], "source_file": str, "format_id": str, "format_name": str, "manual_review_only": bool}`:
+  por posición. `on_page(n, total)` se llama al terminar cada página (lo
+  usa `pdf_worker` para saber que avanza) y con `max_pages` un PDF más
+  largo lanza `PdfLimitError` sin extraer nada.
+- **Traza** (`_parse_lines(lines, profile, trace=lista)`, también
+  `parse_report(trace=...)`): llena la lista con qué ha hecho el motor con
+  cada línea no vacía (`{"idx", "line", "kind", "detail"}`; `kind` es una de
+  las constantes `TRACE_*`: cabecera, sección, grupo, resultado, rango,
+  ignorada, descartada —con el motivo— o sin clasificar). No cambia el
+  resultado; es la base del asistente de plantillas. Lleva datos del
+  informe: solo en memoria.
+- `parse_report(pdf_path, trace=None, on_page=None, max_pages=None) -> {"header": {...}, "results": [...], "source_file": str, "format_id": str, "format_name": str, "manual_review_only": bool, "decimal_separator": str}`:
   extrae las líneas, llama a `parser_profiles.detect_profile(lines)` y, si el
   perfil detectado no es `manual_review_only`, delega en `_parse_lines(lines,
   profile)` (si lo es, devuelve cabecera/resultados vacíos sin más). `_parse_lines`
@@ -777,6 +786,31 @@ motor de parseo compartido.
     `ingest.py` lo marque `status="review"` con un motivo explícito
     ("formato de informe no reconocido (...); parser no implementado") sin
     crear paciente ni informe.
+- **Plantillas del usuario** (`config.USER_PARSER_PROFILES_DIR` =
+  `data/plantillas_laboratorio/`): `load_profiles` las lee después de las de
+  la aplicación, con `origin="usuario"` y `path`. Como no se revisan con el
+  código, `validate_user_profile_data` exige: solo claves conocidas
+  (`KNOWN_PROFILE_KEYS`), `id` de `[a-z0-9_]` (máximo 64) igual al nombre
+  del fichero, una firma, tipos correctos y expresiones regulares acotadas
+  (`check_pattern`: longitud ≤ `MAX_PATTERN_LENGTH`, compilable y sin una
+  repetición de longitud variable dentro de otra repetición, la forma típica
+  de los patrones de coste exponencial; se comprueba con el árbol de
+  `re._parser`) y reemplazos de `line_substitutions` sin referencias a
+  grupos inexistentes (`check_replacement`). Una plantilla del usuario no
+  válida no se usa ni rompe la carga del resto; con el mismo `id` que una de
+  la aplicación es un **conflicto**: se sigue usando la de la aplicación
+  hasta que el usuario decide sustituirla (`config.json`,
+  `plantillas_sustituidas`). Los dos casos quedan en `profile_issues()`.
+  `reload_profiles()` vuelve a leerlas tras guardar o borrar una.
+- `matching_profiles(lines)`: **todas** las plantillas cuya firma aparece en
+  el documento, en el orden de `detect_profile` (la primera es la que se
+  usa); más de una indica firmas solapadas.
+- `decimal_separator` (opcional, `"auto"` por defecto): `","` (coma decimal;
+  un `"."` seguido de 3 cifras es siempre millares) o `"."` (punto decimal,
+  nunca millares). Con un valor fijo no se aplica la heurística del rango
+  de `pdf_parser._value_to_float`. `_parse_lines` lo aplica con
+  `pdf_parser.decimal_convention` y `ingest` también al resolver después
+  las franjas por edad (`parse_report` lo devuelve en `decimal_separator`).
 
 **Añadir un centro nuevo cuya gramática de línea sea idéntica a la ya
 soportada** (marcador `"(n)"` o rango entre paréntesis) es tan sencillo como
@@ -1235,12 +1269,50 @@ nombres con valor/unidad pegados (`noisy_names`, fallo del parser). Salida
 sin nombres de fichero (llevan el CIP). Ampliar `TRANSLATE`/`ABBREV` cuando
 aparezca un laboratorio nuevo.
 
+### `pdf_worker.py` — lectura de PDF en un proceso aparte
+
+Un PDF es una entrada no fiable (dañado o manipulado puede colgar
+pdfminer, agotar la memoria o aprovechar un fallo de la librería) y una
+plantilla del usuario puede traer una expresión regular lenta. Por eso la
+aplicación no parsea los PDF en su propio proceso sino en un hijo
+(`multiprocessing`, modo `spawn`):
+
+- `PdfWorker` (gestor de contexto, un hijo reutilizable para varios PDF):
+  `parse(pdf_path, on_progress=None, trace=False)` devuelve lo mismo que
+  `pdf_parser.parse_report`. Antes de abrirlo, `MAX_PDF_BYTES` (50 MB); ya
+  abierto, `MAX_PDF_PAGES` (100). El hijo avisa al terminar cada página; sin
+  avisos durante `STALL_TIMEOUT_S` (45 s) o pasado `TOTAL_TIMEOUT_S`
+  (180 s) se le para y el PDF falla con `PdfTimeoutError`; fuera de límites,
+  `PdfRejectedError`; cualquier otro fallo de lectura, `PdfWorkerError` (con
+  solo el tipo de la excepción, nunca texto del PDF). Si el hijo no llega a
+  arrancar (`STARTUP_TIMEOUT_S`), los PDF siguientes fallan enseguida.
+- En Windows el hijo va en un *Job Object* (`_limit_memory`, ctypes) con
+  memoria máxima `MEMORY_LIMIT_BYTES` (1,5 GB) y *kill on close*: se
+  cierra con la aplicación.
+- `on_progress(Progress)`: página, segundos y segundos sin noticias
+  (`Progress.stalled` a partir de `STALL_WARNING_S`; `text()` para la barra
+  de Importar).
+- El hijo recibe las rutas de `config.USER_PARSER_PROFILES_DIR` y
+  `config.APP_CONFIG_PATH` del padre (usa las mismas plantillas) y solo
+  devuelve datos simples. Al log van tiempos y nº de páginas; los PDF de
+  más de `SLOW_PDF_S` quedan anotados, sin nombre.
+- `parse_report_isolated(pdf_path, ...)`: un PDF suelto con su propio hijo.
+- En el ejecutable de PyInstaller el hijo es el propio `Analitix.exe`
+  relanzado: `packaging/analitix_launcher.py` llama a
+  `multiprocessing.freeze_support()` antes que nada, y `--self-test` lee su
+  PDF sintético también a través del hijo, así la prueba del instalador lo
+  comprueba.
+
 ### `ingest.py`
 
+- `parse_report(pdf_path)` (de este módulo, no el de `pdf_parser`): parsea
+  a través de `pdf_worker`, con el hijo de la importación en curso
+  (`pdf_batch(on_pdf_progress)`: un único hijo para todos los PDF del
+  bloque) o con uno propio. Es el nombre que sustituyen los tests.
 - `file_hash(path) -> md5 hexdigest` (`usedforsecurity=False`: solo
   identifica el fichero). Se guarda en `processed_files.file_hash` y en
   `reports.file_md5`.
-- `ingest_folder(con, reports_dir=REPORTS_DIR, force=False, on_progress=None, recursive=False) -> IngestResult(processed,
+- `ingest_folder(con, reports_dir=REPORTS_DIR, force=False, on_progress=None, recursive=False, on_pdf_progress=None) -> IngestResult(processed,
   skipped, errors, review)`: `processed` es `list[tuple[nombre_fichero,
   nombre_perfil]]` — el perfil detectado (`format_name` de `parse_report`)
   se guarda junto al fichero para que la interfaz pueda mostrarlo (p. ej.

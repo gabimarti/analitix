@@ -32,6 +32,12 @@ name = "Nombre completo de tu Hospital o Laboratorio"
 # la guía, paso 4).
 priority = 100
 
+# OPCIONAL: cómo escribe los decimales tu laboratorio. "auto" (por defecto)
+# lee "1.000" como mil y decide un "7.349" dudoso mirando el rango de
+# referencia; "," si usa coma decimal (el "." es siempre de millares) y "."
+# si usa punto decimal (el "." nunca es de millares). Bórralo si no lo sabes.
+decimal_separator = "auto"
+
 # ---------------------------------------------------------------------------
 # Etiquetas de OTROS campos de cabecera que no interesa guardar, pero que
 # pueden compartir línea con alguno de los que sí capturas en
