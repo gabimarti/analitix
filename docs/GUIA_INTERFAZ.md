@@ -123,7 +123,11 @@ Reglas:
   daltonismo.
 - Nada de parejas verde/rojo o rojo/naranja como única diferencia. Un
   color nuevo se toma de Okabe-Ito o de las paletas de Paul Tol, y si va
-  como texto sobre blanco, con contraste ≥ 4.5:1.
+  como texto sobre blanco, con contraste ≥ 4.5:1. Antes de darlo por bueno,
+  comprobarlo simulando protanopía, deuteranopía y tritanopía (modelo de
+  Machado et al. 2009, doi:10.1109/TVCG.2009.113): frente a los colores con
+  los que tiene que distinguirse, ΔE CIE76 ≥ 10 en las tres simulaciones.
+  Lo mismo para la escala del mapa de calor (`HEATMAP_CMAP`).
 - **Intensidad, no tono, para la gravedad**: una desviación leve usa el
   mismo color aclarado (`charts._tint`) con contorno del color pleno; el
   color pleno queda para las grandes. El texto (etiquetas, ▲/▼) va siempre

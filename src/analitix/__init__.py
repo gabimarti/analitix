@@ -8,7 +8,7 @@
 """Analitix: análisis local de informes de laboratorio en PDF."""
 
 # Versión de la aplicación; la etiqueta de cada Release de GitHub es "v" + esto.
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 # Fecha de publicación de esa versión (la pone el script de publicación al
 # subir `__version__`); sale en la portada y el pie de los informes PDF.
 __version_date__ = "2026-11-24"

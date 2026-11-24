@@ -962,6 +962,12 @@ valor respecto al rango de referencia de ese informe:
 - **Gris oscuro con un punto** = hay valor, pero el informe no traía rango.
 - **En blanco** = ese día no se midió ese parámetro.
 
+La escala azul–gris–rojo está elegida para distinguirse también con
+daltonismo (protanopía, deuteranopía y tritanopía), igual que los colores
+de los gráficos de Evolución (§2.4). Los dos grises (en rango / sin rango)
+se parecen entre sí con cualquier visión, por eso el de «sin rango» lleva
+además el punto.
+
 Arriba se elige qué mostrar: los parámetros que han estado **fuera de
 rango en el periodo** (por defecto), **todos**, o los de **un panel
 clínico** concreto (Hemograma, Hierro, Función renal...). En este último

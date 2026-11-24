@@ -2372,10 +2372,11 @@ class AnalitixApp(ttk.Window):
         create_manual_report(
             self.con, self.current_patient_id, fecha, self._manual_entries, notes=notas
         )
+        # Sin la fecha de la analítica: el log no lleva datos clínicos del
+        # paciente (ver logging_setup.py), solo ids internos y recuentos.
         logger.info(
-            "Entrada manual guardada: paciente id=%s, fecha=%s, %d determinaciones, con notas=%s",
+            "Entrada manual guardada: paciente id=%s, %d determinaciones, con notas=%s",
             self.current_patient_id,
-            fecha,
             len(self._manual_entries),
             notas is not None,
         )

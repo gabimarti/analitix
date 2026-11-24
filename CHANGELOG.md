@@ -10,6 +10,12 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ## [Sin publicar]
 
+## [1.0.1] - 2026-11-24
+
+### Corregido
+
+- Privacidad: al guardar una analítica con «Entrada manual», el registro de la aplicación (`analitix.log`) ya no anota su fecha; como en el resto del registro, solo se guardan el número interno del paciente y cuántas determinaciones se han añadido.
+
 ## [1.0.0] - 2026-11-24
 
 ### Cambiado

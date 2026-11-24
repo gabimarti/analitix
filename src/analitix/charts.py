@@ -1214,7 +1214,11 @@ def comparison_figure(
 # = por encima), una intensidad por lado. Codifica polaridad + distancia al
 # rango, no estado clínico: por eso no reutiliza COLOR_ALTO/COLOR_BAJO de
 # los puntos de Evolución, aunque comparte su polaridad (azul = bajo, rojo
-# = alto). Azul↔rojo ya es apto para daltonismo.
+# = alto). Apta para daltonismo: simulando protanopía, deuteranopía y
+# tritanopía (Machado et al., IEEE TVCG 2009;15(6):1291-1298,
+# doi:10.1109/TVCG.2009.113) todas las casillas de la leyenda siguen a
+# ΔE CIE76 ≥ 10 entre sí, salvo los dos grises (en rango / sin rango), que
+# ya se parecen con visión normal y por eso «sin rango» lleva un punto.
 HEATMAP_CMAP = LinearSegmentedColormap.from_list(
     "analitix_rango",
     [(0.0, "#184f95"), (0.35, "#9ec5f4"), (0.5, "#f0efec"), (0.65, "#f4b4b3"), (1.0, "#a3282a")],
