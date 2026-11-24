@@ -174,7 +174,9 @@ def _ingest_folder(
     pruned = prune_missing_processed_files(con, known_pdf_filenames(reports_dir))
     if pruned:
         logger.info("Eliminadas %d marcas de importación de ficheros que ya no existen", pruned)
-    logger.info("Iniciando importación de %d PDF en %s (force=%s)", total, reports_dir, force)
+    # Sin la ruta de la carpeta: el usuario puede haberla llamado con el
+    # nombre del paciente y el log es texto plano.
+    logger.info("Iniciando importación de %d PDF (force=%s)", total, force)
     result = IngestResult()
     for i, pdf_path in enumerate(pdf_paths, start=1):
         if on_progress:

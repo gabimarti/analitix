@@ -198,3 +198,18 @@ def test_log_uses_file_hash_not_filename(db, monkeypatch, tmp_path, caplog):
     assert result.review and result.errors
     assert "PACIENTE_FICTICIO" not in caplog.text
     assert caplog.text.count("md5=") == 2
+
+
+def test_log_does_not_include_reports_folder(db, monkeypatch, tmp_path, caplog):
+    # La carpeta de informes puede llevar el nombre del paciente: el log solo
+    # dice cuántos PDF hay, no dónde están.
+    monkeypatch.setattr(ingest, "parse_report", _fake_no_birth_date_result)
+    folder = tmp_path / "PACIENTE_FICTICIO_CARPETA"
+    folder.mkdir()
+    (folder / "informe.pdf").write_bytes(b"%PDF uno")
+    with caplog.at_level("INFO", logger="analitix"):
+        ingest.ingest_folder(db, folder)
+
+    assert "Iniciando importación de 1 PDF" in caplog.text
+    assert "PACIENTE_FICTICIO" not in caplog.text
+    assert str(tmp_path) not in caplog.text

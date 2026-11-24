@@ -14,6 +14,10 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 - Importación más segura: cada PDF se lee en un proceso aparte, con un tamaño máximo (50 MB), un número máximo de páginas (100) y memoria limitada. Si un PDF dañado o manipulado deja de responder, se abandona solo y queda con error, sin colgar la aplicación ni detener el resto de la importación. Mientras se lee, la barra de progreso indica la página y los segundos, y avisa si lleva un rato sin responder.
 
+### Corregido
+
+- Privacidad: el registro de la aplicación (`analitix.log`) ya no anota la ruta de la carpeta de informes al empezar una importación (podía llevar el nombre del paciente); solo cuántos PDF hay.
+
 ## [1.0.1] - 2026-11-24
 
 ### Corregido

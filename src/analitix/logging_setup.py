@@ -8,9 +8,10 @@
 """Configuración del registro (log) de la aplicación a fichero.
 
 El fichero de log (`data/analitix.log`) no contiene datos de pacientes ni
-resultados: solo nombres de fichero PDF, mensajes de estado y trazas de
-error, pensado para poder diagnosticar problemas a posteriori sin exponer
-información médica.
+resultados: los PDF se identifican por la huella de su contenido (md5), sin
+nombre de fichero ni ruta de carpeta (pueden llevar el nombre del paciente),
+junto a mensajes de estado y trazas de error, pensado para poder
+diagnosticar problemas a posteriori sin exponer información médica.
 """
 
 from __future__ import annotations
