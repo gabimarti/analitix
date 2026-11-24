@@ -114,6 +114,11 @@ BUNDLED_BV_PATH = PACKAGE_DIR / "data" / "biological_variation.csv"
 BV_PATH = DATA_DIR / "biological_variation.csv"
 DESCRIPTIONS_DIR = PACKAGE_DIR / "data" / "descripciones"
 PARSER_PROFILES_DIR = PACKAGE_DIR / "data" / "parser_profiles"
+# Plantillas de laboratorio del usuario (`.toml`, mismo formato que las de la
+# aplicación): se leen además de las de `PARSER_PROFILES_DIR`, con una
+# validación más estricta (ver `parser_profiles.py`). No se crea la carpeta
+# hasta que se guarda la primera.
+USER_PARSER_PROFILES_DIR = DATA_DIR / "plantillas_laboratorio"
 
 RES_DIR = PACKAGE_DIR / "res"
 ICON_PATH = RES_DIR / "analitix_icon.png"

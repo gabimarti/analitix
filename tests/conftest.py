@@ -3,7 +3,22 @@ from pathlib import Path
 import pytest
 
 import analitix.catalog as catalog
+import analitix.parser_profiles as parser_profiles
+from analitix import config
 from analitix.db import connect
+
+
+@pytest.fixture(autouse=True)
+def no_user_lab_templates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Cada test sin plantillas de laboratorio del usuario ni `config.json`
+    reales: solo las de la aplicación, salvo que el test cree las suyas en
+    `config.USER_PARSER_PROFILES_DIR`."""
+    monkeypatch.setattr(config, "USER_PARSER_PROFILES_DIR", tmp_path / "plantillas_laboratorio")
+    monkeypatch.setattr(config, "APP_CONFIG_PATH", tmp_path / "config.json")
+    parser_profiles.load_profiles.cache_clear()
+    yield
+    monkeypatch.undo()
+    parser_profiles.load_profiles.cache_clear()
 
 
 @pytest.fixture(autouse=True)
