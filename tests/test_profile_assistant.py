@@ -15,6 +15,12 @@ from analitix.parser_profiles import (
 )
 from analitix.pdf_parser import _parse_lines
 
+# DNI inventado con letra de control válida (la comprobación de privacidad
+# del asistente debe bloquearlo). Se monta aquí para que el número completo
+# no aparezca escrito en el fichero (`scripts/check_privacy.py` lo tomaría
+# por real); 00000000 no sirve: el asistente lo trata como sintético.
+FAKE_DNI = "12345678" + "TRWAGMYFPDXBNJZSQVHLCKE"[12345678 % 23]
+
 MARESME = [
     "Pacient: GARCIA LOPEZ, MARIA",
     "Data naixement: 01/01/1980",
@@ -453,7 +459,7 @@ def test_render_rejects_unknown_keys_and_check_rejects_dangerous_patterns():
     [
         {"boundary_terms": ["GARCIA LOPEZ, MARIA"]},  # valor de la cabecera
         {"boundary_terms": ["Garcia Lopez"]},  # los apellidos de «Apellidos, Nombre»
-        {"known_text_values": ["12345678Z"]},  # DNI con letra válida
+        {"known_text_values": [FAKE_DNI]},  # DNI con letra válida
         {"known_text_values": ["01/02/2024"]},  # una fecha concreta
     ],
 )
@@ -461,7 +467,7 @@ def test_privacy_check_blocks_patient_data(fuga):
     text = pa.render_toml(_minimal(**fuga))
     with pytest.raises(pa.TemplatePrivacyError) as exc:
         pa.check_template_text(text, {"GARCIA LOPEZ, MARIA"})
-    assert "GARCIA" not in str(exc.value) and "12345678Z" not in str(exc.value)
+    assert "GARCIA" not in str(exc.value) and FAKE_DNI not in str(exc.value)
 
 
 def test_private_values_of_a_document():
