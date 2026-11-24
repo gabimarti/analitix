@@ -165,6 +165,11 @@ class ParserProfile:
     # Maresme: "Glucosa", "pH" o "Hematies" en la sección de orina frente a
     # los mismos nombres en sangre). No se añade si el nombre ya la lleva.
     section_name_suffixes: dict[str, str] = field(default_factory=dict)
+    # Convención decimal del laboratorio: "auto" (por defecto: "1.000" es
+    # millares y un "7.349" ambiguo se decide por el rango, ver
+    # `pdf_parser._value_to_float`), "," (coma decimal, "." siempre millares)
+    # o "." (punto decimal, nunca millares).
+    decimal_separator: str = "auto"
     # De dónde viene: "app" (`PARSER_PROFILES_DIR`, revisado con el código)
     # o "usuario" (`config.USER_PARSER_PROFILES_DIR`, validado al cargar).
     origin: str = "app"
@@ -250,7 +255,14 @@ def _profile_from_data(data: dict) -> ParserProfile:
         else None,
         following_range_labels=data.get("following_range_labels", []),
         section_name_suffixes=data.get("section_name_suffixes", {}),
+        decimal_separator=_decimal_separator(data.get("decimal_separator", "auto")),
     )
+
+
+def _decimal_separator(value: object) -> str:
+    if value not in ("auto", ",", "."):
+        raise ValueError(f'decimal_separator tiene que ser "auto", "," o "." (no {value!r})')
+    return value
 
 
 # -- Plantillas del usuario: validación estricta ---------------------------
@@ -293,6 +305,7 @@ KNOWN_PROFILE_KEYS = frozenset(
         "unranged_result_re",
         "following_range_labels",
         "section_name_suffixes",
+        "decimal_separator",
     }
 )
 PROFILE_ID_RE = re.compile(r"[a-z0-9_]{1,64}")

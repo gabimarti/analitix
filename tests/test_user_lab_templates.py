@@ -139,6 +139,7 @@ def test_usual_template_patterns_are_accepted(pattern):
             "«y»",
         ),
         (_valid_data(header_labels=[{"key": "dni", "pattern": "(a+)+"}]), "repetición"),
+        (_valid_data(decimal_separator=";"), "decimal_separator"),
     ],
 )
 def test_user_template_validation_errors(data, mensaje):

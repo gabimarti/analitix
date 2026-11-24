@@ -22,7 +22,7 @@ from pathlib import Path
 
 from analitix.catalog import canonical_id_for
 from analitix.config import REPORTS_DIR
-from analitix.pdf_parser import apply_age_bands, compute_flag, parse_report
+from analitix.pdf_parser import apply_age_bands, compute_flag, decimal_convention, parse_report
 from analitix.repository import (
     STATUS_OTHER_PATIENT,
     add_patient_alias,
@@ -390,10 +390,12 @@ def _ingest_one(
     # resultados se duplicarían. Inofensivo si el informe es nuevo.
     clear_report_results(con, report_id)
     # Rangos por edad que el PDF no pudo resolver por no traer fecha de
-    # nacimiento: se usa la del paciente ya emparejado.
-    apply_age_bands(
-        parsed["results"], get_patient_birth_date(con, patient_id), header.get("request_date")
-    )
+    # nacimiento: se usa la del paciente ya emparejado (con la convención
+    # decimal de la plantilla, como al parsear).
+    with decimal_convention(parsed.get("decimal_separator")):
+        apply_age_bands(
+            parsed["results"], get_patient_birth_date(con, patient_id), header.get("request_date")
+        )
     for res in parsed["results"]:
         res.pop("age_bands", None)
         canonical_id = canonical_id_for(res["raw_name"])

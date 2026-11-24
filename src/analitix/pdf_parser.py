@@ -33,6 +33,9 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -211,16 +214,38 @@ def _extract_labeled_fields(
     return fields
 
 
+# Convención decimal de la plantilla en curso (`ParserProfile.
+# decimal_separator`): "auto" (por defecto, el comportamiento de siempre),
+# "," (coma decimal; un "." seguido de 3 cifras es siempre millares) o "."
+# (punto decimal; el "." nunca es millares). La fija `_parse_lines` para cada
+# informe y la vuelve a fijar `ingest` al resolver después las franjas por
+# edad (`decimal_convention`), así no hay que pasarla por todas las funciones.
+DECIMAL_SEPARATORS = ("auto", ",", ".")
+_decimal_separator: ContextVar[str] = ContextVar("decimal_separator", default="auto")
+
+
+@contextmanager
+def decimal_convention(separator: str | None) -> Iterator[None]:
+    """Aplica la convención decimal de una plantilla dentro del bloque."""
+    token = _decimal_separator.set(separator if separator in DECIMAL_SEPARATORS else "auto")
+    try:
+        yield
+    finally:
+        _decimal_separator.reset(token)
+
+
 def _to_float(text: str) -> float | None:
     candidate = text.strip()
+    separator = _decimal_separator.get()
     # Convención catalana/española: "." agrupa millares (siempre en grupos
     # de 3 dígitos) y "," es el separador decimal, p. ej. "1.000" = 1000,
     # "2.534,5" = 2534.5 (visto en Echevarne). Se comprueba esta forma
     # primero porque un simple "," -> "." no la distingue de un valor con
     # "." como separador decimal normal (el resto de perfiles, p. ej.
     # "-3.0" en HUGTIP) — un "." solo cuenta como separador de millares si
-    # va seguido de exactamente 3 dígitos.
-    if re.fullmatch(r"[-+]?\d{1,3}(\.\d{3})*(,\d+)?", candidate):
+    # va seguido de exactamente 3 dígitos. Con la plantilla en "." (punto
+    # decimal) esa lectura no se aplica nunca.
+    if separator != "." and re.fullmatch(r"[-+]?\d{1,3}(\.\d{3})*(,\d+)?", candidate):
         return float(candidate.replace(".", "").replace(",", "."))
     candidate = candidate.replace(",", ".")
     if re.fullmatch(r"[-+]?\d+(\.\d+)?", candidate):
@@ -242,11 +267,14 @@ def _value_to_float(
     próxima al rango en escala logarítmica: un "1.000" con rango
     "4.000 - 10.000" sigue siendo 1000 y un pH "7.349" con rango
     "7.32 - 7.43" pasa a 7.349 (no 7349). Sin rango, se mantiene la
-    lectura de `_to_float`."""
+    lectura de `_to_float`. Si la plantilla fija la convención
+    (`decimal_separator` "," o "."), no hay ambigüedad que resolver."""
     if not value_raw:
         return None
     value = _to_float(value_raw)
     candidate = value_raw.strip()
+    if _decimal_separator.get() != "auto":
+        return value
     if value is None or not _AMBIGUOUS_THOUSANDS_RE.fullmatch(candidate):
         return value
     limites = [b for b in (ref_low, ref_high) if b is not None and b > 0]
@@ -608,8 +636,49 @@ def compute_flag(
     return None
 
 
-def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
-    """Aplica el motor de parseo a `lines` usando las tablas de `profile`."""
+def _parse_lines(
+    lines: list[str], profile: ParserProfile, trace: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    """Aplica el motor de parseo a `lines` usando las tablas de `profile`.
+
+    `trace`: si se pasa una lista, se llena con la explicación de qué ha
+    hecho el motor con cada línea no vacía (`{"idx", "line", "kind",
+    "detail"}`, en orden; `line` ya con las sustituciones de la plantilla).
+    No cambia el resultado: es para el asistente de plantillas y para
+    depurar una plantilla. Contiene datos del informe: solo en memoria,
+    nunca en el log ni en disco."""
+    with decimal_convention(profile.decimal_separator):
+        return _parse_lines_impl(lines, profile, trace)
+
+
+def _previous_index(marks: dict, shown: dict[int, str], idx: int) -> int:
+    """Índice de la línea no vacía y no ignorada anterior a `idx` (la que el
+    motor guarda como `previous_line`)."""
+    earlier = [i for i in shown if i < idx and marks.get(i, ("",))[0] != TRACE_IGNORED]
+    return max(earlier) if earlier else idx
+
+
+# Clases de línea de la traza (`_parse_lines(trace=...)`).
+TRACE_RESULT = "resultado"
+TRACE_HEADER = "cabecera"
+TRACE_SECTION = "sección"
+TRACE_GROUP = "grupo"
+TRACE_RANGE = "rango"
+TRACE_IGNORED = "ignorada"
+TRACE_DISCARDED = "descartada"
+TRACE_UNCLASSIFIED = "sin clasificar"
+
+
+def _parse_lines_impl(
+    lines: list[str], profile: ParserProfile, trace: list[dict[str, Any]] | None
+) -> dict[str, Any]:
+    marks: dict[int, tuple[str, str]] = {}
+    shown: dict[int, str] = {}
+
+    def mark(kind: str, detail: str = "") -> None:
+        if trace is not None:
+            marks[idx] = (kind, detail)
+
     header: dict[str, str] = {}
     results: list[dict[str, Any]] = []
     current_section: str | None = None
@@ -648,7 +717,9 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
             # El nombre y el valor han quedado en líneas separadas (algunas
             # plantillas antiguas cortan la fila cuando el nombre es largo);
             # sin nombre fiable, se descarta la fila en vez de guardarla mal.
+            mark(TRACE_DISCARDED, "parece un resultado, pero sin nombre delante del valor")
             return
+        mark(TRACE_RESULT, parsed["raw_name"])
         parsed["section"] = current_section
         parsed["test_group"] = current_group
         parsed["sample_date"] = current_sample_date
@@ -670,10 +741,12 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
                 line = line[: -len(flag)].rstrip()
         for token in profile.strip_mid_tokens:
             line = re.sub(rf"\s+{re.escape(token)}\s+", " ", line)
+        shown[idx] = line
 
         if profile.ignore_line_patterns and any(
             p.search(line) for p in profile.ignore_line_patterns
         ):
+            mark(TRACE_IGNORED, "ignore_line_patterns")
             continue
 
         prev_line, previous_line = previous_line, line
@@ -686,6 +759,7 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
         if range_target is not None and profile.following_range_labels:
             if any(line.startswith(label) for label in profile.following_range_labels):
                 collecting_range = True
+                mark(TRACE_RANGE, f"etiqueta de rango de «{range_target['raw_name']}»")
                 continue
             if collecting_range:
                 band = AGE_BAND_RE.match(line)
@@ -694,9 +768,11 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
                         (*_age_band(band), band.group("range").strip())
                     )
                     range_target_idx = idx
+                    mark(TRACE_RANGE, f"franja por edad de «{range_target['raw_name']}»")
                     continue
                 bare = LEADING_RANGE_RE.match(line)
                 if bare and "age_bands" not in range_target:
+                    mark(TRACE_RANGE, f"rango de «{range_target['raw_name']}»")
                     _set_range(range_target, bare.group("range").strip())
                     range_target = None
                     continue
@@ -709,8 +785,14 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
         if profile.section_after_anchor and line == profile.section_after_anchor:
             if prev_line:
                 current_section = prev_line
+                if trace is not None:
+                    marks[_previous_index(marks, shown, idx)] = (
+                        TRACE_SECTION,
+                        "línea anterior a la cabecera de columna",
+                    )
             current_group = None
             in_header = False
+            mark(TRACE_IGNORED, "cabecera de columna (section_after_anchor)")
             continue
 
         # Resultado "interfaced" partido en dos líneas (ver
@@ -725,6 +807,7 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
                 parsed["test_group"] = current_group
                 parsed["sample_date"] = current_sample_date
                 results.append(parsed)
+                mark(TRACE_RESULT, f"{line} (nombre de la fila partida)")
             in_header = False
             continue
 
@@ -732,6 +815,7 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
             in_header = False
             content = line[len(profile.interfaced_result_prefix) :].strip()
             pending_interfaced = _parse_interfaced_value_line(content)
+            mark(TRACE_RESULT, "valor de una fila partida (el nombre va en la línea siguiente)")
             continue
 
         # Plantillas muy antiguas no tienen ninguna etiqueta "Pacient:": el
@@ -745,8 +829,10 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
                 and re.fullmatch(r"[A-Za-zÀ-ÿ'’.\-, ]+", line)
             ):
                 header["full_name"] = line
+                mark(TRACE_HEADER, "full_name (línea siguiente a «Informe»)")
                 continue
 
+        header_found: list[str] = []
         if profile.sample_date_label:
             sample_fields = _extract_labeled_fields(
                 line, [profile.sample_date_label], profile.boundary_re
@@ -755,6 +841,7 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
                 current_sample_date = (
                     _parse_date(sample_fields["sample_date"]) or current_sample_date
                 )
+                header_found.append("sample_date")
 
         if profile.metadata_row_re:
             m = profile.metadata_row_re.match(line)
@@ -765,12 +852,15 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
                         header.setdefault(key, groups[key])
                 if groups.get("sample_date"):
                     current_sample_date = _parse_date(groups["sample_date"]) or current_sample_date
+                found = sorted(k for k, v in groups.items() if v)
+                mark(TRACE_HEADER, "fila de metadatos: " + ", ".join(found))
                 continue
 
         if profile.full_name_re and "full_name" not in header:
             m = profile.full_name_re.search(line)
             if m:
                 header["full_name"] = m.group("name").strip()
+                header_found.append("full_name")
 
         if in_header and INFORME_TITLE_RE.match(line):
             expect_name_next = True
@@ -784,6 +874,9 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
             line, profile.header_labels, profile.boundary_re
         ).items():
             header.setdefault(key, value)
+            header_found.append(key)
+        if header_found:
+            mark(TRACE_HEADER, ", ".join(header_found))
 
         section_match = SECTION_LINE_RE.match(line)
         result_match = RESULT_LINE_RE.match(line)
@@ -792,11 +885,13 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
             current_section = section_match.group(1).strip()
             current_group = None
             in_header = False
+            mark(TRACE_SECTION, current_section)
             continue
 
         if result_match:
             in_header = False
             if NON_RESULT_PREFIX_RE.match(result_match.group(1).strip()):
+                mark(TRACE_DISCARDED, "nota numerada «(n)», no un resultado")
                 continue
             _add_result(result_match.group(1))
             continue
@@ -830,11 +925,14 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
                             "sample_date": current_sample_date,
                         }
                     )
+                    mark(TRACE_RESULT, f"{name} (puntos de relleno)")
                 continue
 
         if profile.detect_headings and _is_heading(line):
             in_header = False
             heading = _normalize_heading(line)
+            is_section = not profile.known_sections or heading in profile.known_sections
+            mark(TRACE_SECTION if is_section else TRACE_GROUP, line.strip())
             # Sin `known_sections` declarado, cada título detectado es
             # directamente la sección (p. ej. Echevarne, un único nivel de
             # título por determinación, sin la jerarquía sección/grupo de
@@ -863,6 +961,7 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
         if BRACKET_RANGE_RE.search(line):
             in_header = False
             if parse_result_line(line, profile.known_text_values)["value_raw"] is None:
+                mark(TRACE_DISCARDED, "rango entre corchetes sin valor delante")
                 continue
             _add_result(line)
             continue
@@ -881,6 +980,7 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
             # después del resultado real "Srm-Urea..."), evita duplicar como
             # si fuera otra determinación distinta.
             if any(marker in line for marker in profile.bare_range_skip_if_contains):
+                mark(TRACE_DISCARDED, "lleva una marca de bare_range_skip_if_contains")
                 continue
             # Texto narrativo/nota a pie que por casualidad termina en un
             # rango numérico (p. ej. "Valors de normalitat en pacients amb
@@ -897,6 +997,7 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
                 ]
                 is None
             ):
+                mark(TRACE_DISCARDED, "termina en un rango pero no tiene valor delante")
                 continue
             _add_result(line, prefer_last_numeric_token=True)
             continue
@@ -908,7 +1009,14 @@ def _parse_lines(lines: list[str], profile: ParserProfile) -> dict[str, Any]:
             in_header = False
             if parse_result_line(line, profile.known_text_values)["value_raw"] is not None:
                 _add_result(line)
+            else:
+                mark(TRACE_DISCARDED, "unranged_result_re sin valor")
             continue
+
+    if trace is not None:
+        for i in sorted(shown):
+            kind, detail = marks.get(i, (TRACE_UNCLASSIFIED, ""))
+            trace.append({"idx": i, "line": shown[i], "kind": kind, "detail": detail})
 
     header["birth_date"] = _parse_date(header.get("birth_date"))
     header["request_date"] = _parse_date(header.get("request_date"))
@@ -958,7 +1066,7 @@ def _parse_sex(text: str | None) -> str | None:
     return _SEX_VALUES.get(words[0].strip("/")) if words else None
 
 
-def parse_report(pdf_path: Path) -> dict[str, Any]:
+def parse_report(pdf_path: Path, trace: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Parsea un informe completo: cabecera del paciente y filas de resultados.
 
     Primero se detecta a qué perfil (centro/laboratorio) corresponde el PDF
@@ -988,7 +1096,7 @@ def parse_report(pdf_path: Path) -> dict[str, Any]:
         }
         results: list[dict[str, Any]] = []
     else:
-        parsed = _parse_lines(lines, profile)
+        parsed = _parse_lines(lines, profile, trace)
         header, results = parsed["header"], parsed["results"]
 
     return {
@@ -999,4 +1107,5 @@ def parse_report(pdf_path: Path) -> dict[str, Any]:
         "format_name": profile.name,
         "format_short_name": profile.short_name or profile.name,
         "manual_review_only": profile.manual_review_only,
+        "decimal_separator": profile.decimal_separator,
     }
