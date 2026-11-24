@@ -36,8 +36,11 @@ Novedades de cada versión en el [registro de cambios](CHANGELOG.md).
   y los guarda cifrados en local, en una base de datos por paciente con su
   propia contraseña, con copias de seguridad y aviso para hacerlas.
 - Muestra gráficos de evolución y comparativas de cada prueba frente a su
-  rango de referencia, con el último valor destacado y colores aptos para
-  daltonismo (el estado se indica también con ▲/▼, nunca solo con color).
+  rango de referencia, con el último valor destacado, y un mapa de calor con
+  el historial de un vistazo. Los colores de gráficos, mapa de calor e
+  informes están elegidos para distinguirse también con daltonismo
+  (protanopía, deuteranopía y tritanopía), y el estado nunca se indica solo
+  con color: va acompañado de ▲/▼, ✓/✗ o texto.
 - Calcula índices y paneles clínicos informativos (p. ej. riesgo
   cardiovascular, función renal, función hepática) a partir de fórmulas y
   umbrales publicados, citando siempre su fuente.

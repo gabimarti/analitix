@@ -1611,7 +1611,11 @@ ha cambiado".
   de distancia; con un único límite, la distancia se mide en fracciones
   de ese límite. Escala divergente `HEATMAP_CMAP` azul ↔ gris neutro ↔ rojo
   (polaridad y distancia; no reutiliza `COLOR_ALTO`/`COLOR_BAJO` aunque
-  comparte su polaridad: azul = bajo, rojo = alto). Al depender solo del rango de cada informe, es
+  comparte su polaridad: azul = bajo, rojo = alto). Apta para daltonismo:
+  simulando protanopía, deuteranopía y tritanopía (Machado et al. 2009,
+  doi:10.1109/TVCG.2009.113) las casillas de la leyenda siguen a ΔE CIE76
+  ≥ 10 entre sí, salvo los dos grises (en rango / sin rango), que ya se
+  parecen con visión normal y se distinguen por el punto. Al depender solo del rango de cada informe, es
   independiente de la unidad. Sin rango -> `HEATMAP_NO_RANGE` con un
   punto; sin analítica -> `HEATMAP_SURFACE`. Separación de 2 px entre
   casillas con la rejilla menor. Valores escritos solo en casillas fuera de
