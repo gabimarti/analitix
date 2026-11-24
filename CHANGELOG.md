@@ -10,6 +10,8 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/) (ver
 
 ## [Sin publicar]
 
+## [1.0.0] - 2026-11-24
+
 ### Cambiado
 
 - Una base de datos cifrada por paciente, cada una con su contraseña: al arrancar se abre la última usada pidiendo su contraseña, o se elige en la lista de bases de datos o se crea una nueva (nombre del paciente y de la base de datos); Archivo → «Cambiar de base de datos...» vuelve a la lista. La base de datos anterior (`data/analitix.db`) ya no se usa: los datos se vuelven a importar desde los PDF. El menú Pacientes queda en «Ficha del paciente...»; «Cambiar paciente activo...» y la lista de pacientes solo aparecen en bases de datos antiguas con varios.
