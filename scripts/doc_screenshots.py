@@ -13,7 +13,7 @@ Uso (Windows, desde la raíz del proyecto, con la app instalada):
 
     venv\\Scripts\\python.exe scripts\\doc_screenshots.py
 
-Nunca abre `data/analitix.db` ni ningún PDF real: crea una base de datos
+Nunca abre nada de `data/` ni ningún PDF real: crea una base de datos
 cifrada temporal, la misma que crea el botón «Base de datos de ejemplo...»
 (`analitix.demo`: paciente ficticio y analíticas sintéticas de tres
 laboratorios), abre la aplicación sobre ella, recorre las pantallas y

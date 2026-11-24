@@ -16,8 +16,10 @@ Analitix es una aplicación de escritorio (Python + Tkinter) que:
 3. Permite analizar la evolución de cada prueba en el tiempo, comparar
    pruebas entre sí y exportar los resultados a Excel/CSV.
 
-No hay servidor: todo el procesamiento es local y el único fichero de estado
-persistente es `data/analitix.db`. La **única conexión a internet** es la
+No hay servidor: todo el procesamiento es local y el estado persistente está
+en `data/`: una base de datos cifrada por paciente en `data/pacientes/*.db`,
+la lista de bases de datos (`data/bases_de_datos.json`, sin cifrar y sin
+datos médicos) y la configuración (`data/config.json`). La **única conexión a internet** es la
 comprobación de versiones nuevas (`updates.py`): una petición GET anónima a
 la API pública de GitHub que solo lee el número de la última versión; no
 envía ningún dato del usuario ni de la base de datos. Solo se hace cuando el
@@ -64,7 +66,11 @@ Python 3.14+ (Windows, `sqlcipher3` con wheel precompilado
 ```
 Analitix/
   informes_analiticas/      PDF de entrada (el usuario los deja aquí)
-  data/                     analitix.db + analitix.log (creados en el primer arranque)
+  data/                     datos locales (creados en el primer arranque)
+    pacientes/                una base de datos cifrada (.db) por paciente
+    bases_de_datos.json       lista de bases de datos (sin cifrar, sin datos médicos)
+    config.json               configuración (carpeta de copias, fechas de la última copia...)
+    analitix.log              registro de la aplicación
   tests/                     suite automatizada aislada de la aplicación
   docs/                      esta documentación
     referencias_medicas/      fuentes científicas de los cálculos clínicos (implementados y pendientes)
@@ -2995,10 +3001,11 @@ estándar (`urllib.request`, `json`), sin dependencias nuevas.
   `api.github.com/repos/gabimarti/analitix/releases?per_page=1` (timeout
   `TIMEOUT_S` = 5 s) y devuelve `(versión, html_url)` de la Release más
   reciente, o `None` si no hay ninguna. No usa `/releases/latest` porque
-  esa ruta excluye las *pre-release*, y todas las `0.x` lo son (§8.1).
-  Con el repositorio privado la API responde 404 a peticiones anónimas:
-  la excepción llega a la GUI como "no se pudo comprobar", y funciona
-  sin cambios en cuanto el repositorio sea público.
+  esa ruta excluye las *pre-release* (las `0.x` lo fueron, §8.1): así una
+  instalación antigua también ve la 1.0.0 y las siguientes, y seguiría
+  funcionando si alguna vez se publicara otra *pre-release*. Si la
+  consulta falla (sin conexión, error de la API), la excepción llega a la
+  GUI como "no se pudo comprobar".
 - `is_newer(latest, current=__version__)`: compara por tuplas de enteros
   ("0.10.0" > "0.9.0"; §8.2), aceptando el prefijo `v` de la etiqueta.
 - En `gui.py`, `_check_updates(manual)` hace la petición en un
@@ -3048,17 +3055,14 @@ indicador: crea widgets, así que tiene que ir en el hilo principal.
 
 `scripts/doc_screenshots.py` (Windows, con el entorno `venv`:
 `venv\Scripts\python.exe scripts\doc_screenshots.py`) regenera todas las
-imágenes de `docs/images/` cuando cambia la interfaz. Nunca toca
-`data/analitix.db` ni ningún PDF: crea una BD cifrada temporal con
-"PACIENTE FICTICIO" (ficha, tabaquismo y 14 analíticas sintéticas de tres
-laboratorios, con los `canonical_id` de todos los paneles y nombres de
-prueba distintos por laboratorio). Los valores los genera `oscillate`:
-suben y bajan alrededor de un centro, casi siempre alternando el lado, con
-altos y bajos y sin tendencia marcada; semilla fija por parámetro, así cada
-ejecución da las mismas capturas. Captura primero el arranque
-(`capture_startup`: aviso legal, ventana de carga y los dos diálogos de
-creación de contraseña, con `main.DB_PATH` apuntando a una BD inexistente),
-después abre `AnalitixApp` sobre la BD de ejemplo, recorre todas las
+imágenes de `docs/images/` cuando cambia la interfaz. Nunca toca `data/`
+ni ningún PDF: redirige `config.PATIENTS_DIR`, `config.DB_LIST_PATH` y
+`config.APP_CONFIG_PATH` a una carpeta temporal y crea en ella la misma BD
+cifrada que el botón «Base de datos de ejemplo...» (`demo.build_demo_db`:
+paciente ficticio y analíticas sintéticas de tres laboratorios). Captura
+primero el arranque (`capture_startup`: aviso legal, ventana de carga,
+lista de bases de datos, «Nueva base de datos» y la contraseña de una base
+de datos nueva), después abre `AnalitixApp` sobre la BD de ejemplo, recorre todas las
 pantallas, los paneles clínicos y los diálogos (ficha, Acerca de) y captura
 cada una con `PIL.ImageGrab` (la ventana se trae al frente con `lift()` +
 `-topmost` justo antes de cada captura; no hay que tocar el ratón mientras
@@ -3066,8 +3070,10 @@ dura, ~1 minuto). Por último exporta el informe de parámetros alterados a
 `docs/ejemplos/informe_alterados_ficticio.pdf` (el único PDF permitido en
 el repositorio, en `PERMITIDOS` de `scripts/check_privacy.py`) e imágenes
 de su portada, su tabla y un gráfico. Las figuras técnicas se generan
-directamente con matplotlib. Las capturas se guardan en paleta de 256
-colores para que pesen poco. Si se añade una pestaña, añadir su captura en
+directamente con matplotlib (a 120 ppp). Las capturas se guardan en RGB de
+24 bits optimizado (sin reducir a 256 colores, para no degradar el texto ni
+los gráficos), incluida la barra de menús de Windows; el PDF de ejemplo se
+renderiza a 150 ppp. Si se añade una pestaña, añadir su captura en
 `capture_app`. Revisar siempre las imágenes resultantes antes de
 publicarlas.
 
@@ -3402,7 +3408,8 @@ Pasos para publicar una versión:
    (huella SHA-256 del instalador) y, como notas, la
    sección `## [X.Y.Z]` de `CHANGELOG.md` (si no existe, falla sin publicar;
    se pueden editar después en la web). Las
-   versiones `0.x` se marcan como *pre-release*. También genera una
+   versiones `0.x` se marcaban como *pre-release*; desde la **1.0.0** son
+   Releases normales y GitHub marca la más reciente como «Latest». También genera una
    atestación de procedencia del instalador (`actions/attest-build-provenance`),
    que prueba que el `.exe` lo compiló este workflow desde este repositorio:
    se verifica con `gh attestation verify Analitix-Setup-X.Y.Z.exe --repo gabimarti/analitix`.
@@ -3418,8 +3425,8 @@ corrige publicando la siguiente versión de parche.
    `git checkout develop && git merge --ff-only origin/main && git push`.
 
 La página de descargas es `…/releases`, no `…/releases/latest`: GitHub excluye de
-`latest` las *pre-release*, y todas las 0.x lo son (mismo motivo por el que
-`updates.py` no usa ese endpoint). `scripts\update_main.bat`
+`latest` las *pre-release*, como lo fueron todas las 0.x (mismo motivo por el
+que `updates.py` no usa ese endpoint). `scripts\update_main.bat`
 sigue actualizando el checkout local de `main`, es decir, a la última
 versión publicada.
 
@@ -3439,8 +3446,10 @@ decimales: después de 0.9.0 viene 0.10.0, no 1.0.0.
 
 - **MAYOR = 0** indica desarrollo inicial: la aplicación puede cambiar sin
   garantías de compatibilidad (SemVer, regla 4). Por eso el workflow publica
-  las versiones `0.x` como *pre-release*. **1.0.0** se reserva para cuando se
-  considere estable para otros usuarios.
+  las versiones `0.x` como *pre-release* (de la 0.9.0 a la 0.12.0).
+- **1.0.0 es la primera versión estable**: la primera que no es
+  *pre-release* y que GitHub muestra como «Latest». A partir de ella se
+  aplican las reglas de la tabla (un cambio incompatible sube MAYOR).
 - **Primera versión publicada: 0.9.0**, y no 0.1.0 ni 0.0.1, porque la
   aplicación ya estaba casi completa al empaquetarse por primera vez (parser
   multiperfil, base de datos cifrada, paneles clínicos, exportación,

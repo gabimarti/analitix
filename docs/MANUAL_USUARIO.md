@@ -109,7 +109,9 @@ instalarlo aparte (por ejemplo desde python.org).
 3. Haz doble clic en `scripts\run_windows.bat` para arrancar la aplicación
    y sigue con §1.3.
 
-La base de datos queda en `data\analitix.db`, dentro del proyecto. En esta
+Las bases de datos quedan en `data\pacientes\` (una por paciente), con la
+lista de bases de datos (`data\bases_de_datos.json`) y la configuración
+(`data\config.json`) al lado, dentro del proyecto. En esta
 forma de uso no aparece el botón "Cambiar ubicación de los datos": la
 ubicación la decide dónde hayas clonado el proyecto, y la app nunca lee la
 configuración de una versión instalada, así que ambas pueden convivir en el
@@ -1880,10 +1882,13 @@ desplazamiento.
 
 **Seguridad**
 
-- **Cambiar contraseña...**: cambia la contraseña maestra de la base de
-  datos sin perder ningún dato. Te pedirá la nueva contraseña dos veces
-  (para confirmarla). A partir de ese momento necesitarás la nueva
-  contraseña para abrir la app.
+- **Cambiar contraseña...**: cambia la contraseña de la base de datos
+  abierta (la del paciente actual) sin perder ningún dato. Te pedirá la
+  nueva contraseña dos veces (para confirmarla). A partir de ese momento
+  necesitarás la nueva contraseña para abrir esa base de datos; las de los
+  demás pacientes no cambian.
+- **Copia de seguridad**: carpeta por defecto de las copias, **Hacer copia
+  de seguridad...** y cada cuántos días recordártelo (ver §1.4).
 
 **Datos**
 
