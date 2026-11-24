@@ -134,7 +134,13 @@ from analitix.hepatic_risk import (
     get_latest_hepatic_summary,
 )
 from analitix.inflammation_risk import get_inflammation_series, get_latest_inflammation_summary
-from analitix.ingest import confirm_same_patient, find_pdf, ingest_folder, known_pdf_filenames
+from analitix.ingest import (
+    confirm_same_patient,
+    find_pdf,
+    ingest_folder,
+    known_pdf_filenames,
+    parse_report,
+)
 from analitix.iron_risk import (
     INDEX_LABELS as IRON_INDEX_LABELS,
     get_iron_index_series,
@@ -145,7 +151,7 @@ from analitix.lipid_risk import (
     get_latest_lipid_summary,
     get_lipid_index_series,
 )
-from analitix.pdf_parser import parse_report
+from analitix.pdf_worker import PdfWorkerError
 from analitix.rcv import classify_change, cusum_drift, cusum_note, personal_range
 from analitix.renal_risk import (
     FG_IDS,
@@ -1078,10 +1084,19 @@ class AnalitixApp(ttk.Window):
 
     def _on_ingest_progress(self, index: int, total: int, filename: str) -> None:
         self.progressbar.configure(maximum=max(total, 1), value=index)
-        self.var_progress_text.set(f"Analizando {index}/{total}: {filename}")
+        self._ingest_label = f"Analizando {index}/{total}: {filename}"
+        self.var_progress_text.set(self._ingest_label)
         # `update_idletasks` (no `update`) repinta la ventana y procesa la cola
         # de eventos sin dar pie a que el usuario dispare otra acción a medias
         # de esta; así no da la sensación de que el programa se ha colgado.
+        self.update_idletasks()
+
+    def _on_pdf_progress(self, progress) -> None:
+        """Mientras el proceso aparte lee un PDF (`pdf_worker`): página,
+        segundos y, si deja de avisar, «sin respuesta desde…» (a los
+        `pdf_worker.STALL_TIMEOUT_S` se abandona ese PDF solo)."""
+        label = getattr(self, "_ingest_label", "Analizando")
+        self.var_progress_text.set(f"{label} · {progress.text()}")
         self.update_idletasks()
 
     def _run_ingest(self, force: bool = False) -> None:
@@ -1097,6 +1112,7 @@ class AnalitixApp(ttk.Window):
                 force=force,
                 on_progress=self._on_ingest_progress,
                 recursive=self.var_import_subfolders.get(),
+                on_pdf_progress=self._on_pdf_progress,
             )
         finally:
             self.btn_import.configure(state="normal")
@@ -1202,7 +1218,10 @@ class AnalitixApp(ttk.Window):
                 return
             if fichero not in cabeceras:
                 ruta = find_pdf(self.reports_dir, fichero)
-                cabeceras[fichero] = parse_report(ruta)["header"] if ruta else {}
+                try:
+                    cabeceras[fichero] = parse_report(ruta)["header"] if ruta else {}
+                except PdfWorkerError:
+                    cabeceras[fichero] = {}
             header = cabeceras[fichero]
             ficha = next(p for p in list_patients(self.con) if p["id"] == pacientes[0]["id"])
             nhc_ficha = ", ".join(v for v in (ficha["nhc"], ficha["nhc_alt"]) if v)

@@ -523,7 +523,8 @@ def _import_gui_with_loading(root: tk.Tk) -> type:
 def _self_test() -> int:
     """Comprobación sin interfaz del ejecutable empaquetado (`Analitix.exe
     --self-test`, la usa la prueba del instalador): importa la interfaz,
-    carga los perfiles, abre una BD cifrada temporal y lee un PDF sintético.
+    carga los perfiles, abre una BD cifrada temporal y lee un PDF sintético
+    (también en el proceso aparte de `pdf_worker`).
     Devuelve el código de salida (0 = correcto); el detalle va al log."""
     import tempfile
     from pathlib import Path
@@ -543,6 +544,13 @@ def _self_test() -> int:
             fig.text(0.1, 0.5, "Glucosa sèrum 95 mg/dL ( 74 - 106 )")
             fig.savefig(pdf)
             assert "Glucosa" in " ".join(extract_lines(pdf)), "no se lee el PDF"
+            # El mismo PDF a través del proceso aparte vigilado: comprueba
+            # que el ejecutable empaquetado arranca el proceso hijo
+            # (`multiprocessing.freeze_support` en el lanzador).
+            from analitix.pdf_worker import parse_report_isolated
+
+            parsed = parse_report_isolated(pdf)
+            assert parsed["format_id"] == "unknown", "proceso de lectura de PDF"
     except Exception:
         logger.exception("Autocomprobación fallida")
         return 1

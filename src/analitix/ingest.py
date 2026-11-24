@@ -16,13 +16,16 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from analitix.catalog import canonical_id_for
 from analitix.config import REPORTS_DIR
-from analitix.pdf_parser import apply_age_bands, compute_flag, decimal_convention, parse_report
+from analitix.pdf_parser import apply_age_bands, compute_flag, decimal_convention
+from analitix.pdf_worker import PdfWorker, Progress
 from analitix.repository import (
     STATUS_OTHER_PATIENT,
     add_patient_alias,
@@ -40,6 +43,34 @@ from analitix.repository import (
 from analitix.textutils import name_words_key, normalize_name
 
 logger = logging.getLogger("analitix.ingest")
+
+# Proceso de lectura de PDF de la importación en curso (ver `pdf_batch`).
+_worker: PdfWorker | None = None
+_pdf_progress: Callable[[Progress], None] | None = None
+
+
+@contextmanager
+def pdf_batch(on_pdf_progress: Callable[[Progress], None] | None = None) -> Iterator[None]:
+    """Un único proceso de lectura de PDF (`pdf_worker.PdfWorker`) para todos
+    los `parse_report` del bloque; si ya hay uno abierto, se reutiliza."""
+    global _worker, _pdf_progress
+    if _worker is not None:
+        yield
+        return
+    _worker, _pdf_progress = PdfWorker(), on_pdf_progress
+    try:
+        yield
+    finally:
+        _worker.close()
+        _worker, _pdf_progress = None, None
+
+
+def parse_report(pdf_path: Path) -> dict[str, Any]:
+    """Parsea un PDF en el proceso aparte vigilado (`pdf_worker`): si el PDF
+    cuelga la lectura o se pasa de límites, lanza `PdfWorkerError` en vez de
+    colgar la aplicación. Misma salida que `pdf_parser.parse_report`."""
+    with pdf_batch():
+        return _worker.parse(pdf_path, on_progress=_pdf_progress)
 
 
 class OtherPatientError(Exception):
@@ -97,6 +128,7 @@ def ingest_folder(
     force: bool = False,
     on_progress: Callable[[int, int, str], None] | None = None,
     recursive: bool = False,
+    on_pdf_progress: Callable[[Progress], None] | None = None,
 ) -> IngestResult:
     """Escanea `reports_dir` e ingiere los PDF nuevos o pendientes.
 
@@ -112,7 +144,23 @@ def ingest_folder(
 
     Con `recursive=True` busca también en las subcarpetas (casilla "Incluir
     subcarpetas" de la pestaña Importar).
+
+    Los PDF se leen en un proceso aparte vigilado (`pdf_batch`);
+    `on_pdf_progress(progreso)` se llama mientras se lee cada uno (página,
+    segundos, si no responde), para mostrarlo. Un PDF que se cuelga o se
+    pasa de límites queda con error y se sigue con el resto.
     """
+    with pdf_batch(on_pdf_progress):
+        return _ingest_folder(con, reports_dir, force, on_progress, recursive)
+
+
+def _ingest_folder(
+    con,
+    reports_dir: Path,
+    force: bool,
+    on_progress: Callable[[int, int, str], None] | None,
+    recursive: bool,
+) -> IngestResult:
     pdf_paths = sorted(reports_dir.rglob("*.pdf") if recursive else reports_dir.glob("*.pdf"))
     total = len(pdf_paths)
     # Si algún PDF se ha renombrado o eliminado desde la última importación,
@@ -241,6 +289,11 @@ def confirm_same_patient(con, pdf_path: Path, patient_id: int) -> tuple[str, str
     datos de cabecera como identidad alternativa del paciente
     (`patient_aliases`), para que el siguiente con esos datos encaje solo.
     Devuelve lo mismo que `_ingest_one`."""
+    with pdf_batch():
+        return _confirm_same_patient(con, pdf_path, patient_id)
+
+
+def _confirm_same_patient(con, pdf_path: Path, patient_id: int) -> tuple[str, str]:
     header = parse_report(pdf_path)["header"]
     identidad = [header.get(k) for k in ("full_name", "dni", "nhc", "cip")]
     if any(identidad):

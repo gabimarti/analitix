@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
@@ -152,7 +152,12 @@ def _drop_overlapping_spaces(page: Any) -> Any:
     return page.filter(keep)
 
 
-def extract_lines(pdf_path: Path, x_tolerance: float = 3) -> list[str]:
+def extract_lines(
+    pdf_path: Path,
+    x_tolerance: float = 3,
+    on_page: Callable[[int, int], None] | None = None,
+    max_pages: int | None = None,
+) -> list[str]:
     """Extrae el texto de todas las páginas, línea a línea.
 
     `x_tolerance` (mismo parámetro de `pdfplumber`, `3` es su valor por
@@ -167,10 +172,17 @@ def extract_lines(pdf_path: Path, x_tolerance: float = 3) -> list[str]:
     los valores fuera de rango se dibujan dos veces superpuestas (una vez con
     fuente normal y otra en negrita) para simular el negrita, y sin este
     filtro pdfplumber intercala los caracteres de ambas copias.
+
+    `on_page(n, total)` se llama al terminar cada página (para vigilar desde
+    fuera que la extracción avanza, ver `pdf_worker.py`); con `max_pages`,
+    un PDF con más páginas lanza `PdfLimitError` sin extraer nada.
     """
     lines: list[str] = []
     with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
+        total = len(pdf.pages)
+        if max_pages is not None and total > max_pages:
+            raise PdfLimitError(f"el PDF tiene {total} páginas (máximo {max_pages})")
+        for number, page in enumerate(pdf.pages, start=1):
             page = _drop_overlapping_spaces(page.dedupe_chars(extra_attrs=()))
             text = page.extract_text(x_tolerance=x_tolerance) or ""
             # Alguna fuente embebida y subseteada (vista en Quirón) sustituye
@@ -179,7 +191,13 @@ def extract_lines(pdf_path: Path, x_tolerance: float = 3) -> list[str]:
             # "Crea\x00nina").
             text = text.replace("\x00", "ti")
             lines.extend(text.split("\n"))
+            if on_page is not None:
+                on_page(number, total)
     return lines
+
+
+class PdfLimitError(ValueError):
+    """PDF fuera de los límites de tamaño o de páginas que se aceptan."""
 
 
 def _extract_labeled_fields(
@@ -1066,7 +1084,12 @@ def _parse_sex(text: str | None) -> str | None:
     return _SEX_VALUES.get(words[0].strip("/")) if words else None
 
 
-def parse_report(pdf_path: Path, trace: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def parse_report(
+    pdf_path: Path,
+    trace: list[dict[str, Any]] | None = None,
+    on_page: Callable[[int, int], None] | None = None,
+    max_pages: int | None = None,
+) -> dict[str, Any]:
     """Parsea un informe completo: cabecera del paciente y filas de resultados.
 
     Primero se detecta a qué perfil (centro/laboratorio) corresponde el PDF
@@ -1074,15 +1097,19 @@ def parse_report(pdf_path: Path, trace: list[dict[str, Any]] | None = None) -> d
     de parseo todavía (`manual_review_only`, incluido el perfil interno
     "no reconocido" cuando ninguno coincide), se devuelve sin cabecera ni
     resultados en vez de forzar sobre él la gramática de otro centro.
+
+    `on_page` y `max_pages`: ver `extract_lines`. La app no llama a esta
+    función directamente con PDF del usuario sino a través de
+    `pdf_worker`, que la ejecuta en un proceso aparte vigilado.
     """
-    lines = extract_lines(pdf_path)
+    lines = extract_lines(pdf_path, on_page=on_page, max_pages=max_pages)
     profile = detect_profile(lines)
     if not profile.manual_review_only and profile.extract_x_tolerance is not None:
         # Se detecta el perfil con la extracción por defecto (las cadenas de
         # firma sin espacios internos no la necesitan) y solo se reextrae
         # con la tolerancia propia del perfil si hace falta — ver
         # `extract_lines`.
-        lines = extract_lines(pdf_path, x_tolerance=profile.extract_x_tolerance)
+        lines = extract_lines(pdf_path, x_tolerance=profile.extract_x_tolerance, on_page=on_page)
 
     if profile.manual_review_only:
         header = {
