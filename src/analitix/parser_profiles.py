@@ -170,6 +170,11 @@ class ParserProfile:
     # `pdf_parser._value_to_float`), "," (coma decimal, "." siempre millares)
     # o "." (punto decimal, nunca millares).
     decimal_separator: str = "auto"
+    # Campos de cabecera que la plantilla tiene que leer siempre (p. ej.
+    # `["full_name", "request_date"]`): si en un PDF falta alguno, la prueba
+    # de la plantilla lo señala (`profile_assistant.evaluate`). Vacío (por
+    # defecto) no exige nada.
+    required_fields: list[str] = field(default_factory=list)
     # De dónde viene: "app" (`PARSER_PROFILES_DIR`, revisado con el código)
     # o "usuario" (`config.USER_PARSER_PROFILES_DIR`, validado al cargar).
     origin: str = "app"
@@ -256,7 +261,17 @@ def _profile_from_data(data: dict) -> ParserProfile:
         following_range_labels=data.get("following_range_labels", []),
         section_name_suffixes=data.get("section_name_suffixes", {}),
         decimal_separator=_decimal_separator(data.get("decimal_separator", "auto")),
+        required_fields=list(data.get("required_fields", [])),
     )
+
+
+def profile_from_data(data: dict, origin: str = "usuario") -> ParserProfile:
+    """Plantilla a partir de sus datos ya leídos (p. ej. una en edición en el
+    asistente), con la validación estricta de las del usuario."""
+    validate_user_profile_data(data)
+    profile = _profile_from_data(data)
+    profile.origin = origin
+    return profile
 
 
 def _decimal_separator(value: object) -> str:
@@ -306,7 +321,23 @@ KNOWN_PROFILE_KEYS = frozenset(
         "following_range_labels",
         "section_name_suffixes",
         "decimal_separator",
+        "required_fields",
     }
+)
+# Campos de cabecera que puede leer una plantilla (`header_labels`,
+# `sample_date_label`, `full_name_re`, `metadata_row_re`).
+HEADER_FIELDS = (
+    "full_name",
+    "birth_date",
+    "sex",
+    "dni",
+    "nhc",
+    "cip",
+    "assistance_number",
+    "report_number",
+    "request_date",
+    "validation_date",
+    "sample_date",
 )
 PROFILE_ID_RE = re.compile(r"[a-z0-9_]{1,64}")
 MAX_PATTERN_LENGTH = 300
@@ -477,6 +508,14 @@ def validate_user_profile_data(data: dict, file_stem: str | None = None) -> None
             raise ProfileValidationError(f"line_substitutions nº {i}: tiene que ser una tabla")
         compiled = check_pattern(item.get("pattern"), f"line_substitutions nº {i}")
         check_replacement(item.get("replacement"), compiled, f"line_substitutions nº {i}")
+    if "required_fields" in data:
+        unknown_fields = set(_str_list(data["required_fields"], "required_fields")) - set(
+            HEADER_FIELDS
+        )
+        if unknown_fields:
+            raise ProfileValidationError(
+                f"required_fields: campos desconocidos ({', '.join(sorted(unknown_fields))})"
+            )
     suffixes = data.get("section_name_suffixes", {})
     if not isinstance(suffixes, dict) or not all(
         isinstance(k, str) and isinstance(v, str) for k, v in suffixes.items()

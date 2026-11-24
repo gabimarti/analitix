@@ -65,6 +65,15 @@ def canonical_id_for(raw_name: str) -> str:
     return norm.replace(" ", "_")
 
 
+def known_canonical_ids() -> set[str]:
+    """`canonical_id` a los que apunta algún alias (de la aplicación o del
+    usuario): pruebas que el catálogo ya conoce por su nombre."""
+    global _overrides
+    if _overrides is None:
+        _overrides = _load_overrides()
+    return set(_overrides.values())
+
+
 def reload_overrides() -> None:
     """Fuerza releer el CSV de alias (tras editarlo en caliente)."""
     global _overrides

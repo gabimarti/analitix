@@ -171,6 +171,8 @@ y una que no cumpla las reglas **no se usa** (el resto sigue funcionando):
   repetición de longitud fija dentro sí vale (`\d{1,3}(\.\d{3})*`).
 - En `line_substitutions`, el reemplazo solo puede usar grupos que tenga el
   patrón (`\1`, `\g<nombre>`).
+- En `required_fields` (opcional), solo nombres de campo de cabecera de la
+  lista de `plantilla_perfil.toml`.
 
 Si tu plantilla usa el mismo `id` que una de la aplicación (p. ej.
 `hugtip`), **no la sustituye en silencio**: se sigue usando la de la

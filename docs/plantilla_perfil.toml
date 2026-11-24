@@ -38,6 +38,12 @@ priority = 100
 # si usa punto decimal (el "." nunca es de millares). Bórralo si no lo sabes.
 decimal_separator = "auto"
 
+# OPCIONAL: campos de cabecera que tu plantilla tiene que leer siempre. Al
+# probar la plantilla se avisa si en un PDF falta alguno. Valores posibles:
+# full_name, birth_date, sex, dni, nhc, cip, assistance_number,
+# report_number, request_date, validation_date, sample_date.
+# required_fields = ["full_name", "request_date"]
+
 # ---------------------------------------------------------------------------
 # Etiquetas de OTROS campos de cabecera que no interesa guardar, pero que
 # pueden compartir línea con alguno de los que sí capturas en
