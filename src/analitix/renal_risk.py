@@ -24,17 +24,20 @@ paciente, dato sensible que Analitix no guarda, y la inmensa mayoría de los
 informes reales ya traen el FG calculado por el laboratorio — ver
 `referencias_renal.md` §2 para el detalle de por qué no se justifica hoy).
 """
+
 from __future__ import annotations
 
 import datetime as dt
 import statistics
-from typing import Any, Optional
+from typing import Any
 
 from analitix.pdf_parser import compute_flag
 from analitix.repository import get_merged_series
 
 FG_IDS = (
-    "filtrat_glomerular_estimat_serum", "filtrat_glomerular_estimat", "filtrat_glomerular_estimat_90_ml_min",
+    "filtrat_glomerular_estimat_serum",
+    "filtrat_glomerular_estimat",
+    "filtrat_glomerular_estimat_90_ml_min",
 )
 UREA_IDS = ("urea_serum",)
 CREATININA_IDS = ("creatinina_serum",)
@@ -56,18 +59,35 @@ ACR_IDS = ("albumina_creatinina", "albumina_creatinina_orina_esporadica")
 # permission from KDIGO 2012 CPG"):
 # https://www.kidney.org/sites/default/files/01-10-7027_ABG_HeatMap_Card_3_0.pdf
 GFR_CATEGORIES = (
-    ("G1", 90.0), ("G2", 60.0), ("G3a", 45.0), ("G3b", 30.0), ("G4", 15.0), ("G5", 0.0),
+    ("G1", 90.0),
+    ("G2", 60.0),
+    ("G3a", 45.0),
+    ("G3b", 30.0),
+    ("G4", 15.0),
+    ("G5", 0.0),
 )
 ACR_A1_HIGH = 30.0
 ACR_A2_HIGH = 300.0
 
 KDIGO_RISK = {
-    ("G1", "A1"): "verde", ("G1", "A2"): "amarillo", ("G1", "A3"): "naranja",
-    ("G2", "A1"): "verde", ("G2", "A2"): "amarillo", ("G2", "A3"): "naranja",
-    ("G3a", "A1"): "amarillo", ("G3a", "A2"): "naranja", ("G3a", "A3"): "rojo",
-    ("G3b", "A1"): "naranja", ("G3b", "A2"): "rojo", ("G3b", "A3"): "rojo",
-    ("G4", "A1"): "rojo", ("G4", "A2"): "rojo", ("G4", "A3"): "rojo_oscuro",
-    ("G5", "A1"): "rojo_oscuro", ("G5", "A2"): "rojo_oscuro", ("G5", "A3"): "rojo_oscuro",
+    ("G1", "A1"): "verde",
+    ("G1", "A2"): "amarillo",
+    ("G1", "A3"): "naranja",
+    ("G2", "A1"): "verde",
+    ("G2", "A2"): "amarillo",
+    ("G2", "A3"): "naranja",
+    ("G3a", "A1"): "amarillo",
+    ("G3a", "A2"): "naranja",
+    ("G3a", "A3"): "rojo",
+    ("G3b", "A1"): "naranja",
+    ("G3b", "A2"): "rojo",
+    ("G3b", "A3"): "rojo",
+    ("G4", "A1"): "rojo",
+    ("G4", "A2"): "rojo",
+    ("G4", "A3"): "rojo_oscuro",
+    ("G5", "A1"): "rojo_oscuro",
+    ("G5", "A2"): "rojo_oscuro",
+    ("G5", "A3"): "rojo_oscuro",
 }
 KDIGO_RISK_LABELS = {
     "verde": "Riesgo bajo",
@@ -89,7 +109,7 @@ KDIGO_RISK_LABELS = {
 # relaciona urea y BUN) para obtener el corte equivalente sobre urea
 # real/creatinina.
 UREA_CREATININA_FACTOR = 60.0 / 28.0
-UREA_CREATININA_LOW = 10.0 * UREA_CREATININA_FACTOR   # ≈21.4: sugiere causa renal intrínseca
+UREA_CREATININA_LOW = 10.0 * UREA_CREATININA_FACTOR  # ≈21.4: sugiere causa renal intrínseca
 UREA_CREATININA_HIGH = 20.0 * UREA_CREATININA_FACTOR  # ≈42.8: sugiere causa prerenal
 
 # Aviso de subida brusca de creatinina (señal débil, no "detección de AKI"):
@@ -106,7 +126,7 @@ AKI_WINDOW_MAX_DAYS = 365
 AKI_RATIO_HIGH = 1.5
 
 
-def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _mg_dl(row: dict[str, Any] | None) -> float | None:
     """Valor numérico si la unidad es mg/dL (urea/creatinina)."""
     if row is None:
         return None
@@ -116,7 +136,7 @@ def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _ml_min(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _ml_min(row: dict[str, Any] | None) -> float | None:
     """Valor numérico del FG si la unidad empieza por mL/min."""
     if row is None:
         return None
@@ -126,7 +146,7 @@ def _ml_min(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _acr_mg_g(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _acr_mg_g(row: dict[str, Any] | None) -> float | None:
     """Valor numérico del ratio albúmina/creatinina si la unidad es mg/g o
     su equivalente numérico µg/mg (1 µg/mg = 1 mg/g: numerador y
     denominador escalan ×1000 en sentido opuesto, se cancela)."""
@@ -138,7 +158,7 @@ def _acr_mg_g(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def gfr_category(value: Optional[float]) -> Optional[str]:
+def gfr_category(value: float | None) -> str | None:
     """Categoría KDIGO G1-G5 de un filtrado glomerular estimado (mL/min)."""
     if value is None:
         return None
@@ -148,7 +168,7 @@ def gfr_category(value: Optional[float]) -> Optional[str]:
     return "G5"
 
 
-def acr_category(value: Optional[float]) -> Optional[str]:
+def acr_category(value: float | None) -> str | None:
     """Categoría KDIGO A1-A3 de un ratio albúmina/creatinina (mg/g)."""
     if value is None:
         return None
@@ -159,7 +179,7 @@ def acr_category(value: Optional[float]) -> Optional[str]:
     return "A3"
 
 
-def kdigo_risk(g: Optional[str], a: Optional[str]) -> Optional[str]:
+def kdigo_risk(g: str | None, a: str | None) -> str | None:
     """Nivel de riesgo KDIGO ("verde".."rojo_oscuro") para una combinación
     G×A, o `None` si falta cualquiera de las dos categorías (sin
     albuminuria no se puede clasificar el riesgo con fiabilidad, ni
@@ -169,7 +189,7 @@ def kdigo_risk(g: Optional[str], a: Optional[str]) -> Optional[str]:
     return KDIGO_RISK.get((g, a))
 
 
-def urea_creatinina_ratio(urea: Optional[float], creatinina: Optional[float]) -> Optional[float]:
+def urea_creatinina_ratio(urea: float | None, creatinina: float | None) -> float | None:
     """Ratio urea/creatinina (ambos mg/dL, urea real de este laboratorio —
     ver `UREA_CREATININA_FACTOR` para la escala frente al BUN/Cr clásico)."""
     if urea is None or creatinina is None or creatinina == 0:
@@ -178,8 +198,8 @@ def urea_creatinina_ratio(urea: Optional[float], creatinina: Optional[float]) ->
 
 
 def aki_ratio(
-    creatinina_actual: Optional[float], creatininas_previas: list[tuple[str, float]], fecha: str
-) -> Optional[float]:
+    creatinina_actual: float | None, creatininas_previas: list[tuple[str, float]], fecha: str
+) -> float | None:
     """Ratio de la creatinina actual frente a la mediana de las creatininas
     de ese paciente entre `AKI_WINDOW_MIN_DAYS` y `AKI_WINDOW_MAX_DAYS` días
     antes de `fecha` (criterio 1 de Sawhney et al. 2015). `creatininas_previas`
@@ -190,8 +210,12 @@ def aki_ratio(
         return None
     referencia = dt.date.fromisoformat(fecha[:10])
     ventana = [
-        value for f, value in creatininas_previas
-        if f != fecha and AKI_WINDOW_MIN_DAYS <= (referencia - dt.date.fromisoformat(f[:10])).days <= AKI_WINDOW_MAX_DAYS
+        value
+        for f, value in creatininas_previas
+        if f != fecha
+        and AKI_WINDOW_MIN_DAYS
+        <= (referencia - dt.date.fromisoformat(f[:10])).days
+        <= AKI_WINDOW_MAX_DAYS
     ]
     if not ventana:
         return None
@@ -199,7 +223,7 @@ def aki_ratio(
 
 
 def _index_point(
-    fecha: str, value: float, ref_low: Optional[float], ref_high: Optional[float], raw_name: str
+    fecha: str, value: float, ref_low: float | None, ref_high: float | None, raw_name: str
 ) -> dict[str, Any]:
     """Fila con la misma forma que `repository.get_series`, para reutilizar
     `charts.evolution_figure`/`comparison_figure` sin cambios."""
@@ -234,12 +258,20 @@ def get_renal_index_series(con, patient_id: int) -> dict[str, list[dict[str, Any
         r = urea_creatinina_ratio(urea, creatinina)
         if r is not None:
             series["idx_urea_creatinina"].append(
-                _index_point(fecha, r, UREA_CREATININA_LOW, UREA_CREATININA_HIGH, "Ratio urea/creatinina")
+                _index_point(
+                    fecha, r, UREA_CREATININA_LOW, UREA_CREATININA_HIGH, "Ratio urea/creatinina"
+                )
             )
         ratio_aki = aki_ratio(creatinina, creatininas_todas, fecha)
         if ratio_aki is not None:
             series["idx_aki_creatinina"].append(
-                _index_point(fecha, ratio_aki, None, AKI_RATIO_HIGH, "Creatinina actual / mediana del último año")
+                _index_point(
+                    fecha,
+                    ratio_aki,
+                    None,
+                    AKI_RATIO_HIGH,
+                    "Creatinina actual / mediana del último año",
+                )
             )
 
     return {key: points for key, points in series.items() if points}
@@ -255,7 +287,7 @@ INDEX_LABELS = {
 }
 
 
-def get_latest_renal_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
+def get_latest_renal_summary(con, patient_id: int) -> dict[str, Any] | None:
     """Último informe con filtrado glomerular estimado disponible, con la
     clasificación KDIGO (si también hay un ACR utilizable ese mismo día) y
     los índices calculables. `None` si el paciente no tiene ningún FG en

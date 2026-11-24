@@ -3,13 +3,35 @@ from pathlib import Path
 import pytest
 
 import analitix.catalog as catalog
-from analitix.textutils import normalize_name, normalize_test_name, strip_accents
+from analitix.textutils import (
+    join_full_name,
+    name_splits,
+    normalize_name,
+    normalize_test_name,
+    split_full_name,
+    strip_accents,
+)
 
 
 def test_text_normalization():
     assert strip_accents("Árbol Ñandú") == "Arbol Nandu"
     assert normalize_name("  García, María-José ") == "MARIA JOSE GARCIA"
     assert normalize_test_name("Colesterol HDL (sèrum)!") == "colesterol hdl serum"
+
+
+def test_full_name_split_and_join():
+    assert split_full_name("García López, María José") == ("María José", "García López")
+    assert split_full_name("MARIA JOSE GARCIA LOPEZ") is None
+    assert join_full_name(" María José ", "García López") == "García López, María José"
+    assert join_full_name("", "García López") == "García López"
+    # La forma guardada empareja con el nombre sin coma de los informes.
+    assert normalize_name(join_full_name("Ana", "Ruiz Gil")) == normalize_name("ANA RUIZ GIL")
+    assert name_splits("ANA RUIZ GIL") == [
+        ("ANA", "RUIZ GIL"),
+        ("ANA RUIZ", "GIL"),
+        ("GIL", "ANA RUIZ"),
+        ("RUIZ GIL", "ANA"),
+    ]
 
 
 def test_catalog_aliases_and_description(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -44,6 +66,7 @@ def test_percent_and_absolute_get_separate_ids(tmp_path: Path, monkeypatch: pyte
 
 def test_unit_equivalences():
     from analitix.textutils import is_count_1e9_l, is_count_1e12_l, unit_key
+
     for unit in ("x10^3/ul", "x10^3_u/mcL", "x10³/mm³", "x10^9/L", "·10³/µl"):
         assert is_count_1e9_l(unit), unit
     for unit in ("x10^6/ul", "x106/mm³", "x10^12/L"):
@@ -55,7 +78,9 @@ def test_unit_equivalences():
 def test_user_aliases_layer_over_bundled_ones(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Ejecutable instalado: alias de la app (solo lectura) + los del usuario.
     bundled, user = tmp_path / "bundled.csv", tmp_path / "user.csv"
-    bundled.write_text("alias_normalizado,canonical_id\nhierro,ferro_serum\nurea,urea_app\n", encoding="utf-8")
+    bundled.write_text(
+        "alias_normalizado,canonical_id\nhierro,ferro_serum\nurea,urea_app\n", encoding="utf-8"
+    )
     user.write_text("alias_normalizado,canonical_id\nurea,urea_usuario\n", encoding="utf-8")
     monkeypatch.setattr(catalog, "BUNDLED_CATALOG_PATH", bundled)
     monkeypatch.setattr(catalog, "CATALOG_PATH", user)
@@ -67,3 +92,17 @@ def test_user_aliases_layer_over_bundled_ones(tmp_path: Path, monkeypatch: pytes
     assert "hierro" not in user.read_text(encoding="utf-8")  # no copia los de la app
     assert "glucosa plasma,glucosa_serum" in user.read_text(encoding="utf-8")
     assert "glucosa" not in bundled.read_text(encoding="utf-8")
+
+
+def test_globulines_percent_and_mass_get_separate_ids(monkeypatch: pytest.MonkeyPatch):
+    """El proteinograma trae «Globulines %» y «Globulines» (g/dL) en el
+    mismo informe: con el mismo id se mezclaban en una sola serie. Usa el
+    CSV de alias de la aplicación (el autouse de conftest lo sustituye)."""
+    from analitix.config import BUNDLED_CATALOG_PATH
+
+    monkeypatch.setattr(catalog, "CATALOG_PATH", BUNDLED_CATALOG_PATH)
+    monkeypatch.setattr(catalog, "BUNDLED_CATALOG_PATH", BUNDLED_CATALOG_PATH)
+    catalog.reload_overrides()
+    assert catalog.canonical_id_for("Globulines %") == "globulines_pct"
+    assert catalog.canonical_id_for("Globulines") == "globulines"
+    assert catalog.canonical_id_for("Globulines totals %") == "globulines_totals_pct"

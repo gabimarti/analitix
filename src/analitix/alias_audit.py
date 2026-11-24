@@ -41,6 +41,7 @@ confianza alta; convertibles con factor (g/L frente a g/dL) → se informan
 pero no se proponen como alias (fusionarlas mezclaría escalas en Evolución);
 incompatibles (% frente a mmol/mol) → nunca se proponen.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -49,7 +50,6 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from analitix.catalog import canonical_id_for
 from analitix.config import PROJECT_ROOT, REPORTS_DIR
@@ -68,53 +68,170 @@ _PAREN_RE = re.compile(r"\(([^)]*)\)")
 _NOISY_NAME_RE = re.compile(r"\d\s*(?:u/?i?/?l|ui/l|mg|g/|%|u/ml)|<\s*\d|^\*|^total$", re.I)
 
 STOPWORDS = {
-    "serum", "suero", "sero", "en", "de", "del", "la", "el", "d", "l", "plasma", "sang", "sangre", "total",
-    "totales", "totals", "c", "subst", "massa", "cat", "nom", "vol", "fr", "i", "y", "per", "por", "v",
-    "absoluto", "absolut", "g", "dl", "mg", "ml", "u", "ui", "io", "ion",
+    "serum",
+    "suero",
+    "sero",
+    "en",
+    "de",
+    "del",
+    "la",
+    "el",
+    "d",
+    "l",
+    "plasma",
+    "sang",
+    "sangre",
+    "total",
+    "totales",
+    "totals",
+    "c",
+    "subst",
+    "massa",
+    "cat",
+    "nom",
+    "vol",
+    "fr",
+    "i",
+    "y",
+    "per",
+    "por",
+    "v",
+    "absoluto",
+    "absolut",
+    "g",
+    "dl",
+    "mg",
+    "ml",
+    "u",
+    "ui",
+    "io",
+    "ion",
 }
 # Catalán/castellano -> pivote (el catalán, que es el de los id existentes).
 TRANSLATE = {
-    "hierro": "ferro", "urato": "urat", "calcio": "calci", "sodio": "sodi", "potasio": "potassi",
-    "cloruro": "clor", "magnesio": "magnesi", "fosforo": "fosfat", "fosfato": "fosfat",
-    "plaquetas": "plaquetes", "plaquetario": "plaquetari", "plaquetar": "plaquetari",
-    "leucocitos": "leucocits", "linfocitos": "limfocits", "linfocits": "limfocits",
-    "neutrofilos": "neutrofils", "monocitos": "monocits", "eosinofilos": "eosinofils", "basofilos": "basofils",
-    "bilirrubina": "bilirubina", "proteinas": "proteines", "creatinini": "creatinina",
-    "trigliceridos": "triglicerids", "hematocrito": "hematocrit", "libre": "lliure", "folato": "folat",
-    "acido": "acid", "urico": "uric", "globulinas": "globulines", "velocidad": "velocitat",
-    "sedimentacion": "sedimentacio", "tiempo": "temps", "actividad": "activitat", "segundos": "segons",
-    "ratio": "rati", "calculados": "calculats", "medio": "mig", "media": "mig", "mitja": "mig",
-    "volumen": "volum", "concentracion": "conc", "orina": "orina", "anticuerpos": "anticossos",
-    "inmunoglobulina": "immunoglobulina", "microglobulina": "microglobulina", "transaminasa": "aminotransferasa",
-    "aminotranferasa": "aminotransferasa", "aspartato": "aspartat",
+    "hierro": "ferro",
+    "urato": "urat",
+    "calcio": "calci",
+    "sodio": "sodi",
+    "potasio": "potassi",
+    "cloruro": "clor",
+    "magnesio": "magnesi",
+    "fosforo": "fosfat",
+    "fosfato": "fosfat",
+    "plaquetas": "plaquetes",
+    "plaquetario": "plaquetari",
+    "plaquetar": "plaquetari",
+    "leucocitos": "leucocits",
+    "linfocitos": "limfocits",
+    "linfocits": "limfocits",
+    "neutrofilos": "neutrofils",
+    "monocitos": "monocits",
+    "eosinofilos": "eosinofils",
+    "basofilos": "basofils",
+    "bilirrubina": "bilirubina",
+    "proteinas": "proteines",
+    "creatinini": "creatinina",
+    "trigliceridos": "triglicerids",
+    "hematocrito": "hematocrit",
+    "libre": "lliure",
+    "folato": "folat",
+    "acido": "acid",
+    "urico": "uric",
+    "globulinas": "globulines",
+    "velocidad": "velocitat",
+    "sedimentacion": "sedimentacio",
+    "tiempo": "temps",
+    "actividad": "activitat",
+    "segundos": "segons",
+    "ratio": "rati",
+    "calculados": "calculats",
+    "medio": "mig",
+    "media": "mig",
+    "mitja": "mig",
+    "volumen": "volum",
+    "concentracion": "conc",
+    "orina": "orina",
+    "anticuerpos": "anticossos",
+    "inmunoglobulina": "immunoglobulina",
+    "microglobulina": "microglobulina",
+    "transaminasa": "aminotransferasa",
+    "aminotranferasa": "aminotransferasa",
+    "aspartato": "aspartat",
 }
 # Abreviaturas equivalentes -> pivote. Solo cuentan como señal de identidad
 # si van entre paréntesis o son el nombre entero ("HCM"): en "Colesterol HDL"
 # la sigla es un calificativo, no un sinónimo del nombre.
 ABBREV = {
-    "got": "ast", "ast": "ast", "gpt": "alt", "alt": "alt", "ggt": "ggt", "vcm": "vcm", "mcv": "vcm",
-    "hcm": "hcm", "mch": "hcm", "chcm": "chcm", "mchc": "chcm", "rdw": "rdw", "vpm": "vpm", "mpv": "vpm",
-    "tsh": "tsh", "t4l": "t4l", "ft4": "t4l", "ldh": "ldh", "hba1c": "hba1c", "vsg": "vsg", "alp": "alp",
-    "cea": "cea", "psa": "psa", "igm": "igm", "igg": "igg", "iga": "iga", "ige": "ige", "hco3": "hco3",
+    "got": "ast",
+    "ast": "ast",
+    "gpt": "alt",
+    "alt": "alt",
+    "ggt": "ggt",
+    "vcm": "vcm",
+    "mcv": "vcm",
+    "hcm": "hcm",
+    "mch": "hcm",
+    "chcm": "chcm",
+    "mchc": "chcm",
+    "rdw": "rdw",
+    "vpm": "vpm",
+    "mpv": "vpm",
+    "tsh": "tsh",
+    "t4l": "t4l",
+    "ft4": "t4l",
+    "ldh": "ldh",
+    "hba1c": "hba1c",
+    "vsg": "vsg",
+    "alp": "alp",
+    "cea": "cea",
+    "psa": "psa",
+    "igm": "igm",
+    "igg": "igg",
+    "iga": "iga",
+    "ige": "ige",
+    "hco3": "hco3",
 }
 
 # Unidades: (dimensión, factor a la unidad de referencia de esa dimensión).
 _UNITS: dict[str, tuple[str, float]] = {
-    "g/l": ("masa", 1.0), "g/dl": ("masa", 10.0), "mg/dl": ("masa", 0.01), "mg/l": ("masa", 0.001),
-    "mcg/ml": ("masa", 0.001), "mcg/dl": ("masa", 1e-5), "mcg/l": ("masa", 1e-6), "ng/ml": ("masa", 1e-6),
-    "ng/dl": ("masa", 1e-8), "pg/ml": ("masa", 1e-9),
-    "mmol/l": ("sustancia", 1.0), "meq/l": ("sustancia", 1.0), "mcmol/l": ("sustancia", 1e-3),
-    "u/l": ("actividad", 1.0), "ui/l": ("actividad", 1.0), "iu/l": ("actividad", 1.0),
-    "ui/l37c": ("actividad", 1.0), "u/l37c": ("actividad", 1.0),
-    "mcui/ml": ("hormona", 1.0), "mciu/ml": ("hormona", 1.0), "mu/l": ("hormona", 1.0), "mui/l": ("hormona", 1.0),
-    "iu/ml": ("ui_ml", 1.0), "ui/ml": ("ui_ml", 1.0), "ku/l": ("ui_ml", 1.0), "kua/l": ("ui_ml", 1.0),
+    "g/l": ("masa", 1.0),
+    "g/dl": ("masa", 10.0),
+    "mg/dl": ("masa", 0.01),
+    "mg/l": ("masa", 0.001),
+    "mcg/ml": ("masa", 0.001),
+    "mcg/dl": ("masa", 1e-5),
+    "mcg/l": ("masa", 1e-6),
+    "ng/ml": ("masa", 1e-6),
+    "ng/dl": ("masa", 1e-8),
+    "pg/ml": ("masa", 1e-9),
+    "mmol/l": ("sustancia", 1.0),
+    "meq/l": ("sustancia", 1.0),
+    "mcmol/l": ("sustancia", 1e-3),
+    "u/l": ("actividad", 1.0),
+    "ui/l": ("actividad", 1.0),
+    "iu/l": ("actividad", 1.0),
+    "ui/l37c": ("actividad", 1.0),
+    "u/l37c": ("actividad", 1.0),
+    "mcui/ml": ("hormona", 1.0),
+    "mciu/ml": ("hormona", 1.0),
+    "mu/l": ("hormona", 1.0),
+    "mui/l": ("hormona", 1.0),
+    "iu/ml": ("ui_ml", 1.0),
+    "ui/ml": ("ui_ml", 1.0),
+    "ku/l": ("ui_ml", 1.0),
+    "kua/l": ("ui_ml", 1.0),
     "mmol/mol": ("mmol/mol", 1.0),
-    "%": ("%", 1.0), "fl": ("fl", 1.0), "pg": ("pg", 1.0), "mm/h": ("mm/h", 1.0),
-    "s": ("s", 1.0), "seg": ("s", 1.0), "segons": ("s", 1.0),
+    "%": ("%", 1.0),
+    "fl": ("fl", 1.0),
+    "pg": ("pg", 1.0),
+    "mm/h": ("mm/h", 1.0),
+    "s": ("s", 1.0),
+    "seg": ("s", 1.0),
+    "segons": ("s", 1.0),
 }
 
 
-def unit_dimension(unit: Optional[str]) -> Optional[tuple[str, float]]:
+def unit_dimension(unit: str | None) -> tuple[str, float] | None:
     """(dimensión, factor) de una unidad, o `None` si no se reconoce (o no
     tiene: índices, cocientes, resultados cualitativos)."""
     u = unit_key(unit)
@@ -130,13 +247,17 @@ def unit_dimension(unit: Optional[str]) -> Optional[tuple[str, float]]:
 
 
 def unit_relation(units_a: set[str], units_b: set[str]) -> str:
-    """"igual" (mismas unidades o equivalentes), "convertible" (misma
+    """ "igual" (mismas unidades o equivalentes), "convertible" (misma
     dimensión con otro factor), "incompatible", o "desconocida" si alguna
     no se reconoce."""
     dims_a = {unit_dimension(u) for u in units_a if u}
     dims_b = {unit_dimension(u) for u in units_b if u}
     if None in dims_a or None in dims_b or not dims_a or not dims_b:
-        return "igual" if {unit_key(u) for u in units_a} == {unit_key(u) for u in units_b} else "desconocida"
+        return (
+            "igual"
+            if {unit_key(u) for u in units_a} == {unit_key(u) for u in units_b}
+            else "desconocida"
+        )
     if dims_a == dims_b:
         return "igual"
     if {d for d, _ in dims_a} == {d for d, _ in dims_b}:
@@ -201,12 +322,25 @@ def collect(pdf_dir: Path) -> dict[str, TestGroup]:
     for i, path in enumerate(sorted(pdf_dir.rglob("*.pdf"))):
         parsed = parse_report(path)
         for res in parsed["results"]:
-            add_result(groups, res["raw_name"], res["unit"], parsed["format_id"], res.get("loinc_code"), str(i))
+            add_result(
+                groups,
+                res["raw_name"],
+                res["unit"],
+                parsed["format_id"],
+                res.get("loinc_code"),
+                str(i),
+            )
     return groups
 
 
-def add_result(groups: dict[str, TestGroup], raw_name: str, unit: Optional[str], lab: str,
-               loinc: Optional[str] = None, report: str = "") -> None:
+def add_result(
+    groups: dict[str, TestGroup],
+    raw_name: str,
+    unit: str | None,
+    lab: str,
+    loinc: str | None = None,
+    report: str = "",
+) -> None:
     cid = canonical_id_for(raw_name)
     g = groups.setdefault(cid, TestGroup(cid))
     g.raw_names[raw_name] = g.raw_names.get(raw_name, 0) + 1
@@ -227,8 +361,18 @@ def panel_ids() -> set[str]:
     """`canonical_id` que usan los paneles clínicos (constantes `*_IDS`): son
     los preferidos como destino de una fusión."""
     ids: set[str] = set()
-    for mod in ("calcium_risk", "glycemic_risk", "hemogram_risk", "hepatic_risk", "inflammation_risk",
-                "iron_risk", "lipid_risk", "renal_risk", "thyroid_risk", "uric_acid_risk"):
+    for mod in (
+        "calcium_risk",
+        "glycemic_risk",
+        "hemogram_risk",
+        "hepatic_risk",
+        "inflammation_risk",
+        "iron_risk",
+        "lipid_risk",
+        "renal_risk",
+        "thyroid_risk",
+        "uric_acid_risk",
+    ):
         module = importlib.import_module(f"analitix.{mod}")
         for name, value in vars(module).items():
             if name.endswith("_IDS") and isinstance(value, tuple):
@@ -257,13 +401,15 @@ def _relation_of(groups: dict[str, TestGroup], cids: list[str]) -> str:
     order = ("igual", "desconocida", "convertible", "incompatible")
     worst = "igual"
     for i, a in enumerate(with_units):
-        for b in with_units[i + 1:]:
+        for b in with_units[i + 1 :]:
             rel = unit_relation(groups[a].units, groups[b].units)
             worst = max(worst, rel, key=order.index)
     return worst
 
 
-def find_proposals(groups: dict[str, TestGroup], preferred: set[str] = frozenset()) -> list[Proposal]:
+def find_proposals(
+    groups: dict[str, TestGroup], preferred: set[str] = frozenset()
+) -> list[Proposal]:
     """Grupos de `canonical_id` distintos que parecen la misma prueba. Las
     señales que solapan (p. ej. misma abreviatura y misma clave de nombre)
     se unen en un único grupo; los nombres con valor/unidad pegados (fallo
@@ -309,15 +455,24 @@ def find_proposals(groups: dict[str, TestGroup], preferred: set[str] = frozenset
     proposals = []
     for root, cids in components.items():
         ordered = sorted(cids)
-        target = max(ordered, key=lambda c: (c in preferred, bool(groups[c].units), groups[c].n, -len(c)))
-        proposals.append(Proposal(
-            ordered, sorted(set(component_reasons[root])), _relation_of(groups, ordered), target,
-            unitless=[c for c in ordered if not groups[c].units],
-            same_report=[
-                (a, b) for i, a in enumerate(ordered) for b in ordered[i + 1:]
-                if groups[a].reports & groups[b].reports
-            ],
-        ))
+        target = max(
+            ordered, key=lambda c: (c in preferred, bool(groups[c].units), groups[c].n, -len(c))
+        )
+        proposals.append(
+            Proposal(
+                ordered,
+                sorted(set(component_reasons[root])),
+                _relation_of(groups, ordered),
+                target,
+                unitless=[c for c in ordered if not groups[c].units],
+                same_report=[
+                    (a, b)
+                    for i, a in enumerate(ordered)
+                    for b in ordered[i + 1 :]
+                    if groups[a].reports & groups[b].reports
+                ],
+            )
+        )
     return sorted(proposals, key=lambda p: p.target)
 
 
@@ -363,8 +518,11 @@ def mixed_groups(groups: dict[str, TestGroup]) -> list[tuple[TestGroup, str]]:
             continue
         names = sorted(g.name_reports)
         pairs = [
-            f"{a} + {b}" for i, a in enumerate(names) for b in names[i + 1:]
-            if normalize_test_name(a) != normalize_test_name(b) and g.name_reports[a] & g.name_reports[b]
+            f"{a} + {b}"
+            for i, a in enumerate(names)
+            for b in names[i + 1 :]
+            if normalize_test_name(a) != normalize_test_name(b)
+            and g.name_reports[a] & g.name_reports[b]
         ]
         if pairs and len(g.loinc) != 1:
             out.append((g, f"juntos en un mismo informe: {'; '.join(pairs)}"))
@@ -373,11 +531,15 @@ def mixed_groups(groups: dict[str, TestGroup]) -> list[tuple[TestGroup, str]]:
 
 def noisy_names(groups: dict[str, TestGroup]) -> list[str]:
     """Nombres con un valor/unidad/rango pegado (fallo del parser, no de alias)."""
-    return sorted({raw for g in groups.values() for raw in g.raw_names if _NOISY_NAME_RE.search(raw)})
+    return sorted(
+        {raw for g in groups.values() for raw in g.raw_names if _NOISY_NAME_RE.search(raw)}
+    )
 
 
 def _fmt_group(g: TestGroup) -> str:
-    names = ", ".join(f"{name} ({n})" for name, n in sorted(g.raw_names.items(), key=lambda kv: -kv[1])[:3])
+    names = ", ".join(
+        f"{name} ({n})" for name, n in sorted(g.raw_names.items(), key=lambda kv: -kv[1])[:3]
+    )
     return f"`{g.canonical_id}` — {g.n} res., {', '.join(sorted(g.labs))}, unid: {', '.join(sorted(g.units)) or '—'} — {names}"
 
 
@@ -386,16 +548,21 @@ def render_report(groups: dict[str, TestGroup], proposals: list[Proposal]) -> st
     convertible = [p for p in proposals if p.relation == "convertible"]
     doubtful = [p for p in proposals if p.relation in ("incompatible", "desconocida")]
     out = [
-        "# Auditoría de alias de pruebas", "",
+        "# Auditoría de alias de pruebas",
+        "",
         f"{len(groups)} identificadores (`canonical_id`), {sum(len(g.raw_names) for g in groups.values())} "
         "nombres distintos. Nada se ha modificado: revisa y copia lo que proceda a `data/test_aliases.csv`, "
-        "o fusiona desde «Normalizar pruebas».", "",
-        "## 1. Propuestas de fusión (unidades iguales o equivalentes)", "",
+        "o fusiona desde «Normalizar pruebas».",
+        "",
+        "## 1. Propuestas de fusión (unidades iguales o equivalentes)",
+        "",
         "Destino (★) = el que usa un panel clínico o, si no, el de más resultados. Revisa que sean de verdad "
         "la misma prueba (misma muestra y método): la herramienta solo compara textos y unidades, y trata "
         "suero y plasma como equivalentes (la orina, no). Las líneas de esta sección que no llevan ⚠ están "
-        "en el CSV adjunto.", "",
+        "en el CSV adjunto.",
+        "",
     ]
+
     def _members(p: Proposal, star: bool) -> list[str]:
         return [
             f"  - {'★ ' if star and cid == p.target else ''}{_fmt_group(groups[cid])}"
@@ -404,33 +571,59 @@ def render_report(groups: dict[str, TestGroup], proposals: list[Proposal]) -> st
         ]
 
     for p in high:
-        warn = (" — ⚠ aparecen juntas en un mismo informe: pruebas distintas, no van al CSV "
-                f"({', '.join(f'{a}/{b}' for a, b in p.same_report)})") if p.same_report else ""
+        warn = (
+            (
+                " — ⚠ aparecen juntas en un mismo informe: pruebas distintas, no van al CSV "
+                f"({', '.join(f'{a}/{b}' for a, b in p.same_report)})"
+            )
+            if p.same_report
+            else ""
+        )
         out.append(f"- **{'; '.join(p.reasons)}**{warn}")
         out += _members(p, star=True)
-    out += ["", "## 2. Misma prueba probable, unidades convertibles (no se proponen como alias)", "",
-            "Fusionarlas mezclaría escalas en Evolución; si un panel las necesita, se añaden a su lista de "
-            "identificadores con conversión (como la PCR en mg/L o la albúmina en g/L).", ""]
+    out += [
+        "",
+        "## 2. Misma prueba probable, unidades convertibles (no se proponen como alias)",
+        "",
+        "Fusionarlas mezclaría escalas en Evolución; si un panel las necesita, se añaden a su lista de "
+        "identificadores con conversión (como la PCR en mg/L o la albúmina en g/L).",
+        "",
+    ]
     for p in convertible:
         out.append(f"- **{'; '.join(p.reasons)}**")
         out += _members(p, star=False)
-    out += ["", "## 3. Coincidencias descartadas por unidades incompatibles o desconocidas", "",
-            "Normalmente son pruebas distintas con nombre parecido (p. ej. HbA1c en % y en mmol/mol).", ""]
+    out += [
+        "",
+        "## 3. Coincidencias descartadas por unidades incompatibles o desconocidas",
+        "",
+        "Normalmente son pruebas distintas con nombre parecido (p. ej. HbA1c en % y en mmol/mol).",
+        "",
+    ]
     for p in doubtful:
         out.append(f"- **{'; '.join(p.reasons)}** ({p.relation})")
         out += _members(p, star=False)
-    out += ["", "## 4. Identificadores que ya mezclan unidades de dimensión distinta", "",
-            "Posible alias equivocado en el CSV (o dos pruebas distintas con el mismo nombre).", ""]
+    out += [
+        "",
+        "## 4. Identificadores que ya mezclan unidades de dimensión distinta",
+        "",
+        "Posible alias equivocado en el CSV (o dos pruebas distintas con el mismo nombre).",
+        "",
+    ]
     out += [f"- {_fmt_group(g)}" for g in unit_conflicts(groups)] or ["- Ninguno."]
     out += ["", "## 5. Nombres con valor o unidad pegados (revisar el parser, no los alias)", ""]
     out += [f"- {name}" for name in noisy_names(groups)] or ["- Ninguno."]
-    out += ["", "## 6. Identificadores que probablemente mezclan pruebas distintas", "",
-            "Mismo laboratorio con el mismo nombre para muestras distintas (sangre/orina) o alias equivocado.", ""]
+    out += [
+        "",
+        "## 6. Identificadores que probablemente mezclan pruebas distintas",
+        "",
+        "Mismo laboratorio con el mismo nombre para muestras distintas (sangre/orina) o alias equivocado.",
+        "",
+    ]
     out += [f"- {_fmt_group(g)} — {why}" for g, why in mixed_groups(groups)] or ["- Ninguno."]
     return "\n".join(out) + "\n"
 
 
-def main(argv: Optional[list[str]] = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("carpeta", nargs="?", type=Path, default=REPORTS_DIR)
     parser.add_argument("--out", type=Path, default=PROJECT_ROOT / "export" / "auditoria_alias.md")
@@ -441,8 +634,13 @@ def main(argv: Optional[list[str]] = None) -> None:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render_report(groups, proposals), encoding="utf-8")
     csv_path = args.out.with_suffix(".csv")
-    lines = sorted({line for p in proposals if p.relation == "igual" for line in alias_lines(groups, p)})
-    csv_path.write_text("alias_normalizado,canonical_id\n" + "".join(f"{a},{c}\n" for a, c in lines), encoding="utf-8")
+    lines = sorted(
+        {line for p in proposals if p.relation == "igual" for line in alias_lines(groups, p)}
+    )
+    csv_path.write_text(
+        "alias_normalizado,canonical_id\n" + "".join(f"{a},{c}\n" for a, c in lines),
+        encoding="utf-8",
+    )
     print(f"Informe: {args.out}\nPropuestas (confianza alta): {csv_path} ({len(lines)} alias)")
 
 

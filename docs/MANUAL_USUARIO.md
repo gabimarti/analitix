@@ -2,6 +2,7 @@
 
 **Autor:** Gabriel Marti
 **Contacto:** [github.com/gabimarti](https://github.com/gabimarti)
+**Web:** [gabimarti.github.io](https://gabimarti.github.io/)
 
 ---
 
@@ -47,7 +48,7 @@ guarda tus datos:
 | | Instalador de Windows (§1.1) | Desde el código fuente (§1.2) |
 |---|---|---|
 | Para quién | cualquier usuario, sin conocimientos técnicos | usuarios técnicos que clonan el repositorio |
-| Necesita Python | no | sí (3.11 o superior) |
+| Necesita Python | no | sí (3.14 o superior) |
 | Cómo se abre | menú Inicio / escritorio → **Analitix** | `scripts\run_windows.bat` |
 | Dónde están tus datos | la carpeta `Analitix` que elijas al instalar | `data\` e `informes_analiticas\` dentro de la carpeta del proyecto |
 | Cambiar la ubicación de los datos | sí, desde **Configuración** (§2.20) | no hace falta: la decide dónde has clonado el proyecto |
@@ -94,8 +95,10 @@ contiene.
 ### 1.2 Desde el código fuente (usuarios técnicos)
 
 Requisitos: Windows (entorno principal; Linux funciona pero no está tan
-probado) y [Python 3.11 o superior](https://www.python.org/downloads/)
+probado) y [Python 3.14 o superior](https://www.python.org/downloads/)
 accesible desde la línea de comandos (`python --version` debe funcionar).
+En Linux, si tu distribución todavía no incluye Python 3.14, tendrás que
+instalarlo aparte (por ejemplo desde python.org).
 
 1. Coloca tus informes de laboratorio en PDF dentro de la carpeta
    `informes_analiticas/` del proyecto (o indica otra carpeta más adelante
@@ -106,7 +109,9 @@ accesible desde la línea de comandos (`python --version` debe funcionar).
 3. Haz doble clic en `scripts\run_windows.bat` para arrancar la aplicación
    y sigue con §1.3.
 
-La base de datos queda en `data\analitix.db`, dentro del proyecto. En esta
+Las bases de datos quedan en `data\pacientes\` (una por paciente), con la
+lista de bases de datos (`data\bases_de_datos.json`) y la configuración
+(`data\config.json`) al lado, dentro del proyecto. En esta
 forma de uso no aparece el botón "Cambiar ubicación de los datos": la
 ubicación la decide dónde hayas clonado el proyecto, y la app nunca lee la
 configuración de una versión instalada, así que ambas pueden convivir en el
@@ -138,25 +143,53 @@ en cada arranque.
   <img src="images/cargando.png" width="45%" alt="Ventana de carga de Analitix">
 </p>
 
-La primera vez, la app te pedirá **crear una contraseña maestra**. Esa
-contraseña cifra toda tu base de datos (`analitix.db`):
+Cada paciente tiene **su propia base de datos**, cifrada con su
+contraseña. La primera vez se abre la **lista de bases de datos**, todavía
+vacía:
+
+<p align="center">
+  <img src="images/bases_de_datos.png" width="60%" alt="Lista de bases de datos con la de ejemplo y otra de prueba">
+</p>
+
+- **Nueva base de datos...**: escribe un nombre corto del paciente (para
+  reconocerlo en la lista) y el nombre de la base de datos (se propone a
+  partir del nombre). La lista no está cifrada: no pongas datos médicos en
+  esos nombres. Opcionalmente puedes rellenar ya el nombre, los apellidos,
+  la fecha de nacimiento y el DNI del paciente: los informes se comparan
+  con ellos desde el primero.
+
+  <p align="center">
+    <img src="images/nueva_base_datos.png" width="50%" alt="Ventana Nueva base de datos con los datos opcionales del paciente">
+  </p>
+
+- **Base de datos de ejemplo...**: crea una con un paciente ficticio y
+  varios años de analíticas inventadas, para probar la aplicación sin usar
+  tus datos. Su contraseña es `analitix-demo`. Si la borras, la puedes
+  volver a crear.
+- **Añadir existente...**, **Copia de seguridad...** y **Borrar...**: ver
+  [1.4 Copia de seguridad](#14-copia-de-seguridad).
+
+Al crear una base de datos nueva se pide su **contraseña**, dos veces. Esa
+contraseña cifra todos los datos de ese paciente:
 - Guárdala en un lugar seguro. **No hay forma de recuperarla si la
   olvidas**; sin ella, los datos ya importados quedan inaccesibles.
 - No la compartas ni la envíes a nadie.
 
 <p align="center">
-  <img src="images/contrasena_crear.png" width="45%" alt="Diálogo para crear la contraseña de una base de datos nueva">
+  <img src="images/contrasena_crear.png" width="45%" alt="Ventana para crear la contraseña de una base de datos nueva, con las dos casillas">
 </p>
 
-<p align="center">
-  <img src="images/contrasena_repetir.png" width="30%" alt="Diálogo para repetir la contraseña">
-</p>
-
-Después, cada día solo hace falta abrir Analitix e introducir tu contraseña.
+Después, cada día solo hace falta abrir Analitix: se abre la última base de
+datos usada y pide su contraseña (si la cancelas, vuelves a la lista).
 
 <p align="center">
   <img src="images/inicio.png" width="80%" alt="Ventana principal de Analitix al abrirla">
 </p>
+
+Cada base de datos es de **un solo paciente**: para trabajar con otra
+persona, cambia de base de datos (**Archivo → Cambiar de base de
+datos...**). Lo que sigue solo se aplica a bases de datos antiguas, de
+antes de tener una por paciente, que pueden tener varios.
 
 Si en la base de datos hay **varios pacientes**, al abrir la aplicación se
 muestra una ventana **Seleccionar paciente activo** con solo el nombre
@@ -170,11 +203,34 @@ necesitan un paciente quedan deshabilitadas hasta que lo elijas.
 
 ### 1.4 Copia de seguridad
 
-Todos tus datos están en un único fichero, `analitix.db`, en tu carpeta de
-datos (Configuración → **Abrir carpeta de datos**). Cierra Analitix y
-cópialo a otro sitio (otro disco, una nube, un pendrive): va cifrado con tu
-contraseña, así que sin ella ese fichero no sirve de nada a quien lo abra.
-Conviene guardar también tus PDF originales.
+Cada paciente tiene su base de datos en un fichero propio (carpeta
+`pacientes` de tu carpeta de datos), cifrado con su contraseña: sin ella
+ese fichero no sirve de nada a quien lo abra. Conviene guardar también tus
+PDF originales.
+
+- **Hacer una copia**: con la base de datos abierta, **Archivo → Copia de
+  seguridad...** (o Configuración → Seguridad); o, en la lista de bases de
+  datos, selecciona una y pulsa **Copia de seguridad...**. Elige dónde
+  guardarla (otro disco, una nube, un pendrive). Se propone la **carpeta
+  por defecto** que elijas en Configuración → Seguridad (si no hay
+  ninguna, tu carpeta personal). La lista muestra la fecha de la **última
+  copia** de cada una.
+- **Recordatorio**: al abrir una base de datos con informes, si hace más de
+  30 días de la última copia (o no hay ninguna), Analitix te propone
+  hacerla. Cambia los días (o 0 para no recordarlo) en Configuración →
+  Seguridad.
+- **Recuperar una copia** (o traer una base de datos de otro equipo): en la
+  lista de bases de datos, **Añadir existente...**, elige el fichero y
+  ponle un nombre. Se copia a tu carpeta de datos; el fichero elegido no se
+  toca. Se abre con la contraseña que tenía.
+- **Borrar una base de datos**: en la lista, **Borrar...** (pide escribir
+  su nombre para confirmar). Borra el fichero del equipo y no se puede
+  deshacer; tus copias de seguridad no se tocan.
+- **Bases de datos antiguas con varios pacientes**: Pacientes → **Separar
+  en una base de datos por paciente...** crea una por paciente, con sus
+  informes, resultados, objetivos y mediciones, y la misma contraseña (la
+  puedes cambiar después en cada una). La original no se modifica:
+  bórrala desde la lista cuando hayas comprobado las nuevas.
 
 ### 1.5 Diagnóstico de problemas
 
@@ -194,8 +250,9 @@ Al arrancar y escribir tu contraseña, se abre la ventana principal con una
 **barra de menú** arriba (no pestañas): mientras no elijas ninguna opción,
 se ve el logo de Analitix como pantalla de bienvenida. Los menús son:
 
-- **Archivo**: Importar, Exportar, Salir.
-- **Pacientes**: Cambiar paciente activo..., Pacientes.
+- **Archivo**: Importar, Exportar, Cambiar de base de datos..., Salir.
+- **Pacientes**: Ficha del paciente... (y, solo en bases de datos antiguas
+  con varios pacientes, Cambiar paciente activo... y Lista de pacientes).
 - **Entrada manual**: Analíticas..., Tensión arterial... (siempre para el paciente activo).
 - **Análisis**: Evolución, Comparativa, Resumen, Mapa de calor — gráficos a la carta de uno o dos
   parámetros elegidos por ti — y Resumen, una tabla tipo "semáforo" con
@@ -326,6 +383,43 @@ mismo/a, incluso sin usar ningún asistente de IA,
     nacimiento coincidentes, esa misma persona ya registrada por otro centro
     puede acabar con dos fichas de paciente — si es así, fusiónalas
     (§2.2, "Fusionar pacientes").
+- **Informes que no encajan con el paciente** (una base de datos = un
+  paciente): al crear la base de datos puedes escribir, si quieres, el
+  nombre, los apellidos, la fecha de nacimiento y el DNI del paciente; los
+  informes se comparan con esos datos desde el primero, y tus datos no se
+  sustituyen por los de los informes (solo se completan los que falten,
+  como el CIP o el NHC). Si no los escribes, el primer informe que importas
+  fija de quién es. A partir de ahí, un informe cuyos datos no coinciden
+  con los de ese paciente **no se importa** sin preguntarte, para no
+  mezclar nunca los resultados de otra persona. Se importan solos los que
+  coinciden en nombre y fecha de nacimiento (aunque el nombre venga en otro
+  orden, p. ej. "GARCIA LOPEZ JUAN" y "JUAN GARCIA LOPEZ"), o en DNI, CIP o
+  NHC. Los demás aparecen al terminar la importación en la ventana
+  **Informes que no encajan**, con el motivo de cada uno (nombre distinto,
+  sin fecha de nacimiento, NHC distinto...). Al seleccionar uno, debajo se
+  ven los datos leídos del PDF junto a los de la ficha (en rojo los
+  distintos, en gris los que faltan), para ver si es otra persona o si el
+  informe no se ha leído bien:
+  - **Es este paciente**: lo importa y recuerda esos datos (ese nombre,
+    ese NHC...) para que la próxima vez un informe igual se importe solo.
+  - **No es**: lo deja fuera; no se vuelve a preguntar mientras el PDF no
+    cambie. Si es de otra persona, impórtalo en la base de datos de esa
+    persona (Archivo → «Cambiar de base de datos...»).
+  - Si el motivo empieza por **«PROBABLEMENTE OTRA PERSONA»** (fecha de
+    nacimiento, DNI o CIP distintos), compruébalo bien antes de decir que es
+    suyo: aunque algún dato coincida (p. ej. el mismo NHC en otro hospital),
+    lo más probable es que sea de otra persona.
+
+  Puedes volver a abrir esa ventana cuando quieras con el botón **Informes
+  que no encajan...** de esta pantalla. En una base de datos antigua con
+  varios pacientes (de antes de tener una base de datos por paciente), los
+  informes se siguen importando como antes.
+- **Nombre y apellidos**: si el informe trae el nombre como «Apellidos,
+  Nombre» (con coma), se separa solo. Si lo trae sin coma ("NOMBRE
+  APELLIDOS") y no lo escribiste al crear la base de datos, al terminar la
+  importación se te pregunta una vez qué parte es el nombre (puede ser
+  compuesto, p. ej. "JUAN CARLOS"). Con «Más tarde» puedes separarlo
+  después en la ficha del paciente.
 - **Reimportar todo (forzar)**: vuelve a analizar TODOS los PDF de la
   carpeta, incluso los que ya estaban bien importados, sustituyendo sus
   datos por los del nuevo análisis. Útil cuando se actualiza el programa y
@@ -367,8 +461,9 @@ informes.
 
 > Captura con datos **ficticios** ("PACIENTE FICTICIO" y valores inventados, no reales).
 
-Ficha del paciente (**Editar ficha...**), con los datos editables, el
-tabaquismo y la lista de informes importados:
+Ficha del paciente (**Editar ficha...**), con los datos editables (el
+nombre y los apellidos en campos separados), el tabaquismo y la lista de
+informes importados:
 
 <p align="center">
   <img src="images/ficha_paciente.png" width="65%" alt="Ficha editable del paciente con tabaquismo e informes importados">
@@ -572,9 +667,11 @@ anota (ver "🎯 Objetivo indicado por mi médico" más abajo).
 - El mismo número mínimo se aplica a **todos** los gráficos de evolución
   (Evolución, Comparativa, cada panel clínico y el informe PDF): por debajo,
   el gráfico se dibuja con el aviso "⚠ Solo N analíticas (mínimo
-  recomendado: M): evolución poco representativa"; con **una sola**
-  analítica no se dibuja ningún gráfico (un punto suelto parecería una
-  evolución), solo el valor, su fecha y su rango.
+  recomendado: M): evolución poco representativa". Por debajo de otro
+  mínimo, el «Mínimo para dibujar una gráfica» de Configuración (por defecto 3 analíticas en
+  fechas distintas dentro del periodo, nunca menos de 2), no se dibuja el
+  gráfico: se indica cuántas analíticas hacen falta. Ese mismo ajuste decide
+  qué parámetros llevan gráfica en los informes PDF.
 - Selecciona una prueba y pulsa **Ver evolución**. El gráfico muestra:
   - La línea de valores en el tiempo, con un punto por análisis.
   - Las líneas discontinuas de mínimo y máximo del rango de referencia (más
@@ -674,6 +771,12 @@ anota (ver "🎯 Objetivo indicado por mi médico" más abajo).
     demostrable"**: con esos datos no se puede afirmar que cambie. Con
     menos de 5 analíticas o menos de 2 años dice **"pocos datos para
     confirmarla"**. Si hay tendencia, añade una proyección a 3 meses vista.
+    Si el gráfico muestra solo los últimos años (Configuración → General,
+    apartado «Gráficos») y hay analíticas más antiguas, aparecen **dos líneas**:
+    la tendencia de esos últimos años (la línea punteada del gráfico, con
+    su proyección) y la del **total histórico**, calculada igual pero con
+    todas las analíticas y sin proyección. Así se ve si el comportamiento
+    reciente coincide con el de siempre o ha cambiado de sentido.
     Es una orientación, **no un diagnóstico ni una predicción médica**.
   - Solo para el **filtrado glomerular estimado** (FG) existe un umbral de
     ritmo de cambio respaldado por una guía clínica: si el FG baja de forma
@@ -859,12 +962,26 @@ valor respecto al rango de referencia de ese informe:
 - **Gris oscuro con un punto** = hay valor, pero el informe no traía rango.
 - **En blanco** = ese día no se midió ese parámetro.
 
-Arriba se elige qué mostrar: los parámetros que **alguna vez** han estado
-fuera de rango (por defecto), **todos**, o los de **un panel clínico**
-concreto (Hemograma, Hierro, Función renal...). En este último caso el mapa
-enseña exactamente los datos con los que calcula ese panel, lo que ayuda a
-ver si le falta algún dato o si alguno no encaja. Pasa el ratón por una
-casilla para ver el valor, la fecha, el rango y el laboratorio.
+Arriba se elige qué mostrar: los parámetros que han estado **fuera de
+rango en el periodo** (por defecto), **todos**, o los de **un panel
+clínico** concreto (Hemograma, Hierro, Función renal...). En este último
+caso el mapa enseña exactamente los datos con los que calcula ese panel, lo
+que ayuda a ver si le falta algún dato o si alguno no encaja. Pasa el ratón
+por una casilla para ver el valor, la fecha, el rango y el laboratorio.
+
+El mapa respeta el **periodo de las gráficas** (Configuración → General,
+apartado «Gráficos»; por ejemplo, los últimos 5 años): solo enseña las
+analíticas de ese periodo, contado desde la más reciente, y arriba a la
+derecha indica cuántas anteriores quedan ocultas. Un parámetro que estuvo
+fuera de rango hace años pero que en el periodo ha estado siempre bien ya no
+aparece en «fuera de rango en el periodo», y uno que no se ha medido en ese
+tiempo no aparece en ninguna opción. Con «Todo el histórico» se ve el
+historial completo. Al cambiar el periodo, el mapa se redibuja solo.
+
+Si hay muchos parámetros, el mapa se reparte en **páginas** (como mucho 20
+filas cada una) para que las casillas se lean bien: usa los botones **◀** y
+**▶** junto a «Página 1 de 3». Todas las páginas tienen las mismas columnas
+(fechas), así que puedes pasar de una a otra y comparar.
 
 Como el color depende del rango de cada informe, el mapa compara bien
 analíticas de laboratorios distintos aunque usen unidades diferentes.
@@ -1074,11 +1191,15 @@ lenguaje sencillo como en detalle técnico con sus citas**.
     sin señalar ninguna enfermedad concreta.
   - **Aviso de linfocitosis sostenida** (⚠), solo cuando los linfocitos
     superan 5×10⁹/L en **dos o más informes** del paciente (no un valor
-    puntual): fechas afectadas, último valor y una explicación en lenguaje
-    llano y técnico (con las citas científicas europeas en las que se
-    basa) de por qué vale la pena comentarlo con el médico — nunca una
-    sospecha de leucemia ni ningún otro diagnóstico. Se muestra incluso
-    si ese informe no tiene VCM.
+    puntual). Va en la **primera línea** del resumen, con el número de
+    informes y el último valor. La explicación en lenguaje llano y técnico
+    (con las citas científicas europeas en las que se basa) de por qué vale
+    la pena comentarlo con el médico — nunca una sospecha de leucemia ni
+    ningún otro diagnóstico — está en el botón **⚠️ Aviso e información
+    científica** del panel. Se muestra incluso si ese informe no tiene
+    VCM. Si el resumen de un panel no cabe
+    en su recuadro, aparece una barra de desplazamiento a la derecha para
+    ver el resto.
 - Abajo, igual que en Evolución (§2.4), una lista con el histórico de cada
   índice y su gráfico de evolución.
 - **ℹ️ ¿Qué es este índice?**: para cada índice, primero una explicación en
@@ -1417,13 +1538,33 @@ respecto al informe anterior, marcada con "(*)" si es un cambio brusco.
 
 - **Exportar informe completo (PDF)...**: **todos** los parámetros del
   **último informe** — mismo contenido y orden que la pestaña Resumen
-  (§2.6).
+  (§2.6). Antes de generarlo puedes añadir, tras las dos tablas, la
+  **comparativa con la analítica anterior**: la misma tabla por secciones
+  (en el orden del PDF del laboratorio) que el «Detalle de analítica»
+  (§2.6), en uno de estos modos:
+  - **con su variación** respecto a la anterior (todas las filas, con
+    valor anterior, actual, variación, tendencia y estado);
+  - **solo alterados**: las filas fuera de rango en la última analítica
+    o que han entrado o salido de rango respecto a la anterior (también
+    las que se han normalizado), con su variación;
+  - **solo la última analítica**, sin comparar (como el cotejo del
+    detalle de analítica).
+  Sin marcarla, el informe queda como siempre.
 - **Exportar informe de alterados (PDF)...**: solo los parámetros que
   **alguna vez** han estado fuera de rango en **todo el histórico** del
   paciente, aunque en el informe más reciente ya estén normales — con su
   valor más reciente (que puede venir de un informe distinto al último,
   si ese parámetro concreto no se repitió en él). Útil para un
   seguimiento centrado solo en lo que alguna vez dio problema.
+  Antes de generarlo se elige qué parámetros llevan además **gráfica de
+  evolución**: los alterados en sus **últimas 2** analíticas
+  (recomendado), en sus **últimas 3**, o en **cualquier** analítica, siempre
+  **dentro del periodo de las gráficas** (Configuración → General; por
+  ejemplo, los últimos 5 años, contados desde tu analítica más reciente).
+  Un parámetro que solo estuvo alterado antes de ese periodo, o que no se
+  ha medido desde entonces, sigue en la tabla pero no genera gráfica: no
+  enseñaría nada alterado. Con «Todo el histórico» se cuenta toda tu
+  historia. La portada indica el periodo usado.
 
 Ejemplo de **informe de alterados** con el paciente ficticio (portada, tabla
 de parámetros fuera de rango y uno de los gráficos de evolución). El PDF
@@ -1450,17 +1591,25 @@ panel clínico para llevar a una consulta:
   - la tabla del último informe (alterados y resto, como en los informes
     anteriores);
   - **Qué ha cambiado** respecto al informe anterior;
+  - la **comparativa con la analítica anterior**, eligiendo el modo en el
+    desplegable (los mismos tres que en el informe completo: con su
+    variación, solo alterados o solo la última analítica);
   - el **mapa de calor**, eligiendo en el desplegable qué parámetros
-    incluye: los alguna vez fuera de rango, todos, o los de un panel
-    concreto (igual que en la pantalla Mapa de calor).
+    incluye: los fuera de rango en el periodo, todos, o los de un panel
+    concreto (igual que en la pantalla Mapa de calor, con el mismo
+    periodo de las gráficas).
 - **Evolución de parámetros**: marca las casillas de los que quieras, en
   una lista que se desplaza con la barra o con la rueda del ratón. Solo
-  aparecen las pruebas con al menos 2 analíticas.
+  aparecen las pruebas con al menos el «Mínimo para dibujar una gráfica»
+  (Configuración, §2.20); si alguna no lo alcanza dentro del periodo, se
+  queda sin gráfica y se indica al terminar.
 - **Paneles clínicos**: cada panel incluye su resumen, tal como lo ves en
   pantalla, y sus gráficos. Los paneles sin datos aparecen desactivados.
-- **⚠ marca lo alterado**: los parámetros que alguna vez han estado fuera
-  de rango y los paneles con algún índice por encima del umbral
-  orientativo. **Marcar alterados** los selecciona todos de una vez y
+- **⚠ marca lo alterado**: los parámetros que han estado fuera de rango
+  y los paneles con algún índice por encima del umbral orientativo,
+  **dentro del periodo de las gráficas** (Configuración → General), que es
+  lo que se dibuja: así no se proponen gráficos sin nada alterado a la
+  vista. Con «Todo el histórico», cualquier vez. **Marcar alterados** los selecciona todos de una vez y
   **Desmarcar todo** deja el informe en blanco para empezar de cero.
 - El informe usa **los mismos ajustes que la pantalla**: los laboratorios
   incluidos (el filtro aparece en la portada y en el pie), el aviso de
@@ -1697,13 +1846,23 @@ desplazamiento.
   **Cambiar carpeta...** para apuntar a otra ubicación (por ejemplo, si
   guardas tus PDF en otro sitio o quieres tener varias carpetas). El cambio
   se recuerda para la próxima vez que abras la app.
-- **Gráficos**: nº mínimo de analíticas para que una evolución se
-  considere representativa (por defecto 4, mínimo 2). Se aplica a todos los
-  gráficos de evolución, incluidos los paneles clínicos y el PDF: por debajo
-  llevan un aviso y con una sola analítica no se dibuja el gráfico (ver
-  §2.4). En Evolución/Comparativa, esas pruebas se agrupan además al final
-  de la lista. Cambia el número y pulsa **Guardar**; se aplica al volver a
-  abrir el gráfico.
+- **Gráficos**: dos mínimos de analíticas (contadas en fechas distintas,
+  dentro del periodo de las gráficas), los mismos para la pantalla
+  (Evolución, Comparativa, paneles clínicos) y para los informes PDF:
+  - **Mínimo para dibujar una gráfica** (por defecto 3, nunca menos de 2):
+    con menos, en pantalla se indica cuántas analíticas hacen falta y en los
+    informes el parámetro sigue en las tablas pero sin gráfica; en el
+    informe personalizado, el mensaje final indica qué parámetros elegidos
+    se han quedado sin ella.
+  - **Mínimo para no mostrar el aviso de pocos datos** (por defecto 4):
+    entre los dos mínimos la gráfica se dibuja con el aviso «⚠ Solo N
+    analíticas», y en Evolución/Comparativa la prueba va al final de la
+    lista (ver §2.4). No puede ser menor que el anterior; si lo pones más
+    bajo, se sube solo.
+
+  Con los valores por defecto: 2 analíticas, sin gráfica; 3, gráfica con
+  aviso; 4 o más, gráfica sin aviso. Pulsa **Guardar** (uno para los dos);
+  Evolución y Comparativa se redibujan al momento.
 - **Actualizaciones**: activa **Comprobar al iniciar** para que Analitix
   mire si hay una versión nueva cada vez que se abre (desactivado por
   defecto), o pulsa **Buscar ahora** para comprobarlo en el momento (ver
@@ -1723,10 +1882,13 @@ desplazamiento.
 
 **Seguridad**
 
-- **Cambiar contraseña...**: cambia la contraseña maestra de la base de
-  datos sin perder ningún dato. Te pedirá la nueva contraseña dos veces
-  (para confirmarla). A partir de ese momento necesitarás la nueva
-  contraseña para abrir la app.
+- **Cambiar contraseña...**: cambia la contraseña de la base de datos
+  abierta (la del paciente actual) sin perder ningún dato. Te pedirá la
+  nueva contraseña dos veces (para confirmarla). A partir de ese momento
+  necesitarás la nueva contraseña para abrir esa base de datos; las de los
+  demás pacientes no cambian.
+- **Copia de seguridad**: carpeta por defecto de las copias, **Hacer copia
+  de seguridad...** y cada cuántos días recordártelo (ver §1.4).
 
 **Datos**
 
@@ -1757,9 +1919,7 @@ desplazamiento.
   con y sin error, y el tamaño del fichero de la base de datos. Pulsa
   **Actualizar** para refrescar tras una importación.
 - **Ubicación de la base de datos** y botón **Abrir carpeta de datos**: la
-  carpeta donde está guardada. Para hacer una copia de seguridad, cierra
-  Analitix y copia el fichero `analitix.db` a otro sitio (va cifrado con tu
-  contraseña; sin ella no se puede abrir).
+  carpeta donde está guardada. Para hacer una copia de seguridad, ver §1.4.
 - **Cambiar ubicación de los datos...** (solo en la versión instalada): lleva
   tu carpeta `Analitix` (base de datos, alias y PDF) a otra ubicación. Si en
   la nueva ya hay datos de Analitix, se usan esos; si no, se **copian** los
@@ -1771,11 +1931,17 @@ desplazamiento.
 
 Muestra el logo de Analitix, el nombre de la aplicación, el autor (Gabriel
 Marti), el **correo de contacto del proyecto** (contact@analitix.slmail.me; pulsable,
-abre tu programa de correo) y un enlace a su perfil de GitHub (pulsable,
-abre el navegador).
+abre tu programa de correo) y enlaces a su perfil de GitHub y a su página
+personal, gabimarti.github.io (pulsables, abren el navegador).
+
+Debajo, el botón **Invítame a un café en Ko-fi** abre en el navegador la
+página para apoyar el proyecto con una donación (también en **Ayuda →
+Apoyar el proyecto (Ko-fi)...**). Es totalmente voluntario: Analitix es y
+seguirá siendo gratuito y no da acceso a nada extra. La aplicación no se
+conecta a Ko-fi; solo abre el enlace.
 
 <p align="center">
-  <img src="images/acerca_de.png" width="35%" alt="Ventana Acerca de Analitix">
+  <img src="images/acerca_de.png" width="35%" alt="Ventana Acerca de Analitix con el botón de Ko-fi">
 </p>
 
 ### 2.22 🔄 Ayuda → Buscar actualizaciones...

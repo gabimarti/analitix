@@ -24,23 +24,51 @@ def test_corrected_calcium():
     assert corrected_calcium(8.0, None) is None
 
 
-def _insert_report(con, patient_id, report_number, fecha, calci=None, albumina=None, ref_low=8.5, ref_high=10.5):
+def _insert_report(
+    con, patient_id, report_number, fecha, calci=None, albumina=None, ref_low=8.5, ref_high=10.5
+):
     report_id = upsert_report(con, patient_id, report_number, fecha, None, "synthetic.pdf")
     if calci is not None:
         insert_result(
-            con, report_id,
-            dict(section=None, test_group=None, loinc_code=None, raw_name="Calci",
-                 canonical_id="calci_serum", value_raw=str(calci), value_num=calci, unit="mg/dl",
-                 ref_low=ref_low, ref_high=ref_high, ref_text=None, flag_pdf=None, flag_calc=None,
-                 sample_date=None),
+            con,
+            report_id,
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name="Calci",
+                canonical_id="calci_serum",
+                value_raw=str(calci),
+                value_num=calci,
+                unit="mg/dl",
+                ref_low=ref_low,
+                ref_high=ref_high,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=None,
+                sample_date=None,
+            ),
         )
     if albumina is not None:
         insert_result(
-            con, report_id,
-            dict(section=None, test_group=None, loinc_code=None, raw_name="Albumina",
-                 canonical_id="albumina_serum", value_raw=str(albumina), value_num=albumina, unit="g/dl",
-                 ref_low=None, ref_high=None, ref_text=None, flag_pdf=None, flag_calc=None,
-                 sample_date=None),
+            con,
+            report_id,
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name="Albumina",
+                canonical_id="albumina_serum",
+                value_raw=str(albumina),
+                value_num=albumina,
+                unit="g/dl",
+                ref_low=None,
+                ref_high=None,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=None,
+                sample_date=None,
+            ),
         )
     con.commit()
 
@@ -58,7 +86,9 @@ def test_series_only_on_dates_with_both_values(db):
 
 def test_series_reuses_lab_reference_range(db):
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
-    _insert_report(db, patient_id, "R1", "2024-01-01", calci=8.0, albumina=2.0, ref_low=8.5, ref_high=10.5)
+    _insert_report(
+        db, patient_id, "R1", "2024-01-01", calci=8.0, albumina=2.0, ref_low=8.5, ref_high=10.5
+    )
     series = get_calcium_index_series(db, patient_id)
     point = series["idx_calcio_corregido"][0]
     assert point["ref_low"] == 8.5

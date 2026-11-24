@@ -21,6 +21,7 @@ necesitando motor de parseo nuevo en `pdf_parser.py` el día que se implemente
 de verdad — este módulo solo cubre la detección de qué perfil aplica a cada
 PDF y los datos de reconocimiento, no un lenguaje universal de gramáticas.
 """
+
 from __future__ import annotations
 
 import re
@@ -28,7 +29,6 @@ import tomllib
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
 
 from analitix.config import PARSER_PROFILES_DIR
 from analitix.textutils import strip_accents
@@ -52,8 +52,8 @@ class ParserProfile:
     signature_requires_any: list[str] = field(default_factory=list)
     signature_header_label_any: list[str] = field(default_factory=list)
     header_labels: list[tuple[str, str]] = field(default_factory=list)
-    sample_date_label: Optional[tuple[str, str]] = None
-    boundary_re: Optional[re.Pattern] = None
+    sample_date_label: tuple[str, str] | None = None
+    boundary_re: re.Pattern | None = None
     known_sections: set[str] = field(default_factory=set)
     known_text_values: list[str] = field(default_factory=list)
     # Habilita, para perfiles cuya gramática de resultado no lleva marcador
@@ -101,7 +101,7 @@ class ParserProfile:
     # `pdf_parser.extract_lines`); `None` (por defecto) usa el valor por
     # defecto de `pdfplumber`. Solo hace falta bajarlo en plantillas cuya
     # fuente funde palabras contiguas sin espacio (p. ej. Echevarne).
-    extract_x_tolerance: Optional[float] = None
+    extract_x_tolerance: float | None = None
     # Patrones (regex, comprobados con `re.search` sobre la línea ya
     # extraída) que descartan la línea sin más procesado — ruido de
     # maquetación que se repite en cada página y que, sin excluirlo, se
@@ -128,7 +128,7 @@ class ParserProfile:
     # Echevarne: "Sra. Apellido Uno Apellido Dos, Nombre..." tras un
     # tratamiento sin ninguna etiqueta "Nombre:"). `None` (por defecto)
     # desactiva esta extracción, usando solo `header_labels`.
-    full_name_re: Optional[re.Pattern] = None
+    full_name_re: re.Pattern | None = None
     # Regex con grupos nombrados opcionales `report_number`/`sample_date`/
     # `request_date`/`validation_date` para una fila de metadatos en la que
     # las etiquetas y los valores van en líneas separadas, no "Etiqueta:
@@ -137,7 +137,7 @@ class ParserProfile:
     # en la línea siguiente, de los valores en ese mismo orden — se
     # reconoce la fila de valores directamente por su forma, sin necesitar
     # la fila de etiquetas). `None` (por defecto) desactiva esta gramática.
-    metadata_row_re: Optional[re.Pattern] = None
+    metadata_row_re: re.Pattern | None = None
     # Sustituciones (regex, reemplazo) aplicadas a cada línea antes de
     # clasificarla, para reparar artefactos de extracción propios de una
     # plantilla (p. ej. Maresme antiguo: el nombre se solapa con la columna
@@ -148,7 +148,7 @@ class ParserProfile:
     # referencia (p. ej. Synlab: la marca " ü " delante del valor; HUGTIP:
     # "Srm-...; c. subst. <valor> <unidad>"). Sin esto la fila se descarta.
     # `None` (por defecto) desactiva esta gramática.
-    unranged_result_re: Optional[re.Pattern] = None
+    unranged_result_re: re.Pattern | None = None
     # Etiquetas tras las que, en las líneas siguientes, viene el rango de un
     # resultado que no lo trae en su propia fila: un rango suelto al inicio
     # de línea ("Valors recomanats:" / "<200 ( 5.2 mmol/L )", HUGTIP) o
@@ -175,12 +175,15 @@ UNKNOWN_PROFILE = ParserProfile(
 )
 
 
-def _build_boundary_re(terms: list[str]) -> Optional[re.Pattern]:
+def _build_boundary_re(terms: list[str]) -> re.Pattern | None:
     if not terms:
         return None
     pattern = (
-        r"(?:" + "|".join(re.escape(strip_accents(t)) for t in terms) + r")"
-        + _TRANSLATION_SUFFIX + r"\s*:"
+        r"(?:"
+        + "|".join(re.escape(strip_accents(t)) for t in terms)
+        + r")"
+        + _TRANSLATION_SUFFIX
+        + r"\s*:"
     )
     return re.compile(pattern, re.IGNORECASE)
 
@@ -217,11 +220,16 @@ def _load_profile(path: Path) -> ParserProfile:
         dot_leader_result=data.get("dot_leader_result", False),
         single_result_name_placeholder=data.get("single_result_name_placeholder", ""),
         full_name_re=re.compile(data["full_name_re"]) if data.get("full_name_re") else None,
-        metadata_row_re=re.compile(data["metadata_row_re"]) if data.get("metadata_row_re") else None,
+        metadata_row_re=re.compile(data["metadata_row_re"])
+        if data.get("metadata_row_re")
+        else None,
         line_substitutions=[
-            (re.compile(item["pattern"]), item["replacement"]) for item in data.get("line_substitutions", [])
+            (re.compile(item["pattern"]), item["replacement"])
+            for item in data.get("line_substitutions", [])
         ],
-        unranged_result_re=re.compile(data["unranged_result_re"]) if data.get("unranged_result_re") else None,
+        unranged_result_re=re.compile(data["unranged_result_re"])
+        if data.get("unranged_result_re")
+        else None,
         following_range_labels=data.get("following_range_labels", []),
         section_name_suffixes=data.get("section_name_suffixes", {}),
     )

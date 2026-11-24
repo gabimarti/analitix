@@ -11,21 +11,25 @@ En cada ejecución se comparan todos los PDF de `informes_analiticas` (sin
 importar su fecha) contra la tabla `processed_files`; solo se parsean los
 ficheros nuevos o cuyo contenido haya cambiado desde la última vez.
 """
+
 from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
 
 from analitix.catalog import canonical_id_for
 from analitix.config import REPORTS_DIR
 from analitix.pdf_parser import apply_age_bands, compute_flag, parse_report
 from analitix.repository import (
+    STATUS_OTHER_PATIENT,
+    add_patient_alias,
     already_processed,
     clear_previous_import,
     clear_report_results,
+    find_patient,
     get_or_create_patient,
     get_patient_birth_date,
     insert_result,
@@ -33,8 +37,15 @@ from analitix.repository import (
     record_processed_file,
     upsert_report,
 )
+from analitix.textutils import name_words_key, normalize_name
 
 logger = logging.getLogger("analitix.ingest")
+
+
+class OtherPatientError(Exception):
+    """El informe no se importa: sus datos no encajan con el paciente de
+    esta BD. `args[0]` es el motivo, para mostrarlo al usuario (lleva datos
+    del informe: no va al log)."""
 
 
 def file_hash(path: Path) -> str:
@@ -61,7 +72,9 @@ def known_pdf_filenames(reports_dir: Path) -> set[str]:
     importado desde otra subcarpeta parecería "sin PDF" en cuanto se cambia
     de carpeta, aunque su PDF siga ahí.
     """
-    return {p.name for p in reports_dir.rglob("*.pdf")} | {p.name for p in REPORTS_DIR.rglob("*.pdf")}
+    return {p.name for p in reports_dir.rglob("*.pdf")} | {
+        p.name for p in REPORTS_DIR.rglob("*.pdf")
+    }
 
 
 @dataclass
@@ -73,13 +86,16 @@ class IngestResult:
     skipped: list[str] = field(default_factory=list)
     errors: list[tuple[str, str]] = field(default_factory=list)
     review: list[tuple[str, str]] = field(default_factory=list)
+    # (nombre_fichero, motivo): no importados por no encajar con el paciente
+    # de la BD, pendientes de «Es este paciente» / «No es».
+    other_patient: list[tuple[str, str]] = field(default_factory=list)
 
 
 def ingest_folder(
     con,
     reports_dir: Path = REPORTS_DIR,
     force: bool = False,
-    on_progress: Optional[Callable[[int, int, str], None]] = None,
+    on_progress: Callable[[int, int, str], None] | None = None,
     recursive: bool = False,
 ) -> IngestResult:
     """Escanea `reports_dir` e ingiere los PDF nuevos o pendientes.
@@ -120,7 +136,14 @@ def ingest_folder(
             result.skipped.append(pdf_path.name)
             continue
         try:
-            reasons, format_name = _ingest_one(con, pdf_path, digest)
+            try:
+                reasons, format_name = _ingest_one(con, pdf_path, digest)
+            except OtherPatientError as exc:
+                # El motivo lleva datos del informe (nombre...): al log solo
+                # la huella del fichero.
+                logger.info("PDF md5=%s no importado: no encaja con el paciente", digest[:12])
+                result.other_patient.append((pdf_path.name, str(exc)))
+                continue
             result.processed.append((pdf_path.name, format_name))
             if reasons:
                 # En el log (texto plano, sin cifrar) va la huella del
@@ -132,22 +155,121 @@ def ingest_folder(
         except Exception as exc:  # noqa: BLE001 - se registra y se continúa con el resto
             logger.exception("Error importando PDF md5=%s", digest[:12])
             con.rollback()
-            record_processed_file(con, pdf_path.name, digest, status="error", error_message=str(exc))
+            record_processed_file(
+                con, pdf_path.name, digest, status="error", error_message=str(exc)
+            )
             con.commit()
             result.errors.append((pdf_path.name, str(exc)))
     logger.info(
-        "Importación terminada: %d procesados, %d omitidos, %d para revisar, %d con error",
-        len(result.processed), len(result.skipped), len(result.review), len(result.errors),
+        "Importación terminada: %d procesados, %d omitidos, %d para revisar, %d con error, "
+        "%d de otro paciente",
+        len(result.processed),
+        len(result.skipped),
+        len(result.review),
+        len(result.errors),
+        len(result.other_patient),
     )
     return result
 
 
-def _ingest_one(con, pdf_path: Path, digest: str) -> tuple[str, str]:
+def _single_patient(con) -> int | None:
+    """El paciente de la BD si tiene exactamente uno (una BD = un paciente);
+    `None` si está vacía (el primer informe fija el paciente) o si tiene
+    varios (BD anteriores a una BD por paciente: se importa como siempre)."""
+    rows = con.execute("SELECT id FROM patients LIMIT 2").fetchall()
+    return rows[0][0] if len(rows) == 1 else None
+
+
+def _strong_mismatches(con, patient_id: int, header: dict) -> list[str]:
+    """Señales fuertes de que el informe es de otra persona aunque algún
+    dato coincida (p. ej. el mismo NHC en otro hospital): fecha de
+    nacimiento, DNI o CIP presentes en los dos y distintos."""
+    birth_date, dni, cip = con.execute(
+        "SELECT birth_date, dni, cip FROM patients WHERE id = ?", (patient_id,)
+    ).fetchone()
+    fuertes = []
+    nacimiento = header.get("birth_date")
+    if nacimiento and birth_date and nacimiento != birth_date:
+        fuertes.append(f"fecha de nacimiento distinta ({nacimiento})")
+    for campo, propio in (("dni", dni), ("cip", cip)):
+        valor = header.get(campo)
+        if valor and propio and valor != propio:
+            fuertes.append(f"{campo.upper()} distinto")
+    return fuertes
+
+
+def _other_patient_reason(con, patient_id: int, header: dict) -> str:
+    """Motivo legible de por qué el informe no encaja con el paciente de la
+    BD. Las señales fuertes de otra persona (`_strong_mismatches`) van
+    primero y destacadas."""
+    full_name, name_key, nhc, nhc_alt = con.execute(
+        "SELECT full_name, name_key, nhc, nhc_alt FROM patients WHERE id = ?", (patient_id,)
+    ).fetchone()
+    fuertes, otros = _strong_mismatches(con, patient_id, header), []
+    nombre = header.get("full_name")
+    if not nombre:
+        otros.append("no se reconoció el nombre en el informe")
+    elif normalize_name(nombre) != name_key:
+        if name_words_key(nombre) == name_words_key(name_key):
+            otros.append(f"el nombre está en otro orden («{nombre}»)")
+        else:
+            otros.append(f"nombre distinto («{nombre}»)")
+    if not header.get("birth_date"):
+        otros.append("el informe no trae fecha de nacimiento")
+    nhc_informe = header.get("nhc")
+    conocidos = {nhc, *(v.strip() for v in (nhc_alt or "").split(","))} - {None, ""}
+    if nhc_informe and conocidos and nhc_informe not in conocidos:
+        otros.append("NHC distinto")
+    texto = "; ".join(fuertes + otros) or "los datos del informe no coinciden con los del paciente"
+    if fuertes:
+        texto = "PROBABLEMENTE OTRA PERSONA: " + texto
+    return f"{texto} (paciente de esta base de datos: {full_name})"
+
+
+def find_pdf(reports_dir: Path, filename: str) -> Path | None:
+    """Ruta de un PDF por su nombre, buscando en `reports_dir` y en
+    `REPORTS_DIR` con sus subcarpetas (como `known_pdf_filenames`)."""
+    for base in (reports_dir, REPORTS_DIR):
+        found = next(base.rglob(filename), None) if base.exists() else None
+        if found:
+            return found
+    return None
+
+
+def confirm_same_patient(con, pdf_path: Path, patient_id: int) -> tuple[str, str]:
+    """«Es este paciente»: importa un informe que no encajaba y guarda sus
+    datos de cabecera como identidad alternativa del paciente
+    (`patient_aliases`), para que el siguiente con esos datos encaje solo.
+    Devuelve lo mismo que `_ingest_one`."""
+    header = parse_report(pdf_path)["header"]
+    identidad = [header.get(k) for k in ("full_name", "dni", "nhc", "cip")]
+    if any(identidad):
+        add_patient_alias(
+            con,
+            patient_id,
+            header.get("full_name"),
+            header.get("birth_date"),
+            header.get("dni"),
+            header.get("nhc"),
+            header.get("cip"),
+        )
+    return _ingest_one(con, pdf_path, file_hash(pdf_path), confirmed_patient_id=patient_id)
+
+
+def _ingest_one(
+    con, pdf_path: Path, digest: str, confirmed_patient_id: int | None = None
+) -> tuple[str, str]:
     """Procesa un PDF. Devuelve `(motivo, nombre_perfil)`: `motivo` es una
     cadena no vacía si el resultado necesita revisión manual (posible PDF de
     un formato/plantilla que la app no reconoce bien), o "" si todo parece
     correcto; `nombre_perfil` es el perfil detectado (`format_name` de
-    `parse_report`, p. ej. "Formato no reconocido" si ninguno coincidió)."""
+    `parse_report`, p. ej. "Formato no reconocido" si ninguno coincidió).
+
+    Si la BD tiene un único paciente y los datos del informe no encajan con
+    él (`find_patient`), no se importa: queda `STATUS_OTHER_PATIENT` y se
+    lanza `OtherPatientError` con el motivo. `confirmed_patient_id` (el
+    usuario confirmó que es de ese paciente, `confirm_same_patient`) se
+    salta esa comprobación."""
     # Por si es un reintento (fichero marcado "review"/"error", o `force=True`
     # sobre uno ya "ok"): borra el informe/resultados de la vez anterior para
     # no duplicar filas ni dejar datos huérfanos de un intento previo.
@@ -166,9 +288,49 @@ def _ingest_one(con, pdf_path: Path, digest: str) -> tuple[str, str]:
             f"formato de informe no reconocido ({parsed['format_name']}); "
             f"parser no implementado, revisar manualmente"
         )
-        record_processed_file(con, pdf_path.name, digest, status="review", error_message=reason_text)
+        record_processed_file(
+            con, pdf_path.name, digest, status="review", error_message=reason_text
+        )
         con.commit()
         return reason_text, parsed["format_name"]
+
+    # Una BD = un paciente: un informe que no encaja con el que ya hay no se
+    # importa sin confirmación (mezclar resultados de otra persona es el
+    # peor error posible). Si ya estaba asignado a él (reimportación de uno
+    # confirmado o fusionado), se respeta.
+    owner = _single_patient(con)
+    if confirmed_patient_id is not None:
+        previous_patient_id = confirmed_patient_id
+    elif owner is not None and previous_patient_id != owner:
+        found_id, matched_by = find_patient(
+            con,
+            header.get("full_name"),
+            header.get("birth_date"),
+            header.get("dni") or None,
+            header.get("nhc") or None,
+            header.get("cip"),
+        )
+        # Ficha sin nombre (BD creada solo con DNI o fecha de nacimiento), o
+        # con el mismo nombre pero aún sin fecha de nacimiento (`find_patient`
+        # exige que las dos coincidan, también vacías): si nada la
+        # contradice, el informe es suyo y completa la ficha.
+        owner_key, owner_birth = con.execute(
+            "SELECT name_key, birth_date FROM patients WHERE id = ?", (owner,)
+        ).fetchone()
+        nombre = header.get("full_name")
+        mismo_nombre = bool(nombre) and normalize_name(nombre) == owner_key
+        if found_id is None and (not owner_key or (mismo_nombre and not owner_birth)):
+            found_id = previous_patient_id = owner
+        # Aunque encaje por algún dato (NHC, nombre en otro orden), una
+        # contradicción fuerte también pide confirmación; una identidad que
+        # el usuario ya confirmó ("alias") no se vuelve a preguntar.
+        if found_id != owner or (matched_by != "alias" and _strong_mismatches(con, owner, header)):
+            reason_text = _other_patient_reason(con, owner, header)
+            record_processed_file(
+                con, pdf_path.name, digest, status=STATUS_OTHER_PATIENT, error_message=reason_text
+            )
+            con.commit()
+            raise OtherPatientError(reason_text)
 
     # Se pasa `full_name=None` (en vez de ya sustituirlo aquí por el nombre
     # del fichero) para que `get_or_create_patient` pueda intentar primero
@@ -229,7 +391,9 @@ def _ingest_one(con, pdf_path: Path, digest: str) -> tuple[str, str]:
     clear_report_results(con, report_id)
     # Rangos por edad que el PDF no pudo resolver por no traer fecha de
     # nacimiento: se usa la del paciente ya emparejado.
-    apply_age_bands(parsed["results"], get_patient_birth_date(con, patient_id), header.get("request_date"))
+    apply_age_bands(
+        parsed["results"], get_patient_birth_date(con, patient_id), header.get("request_date")
+    )
     for res in parsed["results"]:
         res.pop("age_bands", None)
         canonical_id = canonical_id_for(res["raw_name"])
@@ -237,6 +401,13 @@ def _ingest_one(con, pdf_path: Path, digest: str) -> tuple[str, str]:
         insert_result(con, report_id, {**res, "canonical_id": canonical_id, "flag_calc": flag_calc})
 
     status = "review" if reason_text else "ok"
-    record_processed_file(con, pdf_path.name, digest, status=status, report_id=report_id, error_message=reason_text or None)
+    record_processed_file(
+        con,
+        pdf_path.name,
+        digest,
+        status=status,
+        report_id=report_id,
+        error_message=reason_text or None,
+    )
     con.commit()
     return reason_text, parsed["format_name"]

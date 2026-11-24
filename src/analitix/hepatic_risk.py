@@ -18,10 +18,11 @@ x10^3/µL (numéricamente igual a las 10⁹/L de las fórmulas) — si un
 resultado viene en otra unidad se descarta ese punto en vez de calcular con
 cifras no comparables, mismo criterio que `lipid_risk._mg_dl`.
 """
+
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Optional
+from typing import Any
 
 from analitix.pdf_parser import compute_flag
 from analitix.repository import get_merged_series, get_patient_birth_date
@@ -64,7 +65,7 @@ APRI_HIGH = 1.5
 FIB4_HIGH = 2.67
 
 
-def _u_l(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _u_l(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de `row` si su unidad es U/L o UI/L (equivalentes;
     alguna plantilla añade una nota de temperatura, p. ej. "UI/l 37C")."""
     if row is None:
@@ -75,7 +76,7 @@ def _u_l(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _plaquetes_1e9_l(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _plaquetes_1e9_l(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de `row` (plaquetas) si su unidad es x10^3 por
     microlitro (numéricamente igual a 10⁹/L, la unidad de las fórmulas). Se
     acepta cualquier variante que empiece por "x10^3": la extracción de
@@ -88,28 +89,30 @@ def _plaquetes_1e9_l(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def de_ritis_ratio(ast: Optional[float], alt: Optional[float]) -> Optional[float]:
+def de_ritis_ratio(ast: float | None, alt: float | None) -> float | None:
     """Ratio AST/ALT (índice De Ritis)."""
     if ast is None or alt is None or alt == 0:
         return None
     return ast / alt
 
 
-def apri(ast: Optional[float], plaquetes: Optional[float]) -> Optional[float]:
+def apri(ast: float | None, plaquetes: float | None) -> float | None:
     """APRI: (AST / AST-ULN) * 100 / plaquetas."""
     if ast is None or plaquetes is None or plaquetes == 0:
         return None
     return (ast / APRI_AST_ULN) * 100.0 / plaquetes
 
 
-def fib4(age: Optional[float], ast: Optional[float], plaquetes: Optional[float], alt: Optional[float]) -> Optional[float]:
+def fib4(
+    age: float | None, ast: float | None, plaquetes: float | None, alt: float | None
+) -> float | None:
     """FIB-4: edad * AST / (plaquetas * raíz(ALT))."""
     if age is None or ast is None or plaquetes is None or alt is None or alt <= 0 or plaquetes == 0:
         return None
-    return age * ast / (plaquetes * (alt ** 0.5))
+    return age * ast / (plaquetes * (alt**0.5))
 
 
-def _age_at(birth_date: Optional[str], fecha: str) -> Optional[int]:
+def _age_at(birth_date: str | None, fecha: str) -> int | None:
     """Edad en años cumplidos en `fecha` a partir de `birth_date`
     ("AAAA-MM-DD"); `None` si no se conoce la fecha de nacimiento."""
     if not birth_date:
@@ -122,7 +125,7 @@ def _age_at(birth_date: Optional[str], fecha: str) -> Optional[int]:
     return years
 
 
-def _index_point(fecha: str, value: float, ref_high: Optional[float], raw_name: str) -> dict[str, Any]:
+def _index_point(fecha: str, value: float, ref_high: float | None, raw_name: str) -> dict[str, Any]:
     """Fila con la misma forma que `repository.get_series`, para reutilizar
     `charts.evolution_figure`/`comparison_figure` sin cambios."""
     return {
@@ -156,7 +159,9 @@ def get_hepatic_index_series(con, patient_id: int) -> dict[str, list[dict[str, A
 
         dr = de_ritis_ratio(ast, alt)
         if dr is not None:
-            series["idx_de_ritis"].append(_index_point(fecha, dr, DE_RITIS_HIGH, "Ratio AST/ALT (De Ritis)"))
+            series["idx_de_ritis"].append(
+                _index_point(fecha, dr, DE_RITIS_HIGH, "Ratio AST/ALT (De Ritis)")
+            )
         a = apri(ast, plaquetes)
         if a is not None:
             series["idx_apri"].append(_index_point(fecha, a, APRI_HIGH, "APRI"))
@@ -179,7 +184,7 @@ INDEX_LABELS = {
 }
 
 
-def get_latest_hepatic_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
+def get_latest_hepatic_summary(con, patient_id: int) -> dict[str, Any] | None:
     """Último informe con AST y ALT en U/L, con los índices calculables ese
     mismo día (FIB-4 solo si además hay plaquetas y fecha de nacimiento
     conocida). `None` si el paciente no tiene ningún informe utilizable."""

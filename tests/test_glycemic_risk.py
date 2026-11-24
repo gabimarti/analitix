@@ -1,6 +1,5 @@
 import pytest
 
-from analitix.pdf_parser import compute_flag
 from analitix.glycemic_risk import (
     ADA_DIABETES_LOW,
     ADA_NORMAL_HIGH,
@@ -12,6 +11,7 @@ from analitix.glycemic_risk import (
     get_latest_glycemic_summary,
     hba1c_category,
 )
+from analitix.pdf_parser import compute_flag
 from analitix.repository import get_or_create_patient, insert_result, upsert_report
 
 
@@ -41,25 +41,57 @@ def test_hba1c_category(hba1c, expected):
 
 
 def _insert_report(
-    con, patient_id, report_number, fecha, hba1c=None, hba1c_cid="hb_glicosilada_hba1c_sang", unit="%",
+    con,
+    patient_id,
+    report_number,
+    fecha,
+    hba1c=None,
+    hba1c_cid="hb_glicosilada_hba1c_sang",
+    unit="%",
     glucosa=None,
 ):
     report_id = upsert_report(con, patient_id, report_number, fecha, None, "synthetic.pdf")
     if hba1c is not None:
         insert_result(
-            con, report_id,
-            dict(section=None, test_group=None, loinc_code=None, raw_name="HbA1c",
-                 canonical_id=hba1c_cid, value_raw=str(hba1c), value_num=hba1c, unit=unit,
-                 ref_low=None, ref_high=None, ref_text=None, flag_pdf=None, flag_calc=None,
-                 sample_date=None),
+            con,
+            report_id,
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name="HbA1c",
+                canonical_id=hba1c_cid,
+                value_raw=str(hba1c),
+                value_num=hba1c,
+                unit=unit,
+                ref_low=None,
+                ref_high=None,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=None,
+                sample_date=None,
+            ),
         )
     if glucosa is not None:
         insert_result(
-            con, report_id,
-            dict(section=None, test_group=None, loinc_code=None, raw_name="Glucosa",
-                 canonical_id="glucosa_serum", value_raw=str(glucosa), value_num=glucosa, unit="mg/dl",
-                 ref_low=70, ref_high=100, ref_text=None, flag_pdf=None,
-                 flag_calc=compute_flag(glucosa, 70, 100), sample_date=None),
+            con,
+            report_id,
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name="Glucosa",
+                canonical_id="glucosa_serum",
+                value_raw=str(glucosa),
+                value_num=glucosa,
+                unit="mg/dl",
+                ref_low=70,
+                ref_high=100,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=compute_flag(glucosa, 70, 100),
+                sample_date=None,
+            ),
         )
     con.commit()
 
@@ -99,8 +131,13 @@ def test_series_and_high_flag(db):
 def test_series_ignores_ifcc_unit(db):
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
     _insert_report(
-        db, patient_id, "R1", "2024-01-01", hba1c=48.0,
-        hba1c_cid="hb_glicosilada_hba1c_ifcc_sang", unit="mmol/mol",
+        db,
+        patient_id,
+        "R1",
+        "2024-01-01",
+        hba1c=48.0,
+        hba1c_cid="hb_glicosilada_hba1c_ifcc_sang",
+        unit="mmol/mol",
     )
     assert get_glycemic_index_series(db, patient_id) == {}
 

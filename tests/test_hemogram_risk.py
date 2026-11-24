@@ -43,8 +43,13 @@ def test_mentzer_index():
 
 @pytest.mark.parametrize(
     ("vcm", "expected"),
-    [(79.9, "microcitica"), (80.0, "normocitica"), (100.0, "normocitica"),
-     (100.1, "macrocitica"), (None, None)],
+    [
+        (79.9, "microcitica"),
+        (80.0, "normocitica"),
+        (100.0, "normocitica"),
+        (100.1, "macrocitica"),
+        (None, None),
+    ],
 )
 def test_vcm_category(vcm, expected):
     assert vcm_category(vcm) == expected
@@ -63,8 +68,18 @@ def test_unit_guards():
 
 
 def _insert_hemogram_report(
-    con, patient_id, report_number, fecha, vcm=None, hematies=None, rdw=None,
-    neutrofils=None, limfocits=None, limfocits_cid="limfocits_total", monocits=None, plaquetes=None,
+    con,
+    patient_id,
+    report_number,
+    fecha,
+    vcm=None,
+    hematies=None,
+    rdw=None,
+    neutrofils=None,
+    limfocits=None,
+    limfocits_cid="limfocits_total",
+    monocits=None,
+    plaquetes=None,
 ):
     report_id = upsert_report(con, patient_id, report_number, fecha, None, "synthetic.pdf")
     values = []
@@ -84,10 +99,24 @@ def _insert_hemogram_report(
         values.append(("Plaquetes", "plaquetes", plaquetes, "x10^3/ul"))
     for raw_name, cid, value, unit in values:
         insert_result(
-            con, report_id,
-            dict(section=None, test_group=None, loinc_code=None, raw_name=raw_name,
-                 canonical_id=cid, value_raw=str(value), value_num=value, unit=unit,
-                 ref_low=None, ref_high=None, ref_text=None, flag_pdf=None, flag_calc=None, sample_date=None),
+            con,
+            report_id,
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name=raw_name,
+                canonical_id=cid,
+                value_raw=str(value),
+                value_num=value,
+                unit=unit,
+                ref_low=None,
+                ref_high=None,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=None,
+                sample_date=None,
+            ),
         )
     con.commit()
 
@@ -95,10 +124,24 @@ def _insert_hemogram_report(
 def test_limfocits_spelling_variants_are_merged(db):
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
     _insert_hemogram_report(
-        db, patient_id, "R1", "2023-01-01", vcm=90, neutrofils=6.0, limfocits=2.0, limfocits_cid="limfocits_total",
+        db,
+        patient_id,
+        "R1",
+        "2023-01-01",
+        vcm=90,
+        neutrofils=6.0,
+        limfocits=2.0,
+        limfocits_cid="limfocits_total",
     )
     _insert_hemogram_report(
-        db, patient_id, "R2", "2024-01-01", vcm=90, neutrofils=6.0, limfocits=3.0, limfocits_cid="linfocits_total",
+        db,
+        patient_id,
+        "R2",
+        "2024-01-01",
+        vcm=90,
+        neutrofils=6.0,
+        limfocits=3.0,
+        limfocits_cid="linfocits_total",
     )
     series = get_hemogram_index_series(db, patient_id)
     assert len(series["idx_nlr"]) == 2
@@ -119,8 +162,17 @@ def test_mentzer_only_appears_when_microcytic(db):
 def test_latest_hemogram_summary(db):
     patient_id, _ = get_or_create_patient(db, "Test Patient", None, None, None)
     _insert_hemogram_report(
-        db, patient_id, "R1", "2024-01-01", vcm=70, hematies=4.5, rdw=16.0,
-        neutrofils=6.0, limfocits=2.0, monocits=0.5, plaquetes=300,
+        db,
+        patient_id,
+        "R1",
+        "2024-01-01",
+        vcm=70,
+        hematies=4.5,
+        rdw=16.0,
+        neutrofils=6.0,
+        limfocits=2.0,
+        monocits=0.5,
+        plaquetes=300,
     )
     summary = get_latest_hemogram_summary(db, patient_id)
     assert summary["fecha"] == "2024-01-01"
@@ -141,7 +193,9 @@ def test_sustained_lymphocytosis_alert_requires_two_reports(db):
     _insert_hemogram_report(db, patient_id, "R1", "2023-01-01", limfocits=5.5)
     assert get_sustained_lymphocytosis_alert(db, patient_id) is None  # una sola vez, no cuenta
 
-    _insert_hemogram_report(db, patient_id, "R2", "2024-01-01", limfocits=6.0, limfocits_cid="linfocits_total")
+    _insert_hemogram_report(
+        db, patient_id, "R2", "2024-01-01", limfocits=6.0, limfocits_cid="linfocits_total"
+    )
     alerta = get_sustained_lymphocytosis_alert(db, patient_id)
     assert alerta["fechas"] == ["2023-01-01", "2024-01-01"]
     assert alerta["ultimo_valor"] == 6.0

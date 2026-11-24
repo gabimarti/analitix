@@ -8,7 +8,9 @@ def test_name_signature_crosses_labs_and_languages():
     assert key("Potassi") == key("Potasio") == key("Srm-Ió Potassi; c. subst.")
     assert key("Glucosa sèrum") == key("Pla-Glucosa; c. subst.") == key("Glucosa (suero/plasma)")
     # La marca "sèrum 1" no separa, pero "Alfa 1" frente a "Alfa 2" sí.
-    assert key("Aspartat aminotranferasa (AST) sèrum 1") == key("Aspartat aminotranferasa (AST) sèrum")
+    assert key("Aspartat aminotranferasa (AST) sèrum 1") == key(
+        "Aspartat aminotranferasa (AST) sèrum"
+    )
     assert key("Alfa 1 globulina") != key("Alfa 2 globulina")
     # La orina no es la misma prueba que en sangre; el "%" tampoco.
     assert key("Uri-Creatinini; c. subst.") != key("Creatinina sèrum")
@@ -34,17 +36,27 @@ def test_unit_relation():
 def test_find_proposals_and_alias_lines():
     groups: dict = {}
     for raw, unit, lab in [
-        ("Ferro sèrum", "mcg/dL", "maresme"), ("Ferro sèrum", "mcg/dL", "maresme"),
-        ("Hierro", "µg/dL", "synlab"), ("Srm-Ferro, c. subst.", "µg/dL", "hugtip"),
-        ("Hb glicosilada (HbA1c) sang", "%", "maresme"), ("Hb glicosilada (HbA1c) IFCC sang", "mmol/mol", "maresme"),
+        ("Ferro sèrum", "mcg/dL", "maresme"),
+        ("Ferro sèrum", "mcg/dL", "maresme"),
+        ("Hierro", "µg/dL", "synlab"),
+        ("Srm-Ferro, c. subst.", "µg/dL", "hugtip"),
+        ("Hb glicosilada (HbA1c) sang", "%", "maresme"),
+        ("Hb glicosilada (HbA1c) IFCC sang", "mmol/mol", "maresme"),
         ("LDH sèrum 160 UI/L", None, "maresme"),  # nombre contaminado por el parser
     ]:
         aa.add_result(groups, raw, unit, lab)
     proposals = {p.target: p for p in aa.find_proposals(groups, preferred={"ferro_serum"})}
     ferro = proposals["ferro_serum"]
     assert ferro.relation == "igual"
-    assert set(aa.alias_lines(groups, ferro)) == {("hierro", "ferro_serum"), ("srm ferro c subst", "ferro_serum")}
-    assert all(p.relation == "incompatible" for p in proposals.values() if "hb_glicosilada_hba1c_sang" in p.ids)
+    assert set(aa.alias_lines(groups, ferro)) == {
+        ("hierro", "ferro_serum"),
+        ("srm ferro c subst", "ferro_serum"),
+    }
+    assert all(
+        p.relation == "incompatible"
+        for p in proposals.values()
+        if "hb_glicosilada_hba1c_sang" in p.ids
+    )
     assert not any("ldh_serum_160_ui_l" in p.ids for p in proposals.values())
     assert "LDH sèrum 160 UI/L" in aa.noisy_names(groups)
 

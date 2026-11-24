@@ -3,9 +3,10 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-07
-# Última actualización: 2026-09-25
+# Última actualización: 2026-10-09
 # ---------------------------------------------------------------------------
 """Acceso a la base de datos SQLite cifrada (SQLCipher) del proyecto."""
+
 from __future__ import annotations
 
 import datetime as dt
@@ -13,8 +14,6 @@ import re
 from pathlib import Path
 
 from sqlcipher3 import dbapi2 as sqlcipher
-
-from analitix.config import DB_PATH
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS patients (
@@ -88,6 +87,21 @@ CREATE TABLE IF NOT EXISTS settings (
 -- < 100 mg/dL): lo introduce la persona a mano, nunca lo calcula Analitix.
 -- En los gráficos sustituye al rango del laboratorio. Un límite puede faltar
 -- ("< 100" = solo target_high). set_on: "AAAA-MM-DD".
+-- Identidades alternativas confirmadas por el usuario para un paciente: los
+-- datos de cabecera de un informe que no encajaba (nombre en otro orden, otro
+-- NHC, sin DNI...) y que dijo que sí eran de este paciente ("Es este
+-- paciente", `ingest.confirm_same_patient`). `repository.find_patient` las
+-- consulta para que el siguiente informe con esos datos encaje solo.
+CREATE TABLE IF NOT EXISTS patient_aliases (
+    id INTEGER PRIMARY KEY,
+    patient_id INTEGER NOT NULL REFERENCES patients(id),
+    name_key TEXT,
+    birth_date TEXT,
+    dni TEXT,
+    cip TEXT,
+    nhc TEXT
+);
+
 CREATE TABLE IF NOT EXISTS targets (
     patient_id INTEGER NOT NULL REFERENCES patients(id),
     canonical_id TEXT NOT NULL,
@@ -151,8 +165,9 @@ def _set_key(con: sqlcipher.Connection, pragma: str, password: str) -> None:
     con.execute(f"PRAGMA {pragma} = '{escaped_password}'")
 
 
-def connect(password: str, db_path: Path = DB_PATH) -> sqlcipher.Connection:
-    """Abre (o crea) la base de datos cifrada con la contraseña dada."""
+def connect(password: str, db_path: Path) -> sqlcipher.Connection:
+    """Abre (o crea) la base de datos cifrada `db_path` (la de un paciente,
+    ver `databases.db_path`) con la contraseña dada."""
     con = sqlcipher.connect(str(db_path))
     _set_key(con, "key", password)
     try:

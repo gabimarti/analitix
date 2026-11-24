@@ -15,6 +15,7 @@ El CSV admite la plantilla propia (`CSV_TEMPLATE`) y las cabeceras de las
 exportaciones de tensiómetros habituales (Omron Connect, Withings), con
 separador `;`, `,` o tabulador y varios formatos de fecha.
 """
+
 from __future__ import annotations
 
 import csv
@@ -23,7 +24,7 @@ import io
 import re
 import unicodedata
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from analitix.textutils import strip_accents
 
@@ -51,31 +52,69 @@ CSV_TEMPLATE = (
 # "Systolic (mmHg)", "Pulse (bpm)", "Notes") y Withings ("Date" con hora,
 # "Heart rate", "Comments").
 HEADER_ALIASES = {
-    "fecha_hora": "fecha_hora", "fecha y hora": "fecha_hora", "datetime": "fecha_hora",
-    "date time": "fecha_hora", "fecha": "fecha", "date": "fecha",
-    "hora": "hora", "time": "hora",
+    "fecha_hora": "fecha_hora",
+    "fecha y hora": "fecha_hora",
+    "datetime": "fecha_hora",
+    "date time": "fecha_hora",
+    "fecha": "fecha",
+    "date": "fecha",
+    "hora": "hora",
+    "time": "hora",
     # "SYS/DIA/PUL" (abreviaturas de los propios tensiómetros): "dia" es la
     # diastólica, no el día.
-    "sistolica": "sistolica", "systolic": "sistolica", "sys": "sistolica", "systole": "sistolica",
-    "pas": "sistolica", "alta": "sistolica", "tension alta": "sistolica",
-    "diastolica": "diastolica", "diastolic": "diastolica", "dia": "diastolica", "diastole": "diastolica",
-    "pad": "diastolica", "baja": "diastolica", "tension baja": "diastolica",
-    "pulso": "pulso", "pulse": "pulso", "pul": "pulso", "heart rate": "pulso", "frecuencia cardiaca": "pulso",
-    "fc": "pulso", "bpm": "pulso", "ppm": "pulso",
-    "lugar": "lugar", "place": "lugar", "location": "lugar",
-    "notas": "notas", "nota": "notas", "notes": "notas", "comments": "notas", "comentarios": "notas",
+    "sistolica": "sistolica",
+    "systolic": "sistolica",
+    "sys": "sistolica",
+    "systole": "sistolica",
+    "pas": "sistolica",
+    "alta": "sistolica",
+    "tension alta": "sistolica",
+    "diastolica": "diastolica",
+    "diastolic": "diastolica",
+    "dia": "diastolica",
+    "diastole": "diastolica",
+    "pad": "diastolica",
+    "baja": "diastolica",
+    "tension baja": "diastolica",
+    "pulso": "pulso",
+    "pulse": "pulso",
+    "pul": "pulso",
+    "heart rate": "pulso",
+    "frecuencia cardiaca": "pulso",
+    "fc": "pulso",
+    "bpm": "pulso",
+    "ppm": "pulso",
+    "lugar": "lugar",
+    "place": "lugar",
+    "location": "lugar",
+    "notas": "notas",
+    "nota": "notas",
+    "notes": "notas",
+    "comments": "notas",
+    "comentarios": "notas",
 }
-_MONTHS_EN = {m: i for i, m in enumerate(
-    ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"), start=1)}
+_MONTHS_EN = {
+    m: i
+    for i, m in enumerate(
+        ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"),
+        start=1,
+    )
+}
 _DATE_FORMATS = (
-    "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S",
-    "%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S", "%d-%m-%Y %H:%M", "%d-%m-%Y %H:%M:%S",
+    "%Y-%m-%d %H:%M",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M",
+    "%Y-%m-%dT%H:%M:%S",
+    "%d/%m/%Y %H:%M",
+    "%d/%m/%Y %H:%M:%S",
+    "%d-%m-%Y %H:%M",
+    "%d-%m-%Y %H:%M:%S",
 )
 _VACIO = ("", "-", "--")
 
 
-def parse_datetime(text: str, now: Optional[dt.datetime] = None) -> str:
-    """"AAAA-MM-DD HH:MM" a partir de los formatos admitidos (también el de
+def parse_datetime(text: str, now: dt.datetime | None = None) -> str:
+    """ "AAAA-MM-DD HH:MM" a partir de los formatos admitidos (también el de
     Omron, "Jan 12 2025 08:15", con el mes en inglés sin depender del idioma
     del sistema). Rechaza fechas futuras y anteriores a 1900."""
     text = " ".join((text or "").split())
@@ -87,11 +126,18 @@ def parse_datetime(text: str, now: Optional[dt.datetime] = None) -> str:
         except ValueError:
             continue
     if valor is None:
-        m = re.fullmatch(r"([A-Za-z]{3})[a-z]*\.? (\d{1,2}),? (\d{4}) (\d{1,2}):(\d{2})(?::\d{2})?", text)
+        m = re.fullmatch(
+            r"([A-Za-z]{3})[a-z]*\.? (\d{1,2}),? (\d{4}) (\d{1,2}):(\d{2})(?::\d{2})?", text
+        )
         if m and m.group(1).lower() in _MONTHS_EN:
             try:
-                valor = dt.datetime(int(m.group(3)), _MONTHS_EN[m.group(1).lower()], int(m.group(2)),
-                                    int(m.group(4)), int(m.group(5)))
+                valor = dt.datetime(
+                    int(m.group(3)),
+                    _MONTHS_EN[m.group(1).lower()],
+                    int(m.group(2)),
+                    int(m.group(4)),
+                    int(m.group(5)),
+                )
             except ValueError:
                 valor = None
     if valor is None:
@@ -113,13 +159,17 @@ def check_limits(limits: dict[str, Any]) -> dict[str, tuple[int, int]]:
         except (KeyError, TypeError, ValueError):
             raise ValueError(f"límites de la {LIMIT_NAMES[clave]} no válidos") from None
         if not tope_min <= minimo < maximo <= tope_max:
-            raise ValueError(f"los límites de la {LIMIT_NAMES[clave]} deben cumplir "
-                             f"{tope_min} ≤ mínimo < máximo ≤ {tope_max}")
+            raise ValueError(
+                f"los límites de la {LIMIT_NAMES[clave]} deben cumplir "
+                f"{tope_min} ≤ mínimo < máximo ≤ {tope_max}"
+            )
         resultado[clave] = (minimo, maximo)
     return resultado
 
 
-def _parse_int(text: Any, nombre: str, rango: tuple[int, int], obligatorio: bool = True) -> Optional[int]:
+def _parse_int(
+    text: Any, nombre: str, rango: tuple[int, int], obligatorio: bool = True
+) -> int | None:
     texto = str(text if text is not None else "").strip()
     if texto in _VACIO:
         if obligatorio:
@@ -129,12 +179,14 @@ def _parse_int(text: Any, nombre: str, rango: tuple[int, int], obligatorio: bool
         raise ValueError(f"{nombre} no válida: «{texto}» (solo números enteros)")
     valor = int(re.split(r"[.,]", texto)[0])
     if not rango[0] <= valor <= rango[1]:
-        raise ValueError(f"{nombre} fuera de los límites admitidos: {valor} (entre {rango[0]} y {rango[1]}; "
-                         "se ajustan en Configuración → Entrada manual)")
+        raise ValueError(
+            f"{nombre} fuera de los límites admitidos: {valor} (entre {rango[0]} y {rango[1]}; "
+            "se ajustan en Configuración → Entrada manual)"
+        )
     return valor
 
 
-def clean_note(text: Optional[str]) -> Optional[str]:
+def clean_note(text: str | None) -> str | None:
     """Nota sin caracteres de control y con longitud limitada (`None` si
     queda vacía)."""
     # Cada carácter de control (tabulador, salto de línea, nulo...) pasa a
@@ -144,10 +196,16 @@ def clean_note(text: Optional[str]) -> Optional[str]:
     return limpio or None
 
 
-def validate_reading(fecha_hora: str, sistolica: Any, diastolica: Any, pulso: Any = None,
-                     lugar: Optional[str] = None, notas: Optional[str] = None,
-                     now: Optional[dt.datetime] = None,
-                     limits: Optional[dict[str, tuple[int, int]]] = None) -> dict[str, Any]:
+def validate_reading(
+    fecha_hora: str,
+    sistolica: Any,
+    diastolica: Any,
+    pulso: Any = None,
+    lugar: str | None = None,
+    notas: str | None = None,
+    now: dt.datetime | None = None,
+    limits: dict[str, tuple[int, int]] | None = None,
+) -> dict[str, Any]:
     """Medición validada y normalizada, o `ValueError` con el motivo en
     lenguaje llano. `limits`: los de Configuración (por defecto,
     `DEFAULT_LIMITS`)."""
@@ -161,8 +219,14 @@ def validate_reading(fecha_hora: str, sistolica: Any, diastolica: Any, pulso: An
     lugar_norm = strip_accents((lugar or "").strip().lower()) or DEFAULT_PLACE
     if lugar_norm not in PLACES:
         raise ValueError(f"lugar no válido: «{lugar}» (casa o consulta)")
-    return {"measured_at": medida, "systolic": sis, "diastolic": dia, "pulse": pul,
-            "place": lugar_norm, "note": clean_note(notas)}
+    return {
+        "measured_at": medida,
+        "systolic": sis,
+        "diastolic": dia,
+        "pulse": pul,
+        "place": lugar_norm,
+        "note": clean_note(notas),
+    }
 
 
 def _norm_header(header: str) -> str:
@@ -170,8 +234,9 @@ def _norm_header(header: str) -> str:
     return " ".join(texto.replace("_", " ").split()).replace("fecha hora", "fecha_hora")
 
 
-def read_csv(path: Path, now: Optional[dt.datetime] = None,
-             limits: Optional[dict[str, tuple[int, int]]] = None) -> tuple[list[dict[str, Any]], list[str]]:
+def read_csv(
+    path: Path, now: dt.datetime | None = None, limits: dict[str, tuple[int, int]] | None = None
+) -> tuple[list[dict[str, Any]], list[str]]:
     """(mediciones válidas, errores "Línea N: motivo") de un CSV. Error
     general (sin mediciones) si faltan las columnas imprescindibles:
     fecha y hora (juntas o separadas), sistólica y diastólica."""
@@ -193,11 +258,20 @@ def read_csv(path: Path, now: Optional[dt.datetime] = None,
         if campo and campo not in columnas:
             columnas[campo] = i
     tiene_fecha = "fecha_hora" in columnas or "fecha" in columnas
-    faltan = [n for n, ok in (("fecha y hora", tiene_fecha), ("sistolica", "sistolica" in columnas),
-                              ("diastolica", "diastolica" in columnas)) if not ok]
+    faltan = [
+        n
+        for n, ok in (
+            ("fecha y hora", tiene_fecha),
+            ("sistolica", "sistolica" in columnas),
+            ("diastolica", "diastolica" in columnas),
+        )
+        if not ok
+    ]
     if faltan:
-        return [], [f"Faltan columnas: {', '.join(faltan)}. Cabecera esperada: "
-                    f"{CSV_TEMPLATE.splitlines()[0]}"]
+        return [], [
+            f"Faltan columnas: {', '.join(faltan)}. Cabecera esperada: "
+            f"{CSV_TEMPLATE.splitlines()[0]}"
+        ]
 
     def celda(fila: list[str], campo: str) -> str:
         i = columnas.get(campo)
@@ -207,11 +281,22 @@ def read_csv(path: Path, now: Optional[dt.datetime] = None,
     for n, fila in enumerate(filas[1:], start=2):
         if not any(c.strip() for c in fila):
             continue
-        fecha_hora = celda(fila, "fecha_hora") or f"{celda(fila, 'fecha')} {celda(fila, 'hora')}".strip()
+        fecha_hora = (
+            celda(fila, "fecha_hora") or f"{celda(fila, 'fecha')} {celda(fila, 'hora')}".strip()
+        )
         try:
-            lecturas.append(validate_reading(fecha_hora, celda(fila, "sistolica"), celda(fila, "diastolica"),
-                                             celda(fila, "pulso"), celda(fila, "lugar"), celda(fila, "notas"), now,
-                                             limits))
+            lecturas.append(
+                validate_reading(
+                    fecha_hora,
+                    celda(fila, "sistolica"),
+                    celda(fila, "diastolica"),
+                    celda(fila, "pulso"),
+                    celda(fila, "lugar"),
+                    celda(fila, "notas"),
+                    now,
+                    limits,
+                )
+            )
         except ValueError as exc:
             errores.append(f"Línea {n}: {exc}")
     return lecturas, errores
@@ -229,7 +314,11 @@ BP_THRESHOLDS = {
     "casa": {"elevada": (120, 70), "hipertension": (135, 85)},
     "consulta": {"elevada": (120, 70), "hipertension": (140, 90)},
 }
-BP_CATEGORY_LABELS = {"no_elevada": "PA no elevada", "elevada": "PA elevada", "hipertension": "hipertensión"}
+BP_CATEGORY_LABELS = {
+    "no_elevada": "PA no elevada",
+    "elevada": "PA elevada",
+    "hipertension": "hipertensión",
+}
 # Protocolo de automedida en casa (Stergiou GS et al., "2021 European
 # Society of Hypertension practice guidelines for office and out-of-office
 # blood pressure measurement", J Hypertens 2021;39(7):1293-1302,
@@ -253,11 +342,11 @@ def bp_category(systolic: float, diastolic: float, place: str = "casa") -> str:
     return "no_elevada"
 
 
-def _media(valores: list[float]) -> Optional[float]:
+def _media(valores: list[float]) -> float | None:
     return sum(valores) / len(valores) if valores else None
 
 
-def home_week_summary(readings: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
+def home_week_summary(readings: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Media de la última semana de automedida en casa según el protocolo
     ESH 2021: las lecturas "casa" de los `HBPM_DAYS` días que acaban en la
     última, sin el primer día con lecturas. `valida` solo si quedan al menos
@@ -277,11 +366,17 @@ def home_week_summary(readings: list[dict[str, Any]]) -> Optional[dict[str, Any]
     dias_ = _media([r["diastolic"] for r in usadas])
     valida = dias >= HBPM_MIN_DAYS and len(usadas) >= HBPM_MIN_READINGS
     return {
-        "inicio": inicio.isoformat(), "fin": fin.isoformat(), "primer_dia": primer_dia.isoformat(),
-        "dias": dias, "n": len(usadas), "systolic": sis, "diastolic": dias_,
+        "inicio": inicio.isoformat(),
+        "fin": fin.isoformat(),
+        "primer_dia": primer_dia.isoformat(),
+        "dias": dias,
+        "n": len(usadas),
+        "systolic": sis,
+        "diastolic": dias_,
         "pulse": _media([r["pulse"] for r in usadas if r.get("pulse")]),
         "pulse_pressure": None if sis is None else sis - dias_,
-        "valida": valida, "categoria": bp_category(sis, dias_) if valida else None,
+        "valida": valida,
+        "categoria": bp_category(sis, dias_) if valida else None,
     }
 
 
@@ -292,18 +387,26 @@ def bp_summary_text(readings: list[dict[str, Any]]) -> str:
     lineas = []
     semana = home_week_summary(readings)
     if semana is None:
-        lineas.append("No hay mediciones tomadas en casa: la media de automedida solo usa las de casa.")
+        lineas.append(
+            "No hay mediciones tomadas en casa: la media de automedida solo usa las de casa."
+        )
     else:
-        periodo = f"del {semana['inicio']} al {semana['fin']}, sin el primer día ({semana['primer_dia']})"
+        periodo = (
+            f"del {semana['inicio']} al {semana['fin']}, sin el primer día ({semana['primer_dia']})"
+        )
         if semana["n"]:
             media = f"{semana['systolic']:.0f}/{semana['diastolic']:.0f} mmHg"
             extra = f" · presión de pulso {semana['pulse_pressure']:.0f} mmHg"
             if semana["pulse"]:
                 extra += f" · pulso medio {semana['pulse']:.0f} lpm"
-            lineas.append(f"Última semana de automedida en casa ({periodo}): {semana['n']} lecturas en "
-                          f"{semana['dias']} días. Media {media}{extra}.")
+            lineas.append(
+                f"Última semana de automedida en casa ({periodo}): {semana['n']} lecturas en "
+                f"{semana['dias']} días. Media {media}{extra}."
+            )
         else:
-            lineas.append(f"Última semana de automedida en casa ({periodo}): sin lecturas después del primer día.")
+            lineas.append(
+                f"Última semana de automedida en casa ({periodo}): sin lecturas después del primer día."
+            )
         if semana["valida"]:
             casa = BP_THRESHOLDS["casa"]
             lineas.append(
@@ -311,38 +414,52 @@ def bp_summary_text(readings: list[dict[str, Any]]) -> str:
                 f"{BP_CATEGORY_LABELS[semana['categoria']]} (no elevada < {casa['elevada'][0]}/{casa['elevada'][1]}; "
                 f"elevada hasta < {casa['hipertension'][0]}/{casa['hipertension'][1]}; hipertensión ≥ "
                 f"{casa['hipertension'][0]}/{casa['hipertension'][1]} mmHg). Es una ayuda para hablarlo con tu "
-                "médico, no un diagnóstico.")
+                "médico, no un diagnóstico."
+            )
         else:
             lineas.append(
                 f"No cumple el protocolo de automedida de la guía ESH 2021 (hacen falta al menos "
                 f"{HBPM_MIN_DAYS} días y {HBPM_MIN_READINGS} lecturas sin contar el primer día, idealmente "
-                f"{HBPM_DAYS} días con dos tomas por la mañana y dos por la noche): la media no se clasifica.")
+                f"{HBPM_DAYS} días con dos tomas por la mañana y dos por la noche): la media no se clasifica."
+            )
     consulta = [r for r in readings if r.get("place") == "consulta"]
     if consulta:
         ultima = consulta[-1]
-        lineas.append(f"Última toma en la consulta: {ultima['systolic']}/{ultima['diastolic']} mmHg "
-                      f"({ultima['measured_at'][:10]}); en la consulta los umbrales son otros (hipertensión ≥ 140/90).")
-    lineas.append("Las lecturas sueltas no se clasifican: tienen poca precisión diagnóstica (ESH 2021).")
+        lineas.append(
+            f"Última toma en la consulta: {ultima['systolic']}/{ultima['diastolic']} mmHg "
+            f"({ultima['measured_at'][:10]}); en la consulta los umbrales son otros (hipertensión ≥ 140/90)."
+        )
+    lineas.append(
+        "Las lecturas sueltas no se clasifican: tienen poca precisión diagnóstica (ESH 2021)."
+    )
     return "\n".join(lineas)
 
 
-def period_stats(readings: list[dict[str, Any]], desde: Optional[str] = None,
-                 hasta: Optional[str] = None) -> Optional[dict[str, Any]]:
+def period_stats(
+    readings: list[dict[str, Any]], desde: str | None = None, hasta: str | None = None
+) -> dict[str, Any] | None:
     """Medias descriptivas de las mediciones EN CASA entre `desde` y
     `hasta` ("AAAA-MM-DD", ambos incluidos; `None` = sin límite): nº de
     mediciones y de días, y media de sistólica, diastólica y pulso de todas
     las mediciones. No se clasifican (la guía solo clasifica una semana de
     automedida según protocolo, ver `home_week_summary`). `None` si no hay
     ninguna en el periodo."""
-    casa = [r for r in readings if r.get("place", "casa") == "casa"
-            and (desde is None or r["measured_at"][:10] >= desde)
-            and (hasta is None or r["measured_at"][:10] <= hasta)]
+    casa = [
+        r
+        for r in readings
+        if r.get("place", "casa") == "casa"
+        and (desde is None or r["measured_at"][:10] >= desde)
+        and (hasta is None or r["measured_at"][:10] <= hasta)
+    ]
     if not casa:
         return None
     return {
-        "desde": casa[0]["measured_at"][:10], "hasta": casa[-1]["measured_at"][:10], "n": len(casa),
+        "desde": casa[0]["measured_at"][:10],
+        "hasta": casa[-1]["measured_at"][:10],
+        "n": len(casa),
         "dias": len({r["measured_at"][:10] for r in casa}),
-        "systolic": _media([r["systolic"] for r in casa]), "diastolic": _media([r["diastolic"] for r in casa]),
+        "systolic": _media([r["systolic"] for r in casa]),
+        "diastolic": _media([r["diastolic"] for r in casa]),
         "pulse": _media([r["pulse"] for r in casa if r.get("pulse")]),
     }
 

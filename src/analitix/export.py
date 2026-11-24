@@ -3,16 +3,18 @@
 # Autor: Gabriel Marti
 # Contacto: https://github.com/gabimarti
 # Fecha de creación: 2026-09-07
-# Última actualización: 2026-10-08
+# Última actualización: 2026-10-09
 # ---------------------------------------------------------------------------
 """Exportación de resultados a Excel, CSV y PDF."""
+
 from __future__ import annotations
 
 import datetime as dt
 import io
 import textwrap
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import matplotlib.image as mpimg
 import pandas as pd
@@ -21,11 +23,18 @@ from matplotlib.figure import Figure
 
 from analitix import __version__, __version_date__
 from analitix.charts import (
-    COLOR_ALTO, COLOR_BAJO, COLOR_BRUSCO, DEFAULT_MIN_POINTS, data_sufficiency, evolution_figure,
+    COLOR_ALTO,
+    COLOR_BAJO,
+    COLOR_BRUSCO,
+    DEFAULT_MIN_CHART_POINTS,
+    DEFAULT_MIN_POINTS,
+    enough_for_chart,
+    evolution_figure,
 )
 from analitix.config import LOGO_PATH
 from analitix.pdf_parser import NUMERIC_TOKEN_RE
-from analitix.updates import REPO_URL
+from analitix.report_detail import format_diff
+from analitix.updates import AUTHOR_URL, REPO_URL
 
 # Excel/LibreOffice interpretan una celda de texto como fórmula si empieza por
 # uno de estos caracteres (inyección de fórmulas CSV/Excel, CWE-1236). Los
@@ -99,7 +108,7 @@ _PDF_DISCLAIMER = (
 # Versión con la que se generó el informe, en la portada y en el pie de cada
 # página, para saber de dónde sale cualquier página suelta.
 _ANALITIX_VERSION = f"Analitix {__version__} ({__version_date__})"
-_FOOTER_STRIP_IN = 0.4  # franja propia del pie en las páginas que no eran A4
+_FOOTER_STRIP_IN = 0.5  # franja propia del pie en las páginas que no eran A4
 # Tabla de parámetros: el nombre ocupa casi la mitad (antes las cinco
 # columnas medían igual y el nombre se cortaba); el estado es una palabra.
 _TABLE_COL_WIDTHS = (0.46, 0.15, 0.15, 0.09, 0.15)
@@ -149,25 +158,47 @@ def _fit_page_a4(fig: Figure) -> None:
         leyenda.set_bbox_to_anchor((0, desplazamiento, 1, escala), transform=fig.transFigure)
 
 
+# Caracteres que caben en una línea del pie (8 pt, todo el ancho de una
+# página A4 vertical) y en una línea de detalle de la portada (11 pt).
+_FOOTER_LINE_CHARS = 110
+_COVER_LINE_CHARS = 72
+
+
+def _wrap_segments(texto: str, ancho: int) -> list[str]:
+    """Parte un texto «a · b · c» en líneas de como mucho `ancho`
+    caracteres sin cortar ningún tramo entre « · » (salvo un tramo que por
+    sí solo ya no quepa)."""
+    lineas: list[str] = []
+    for tramo in texto.split(" · "):
+        if lineas and len(lineas[-1]) + 3 + len(tramo) <= ancho:
+            lineas[-1] += " · " + tramo
+        else:
+            lineas.extend(textwrap.wrap(tramo, width=ancho) or [""])
+    return lineas
+
+
 def _add_footer(fig: Figure, tipo_informe: str, pagina: int, total: int) -> None:
     """Pie de página en todas las páginas del PDF, incluida la portada, en
     una franja propia que no tapa el contenido, en una página A4
-    (`_fit_page_a4`): tipo de informe a la izquierda y "Página n de N" a la
-    derecha; debajo, centrada, la versión de Analitix (en su propia línea
-    porque el tipo de informe puede ser largo, p. ej. con el filtro de
-    laboratorios)."""
+    (`_fit_page_a4`): arriba, el tipo de informe a todo el ancho (en dos
+    líneas si es largo, p. ej. con el periodo y el filtro de laboratorios);
+    debajo, la versión de Analitix centrada y "Página n de N" a la derecha,
+    para que el número de página nunca se solape con el tipo de informe."""
     _fit_page_a4(fig)
     alto = fig.get_size_inches()[1]
-    y = 0.2 / alto  # a 0,2 pulgadas del borde inferior
-    fig.text(0.06, y, tipo_informe, fontsize=8, color="#777777")
+    lineas = _wrap_segments(tipo_informe, _FOOTER_LINE_CHARS)[:2]
+    for i, linea in enumerate(reversed(lineas)):
+        y = (0.2 + 0.13 * i) / alto  # la última línea, a 0,2 pulgadas del borde
+        fig.text(0.06, y, linea, fontsize=8, color="#777777")
+    y = 0.06 / alto
+    fig.text(0.5, y, _ANALITIX_VERSION, fontsize=7, color="#777777", ha="center")
     fig.text(0.94, y, f"Página {pagina} de {total}", fontsize=8, color="#777777", ha="right")
-    fig.text(0.5, 0.06 / alto, _ANALITIX_VERSION, fontsize=7, color="#777777", ha="center")
 
 
 def _cover_page(patient_name: str, tipo_informe: str, fecha: str) -> Figure:
     """Portada: logo de Analitix, nombre del paciente, tipo de informe,
-    fecha, versión de Analitix y URL del proyecto — sin ninguna tabla (eso
-    empieza en la página siguiente)."""
+    fecha, versión de Analitix, URL del proyecto y página del autor — sin
+    ninguna tabla (eso empieza en la página siguiente)."""
     fig = Figure(figsize=(8.27, 11.69), dpi=100)  # A4 vertical
     try:
         logo = mpimg.imread(str(LOGO_PATH))
@@ -177,46 +208,91 @@ def _cover_page(patient_name: str, tipo_informe: str, fecha: str) -> Figure:
     except OSError:
         pass  # sin el fichero de logo no se bloquea la generación del informe
     fig.text(0.5, 0.56, "Informe de seguimiento", fontsize=20, weight="bold", ha="center")
-    fig.text(0.5, 0.50, tipo_informe, fontsize=14, ha="center", color="#555555")
-    fig.text(0.5, 0.44, f"Paciente: {patient_name}", fontsize=12, ha="center")
+    # El tipo de informe puede ser largo («Informe de parámetros alterados ·
+    # Gráficas: ... · Periodo: ... · Datos solo de: ...»): el primer tramo va
+    # en grande y el resto debajo, en líneas que caben en la página.
+    principal, _, detalle = tipo_informe.partition(" · ")
+    fig.text(0.5, 0.50, principal, fontsize=14, ha="center", color="#555555")
+    y = 0.50
+    for linea in _wrap_segments(detalle, _COVER_LINE_CHARS) if detalle else []:
+        y -= 0.024
+        fig.text(0.5, y, linea, fontsize=11, ha="center", color="#555555")
+    y_paciente = min(0.44, y - 0.045)
+    fig.text(0.5, y_paciente, f"Paciente: {patient_name}", fontsize=12, ha="center")
     fig.text(
-        0.5, 0.40, f"Último informe de laboratorio: {fecha[:10]}  ·  Generado: {dt.date.today().isoformat()}",
-        fontsize=10, ha="center", color="#555555",
+        0.5,
+        y_paciente - 0.04,
+        f"Último informe de laboratorio: {fecha[:10]}  ·  Generado: {dt.date.today().isoformat()}",
+        fontsize=10,
+        ha="center",
+        color="#555555",
     )
-    fig.text(0.5, 0.20, f"Generado con {_ANALITIX_VERSION}", fontsize=9, ha="center", color="#555555")
+    fig.text(
+        0.5, 0.20, f"Generado con {_ANALITIX_VERSION}", fontsize=9, ha="center", color="#555555"
+    )
     fig.text(0.5, 0.18, REPO_URL, fontsize=9, ha="center", color="#555555")
+    fig.text(
+        0.5, 0.16, f"Autor: Gabriel Marti · {AUTHOR_URL}", fontsize=9, ha="center", color="#555555"
+    )
     fig.text(0.5, 0.1, _PDF_DISCLAIMER, fontsize=8, color="#555555", ha="center", wrap=True)
     return fig
 
 
-def _table_page(fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: float, subtitulo: str) -> Figure:
+def _table_page(
+    fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: float, subtitulo: str
+) -> Figure:
     """Una página A4 con la tabla de `filas` (mismas columnas/colores que
     la pestaña Resumen de `gui.py`)."""
     fig = Figure(figsize=(8.27, 11.69), dpi=100)  # A4 vertical
     fig.text(0.06, 0.95, subtitulo, fontsize=14, weight="bold")
-    fig.text(0.06, 0.925, f"Último informe de laboratorio: {fecha[:10]}", fontsize=9, color="#555555")
+    fig.text(
+        0.06, 0.925, f"Último informe de laboratorio: {fecha[:10]}", fontsize=9, color="#555555"
+    )
 
     ax = fig.add_axes((0.06, 0.08, 0.88, 0.82))
     ax.axis("off")
     if not filas:
-        ax.text(0.5, 0.95, "Sin parámetros en esta categoría.", ha="center", va="top", fontsize=10,
-                 transform=ax.transAxes)
+        ax.text(
+            0.5,
+            0.95,
+            "Sin parámetros en esta categoría.",
+            ha="center",
+            va="top",
+            fontsize=10,
+            transform=ax.transAxes,
+        )
     else:
         columnas = ["Parámetro", "Valor", "Referencia", "Estado", "Variación"]
         filas_texto = []
         for f in filas:
             ref_low, ref_high = f["ref_low"], f["ref_high"]
-            referencia = f"{ref_low:g} - {ref_high:g}" if ref_low is not None and ref_high is not None else "-"
-            estado = _ESTADO_TEXTO.get(f["flag_calc"], "Normal")
-            variacion = "-" if f["pct"] is None else f"{f['pct']:+.1f}%{' (*)' if f['brusco'] else ''}"
+            referencia = (
+                f"{ref_low:g} - {ref_high:g}"
+                if ref_low is not None and ref_high is not None
+                else "-"
+            )
+            estado = _ESTADO_TEXTO.get(f.get("flag_calc"), "Normal")
+            pct = f.get("pct")
+            variacion = "-" if pct is None else f"{pct:+.1f}%{' (*)' if f.get('brusco') else ''}"
             nombre = f["raw_name"] or ""
             if len(nombre) > _TABLE_NAME_MAX:
                 nombre = nombre[: _TABLE_NAME_MAX - 1] + "…"
             filas_texto.append(
-                [nombre, f"{f['value_num']:g} {f['unit'] or ''}".strip(), referencia, estado, variacion]
+                [
+                    nombre,
+                    f"{f['value_num']:g} {f['unit'] or ''}".strip(),
+                    referencia,
+                    estado,
+                    variacion,
+                ]
             )
-        tabla = ax.table(cellText=filas_texto, colLabels=columnas, loc="upper center", cellLoc="left",
-                         colWidths=_TABLE_COL_WIDTHS)
+        tabla = ax.table(
+            cellText=filas_texto,
+            colLabels=columnas,
+            loc="upper center",
+            cellLoc="left",
+            colWidths=_TABLE_COL_WIDTHS,
+        )
         tabla.auto_set_font_size(False)
         tabla.set_fontsize(8)
         tabla.scale(1, 1.4)
@@ -227,9 +303,12 @@ def _table_page(fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: floa
                 tabla[(row, 3)].get_text().set_weight("bold")
 
     fig.text(
-        0.06, 0.05, f"(*) cambio de {cambio_brusco_pct:g}% o más respecto al informe anterior, esté o no "
+        0.06,
+        0.05,
+        f"(*) cambio de {cambio_brusco_pct:g}% o más respecto al informe anterior, esté o no "
         "dentro de rango.",
-        fontsize=7, color="#555555",
+        fontsize=7,
+        color="#555555",
     )
     return fig
 
@@ -245,7 +324,11 @@ def export_pdf(
     *,
     tipo_informe: str,
     min_points: int = DEFAULT_MIN_POINTS,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
+    full_series_by_canonical_id: dict[str, list[dict[str, Any]]] | None = None,
+    chart_years: int = 0,
+    min_chart_points: int = DEFAULT_MIN_CHART_POINTS,
+    extra_pages: list[Figure] | None = None,
 ) -> int:
     """Informe de seguimiento en PDF (ampliado 2026-09-21 en dos pasos:
     primero con dos tipos de informe — "completo"/"de alterados", ver
@@ -259,14 +342,17 @@ def export_pdf(
        informe más reciente (`flag_calc in ("alto", "bajo")`).
     3. Tabla del resto de `filas` (dentro de rango, o sin `flag_calc`).
     4. Un gráfico de evolución (`charts.evolution_figure`) por cada
-       parámetro de `filas` con **al menos 2 puntos** en
+       parámetro de `filas` con al menos `min_chart_points` analíticas
+       (fechas distintas, nunca menos de 2; ajuste de Configuración) en
        `series_by_canonical_id` — nunca para los parámetros "normales"
-       (el llamador ya decide qué incluir ahí) ni para uno con un único
-       valor (no hay nada que mostrar como evolución). Con menos de
+       (el llamador ya decide qué incluir ahí) ni para uno con menos
+       analíticas (no hay evolución que mostrar). Con menos de
        `min_points` (el mismo ajuste de Configuración que la pantalla) el
        gráfico lleva el aviso de pocos datos de `charts.data_sufficiency`.
 
-    Todas las páginas llevan pie (`_add_footer`). `on_progress(n, total)`
+    `extra_pages` (opcional, p. ej. la comparativa con la analítica anterior
+    de `report_detail_pages`) van después de las dos tablas y antes de los
+    gráficos. Todas las páginas llevan pie (`_add_footer`). `on_progress(n, total)`
     se llama tras escribir cada página (barra de progreso de `gui.py`).
     Devuelve el nº de páginas de gráfico añadidas."""
     fuera_de_rango = [f for f in filas if f["flag_calc"] in ("alto", "bajo")]
@@ -275,16 +361,23 @@ def export_pdf(
     graficos = []
     for f in filas:
         series = series_by_canonical_id.get(f["canonical_id"])
-        if series and data_sufficiency(len(series), min_points) not in ("sin_datos", "un_punto"):
+        if series and enough_for_chart(series, min_chart_points):
             graficos.append((f, series))
-    total = 3 + len(graficos)
+    extra_pages = list(extra_pages or [])
+    total = 3 + len(extra_pages) + len(graficos)
 
     pagina = 1
     with PdfPages(path) as pdf:
         for fig in (
             _cover_page(patient_name, tipo_informe, fecha),
-            _table_page(fecha, fuera_de_rango, cambio_brusco_pct, "Parámetros alterados en la última analítica"),
+            _table_page(
+                fecha,
+                fuera_de_rango,
+                cambio_brusco_pct,
+                "Parámetros alterados en la última analítica",
+            ),
             _table_page(fecha, resto, cambio_brusco_pct, "Resto de parámetros"),
+            *extra_pages,
         ):
             _add_footer(fig, tipo_informe, pagina, total)
             pdf.savefig(fig)
@@ -293,12 +386,20 @@ def export_pdf(
             pagina += 1
 
         for f, series in graficos:
-            fig = evolution_figure(series, labels.get(f["canonical_id"], f["raw_name"]), min_points)
-            _add_footer(fig, tipo_informe, pagina, total)
-            pdf.savefig(fig)
-            if on_progress:
-                on_progress(pagina, total)
-            pagina += 1
+            full_s = (full_series_by_canonical_id or {}).get(f["canonical_id"])
+            fig = evolution_figure(
+                series,
+                labels.get(f["canonical_id"], f["raw_name"]),
+                min_points,
+                full_series=full_s,
+                chart_years=chart_years,
+            )
+            if fig is not None:
+                _add_footer(fig, tipo_informe, pagina, total)
+                pdf.savefig(fig)
+                if on_progress:
+                    on_progress(pagina, total)
+                pagina += 1
     return len(graficos)
 
 
@@ -307,7 +408,10 @@ def export_pdf(
 # las figuras; aquí solo se monta el documento: portada + páginas en el
 # orden recibido + pie en todas, igual que `export_pdf`.
 
-def table_page(fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: float, subtitulo: str) -> Figure:
+
+def table_page(
+    fecha: str, filas: list[dict[str, Any]], cambio_brusco_pct: float, subtitulo: str
+) -> Figure:
     """Página de tabla (la misma de `export_pdf`), para el informe personalizado."""
     return _table_page(fecha, filas, cambio_brusco_pct, subtitulo)
 
@@ -326,7 +430,9 @@ def text_page(titulo: str, texto: str) -> Figure:
     lineas = lineas[:_TEXT_PAGE_MAX_LINES]
     fig.analitix_text = (titulo, lineas)
     fig.text(0.06, 0.95, titulo, fontsize=14, weight="bold")
-    fig.text(0.06, 0.95 - _TEXT_GAP_IN / 11.69, "\n".join(lineas), fontsize=9, va="top", linespacing=1.4)
+    fig.text(
+        0.06, 0.95 - _TEXT_GAP_IN / 11.69, "\n".join(lineas), fontsize=9, va="top", linespacing=1.4
+    )
     return fig
 
 
@@ -355,7 +461,9 @@ def _is_chart(fig: Figure) -> bool:
     return not _is_a4(fig) and getattr(fig, "analitix_tight_rect", None) is None
 
 
-def _flow_pages(paginas: list[Figure], por_pagina: int) -> list[Figure | list[tuple[str, Any, float]]]:
+def _flow_pages(
+    paginas: list[Figure], por_pagina: int
+) -> list[Figure | list[tuple[str, Any, float]]]:
     """Con `por_pagina` 2 o 3, rellena páginas A4 verticales de arriba abajo
     con los textos (`text_page`) y gráficos seguidos de `paginas`: cada
     gráfico a todo el ancho útil y con alto 1/`por_pagina` del útil (sin
@@ -378,7 +486,7 @@ def _flow_pages(paginas: list[Figure], por_pagina: int) -> list[Figure | list[tu
             resultado.append(bloques)
         bloques, libre = [], alto_util
 
-    def bloque_de(fig: Figure) -> Optional[tuple[str, Any, float]]:
+    def bloque_de(fig: Figure) -> tuple[str, Any, float] | None:
         texto = getattr(fig, "analitix_text", None)
         if texto is not None:
             return "texto", texto, _TEXT_GAP_IN + len(texto[1]) * _TEXT_LINE_IN + 0.15
@@ -421,9 +529,21 @@ def _flow_page(bloques: list[tuple[str, Any, float]]) -> Figure:
     for tipo, contenido, alto in bloques:
         if tipo == "texto":
             titulo, lineas = contenido
-            page.text(_CHARTS_MARGIN_IN / ancho_a4, (arriba - 0.2) / alto_a4, titulo, fontsize=14, weight="bold")
-            page.text(_CHARTS_MARGIN_IN / ancho_a4, (arriba - 0.2 - _TEXT_GAP_IN) / alto_a4, "\n".join(lineas),
-                      fontsize=9, va="top", linespacing=1.4)
+            page.text(
+                _CHARTS_MARGIN_IN / ancho_a4,
+                (arriba - 0.2) / alto_a4,
+                titulo,
+                fontsize=14,
+                weight="bold",
+            )
+            page.text(
+                _CHARTS_MARGIN_IN / ancho_a4,
+                (arriba - 0.2 - _TEXT_GAP_IN) / alto_a4,
+                "\n".join(lineas),
+                fontsize=9,
+                va="top",
+                linespacing=1.4,
+            )
         else:
             fig = contenido
             escala = alto / fig.get_size_inches()[1]
@@ -431,17 +551,30 @@ def _flow_page(bloques: list[tuple[str, Any, float]]) -> Figure:
             buf = io.BytesIO()
             fig.savefig(buf, format="png", dpi=_CHARTS_DPI * escala)
             buf.seek(0)
-            ax = page.add_axes((_CHARTS_MARGIN_IN / ancho_a4, (arriba - alto) / alto_a4,
-                                ancho_util / ancho_a4, alto / alto_a4))
+            ax = page.add_axes(
+                (
+                    _CHARTS_MARGIN_IN / ancho_a4,
+                    (arriba - alto) / alto_a4,
+                    ancho_util / ancho_a4,
+                    alto / alto_a4,
+                )
+            )
             ax.imshow(mpimg.imread(buf), interpolation="none")
             ax.axis("off")
         arriba -= alto + _CHARTS_GAP_IN
     return page
 
 
-def export_pages_pdf(patient_name: str, fecha: str, paginas: list[Figure], path: Path, *, tipo_informe: str,
-                     graficos_por_pagina: int = 1,
-                     on_progress: Optional[Callable[[int, int], None]] = None) -> int:
+def export_pages_pdf(
+    patient_name: str,
+    fecha: str,
+    paginas: list[Figure],
+    path: Path,
+    *,
+    tipo_informe: str,
+    graficos_por_pagina: int = 1,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> int:
     """Escribe el informe personalizado: portada (`_cover_page`, con el
     aviso de que no es un diagnóstico) y después `paginas` en ese orden,
     todas con pie (`_add_footer`). Con `graficos_por_pagina` 2 o 3, los
@@ -453,7 +586,9 @@ def export_pages_pdf(patient_name: str, fecha: str, paginas: list[Figure], path:
     paginas = _flow_pages(paginas, graficos_por_pagina)
     total = len(paginas) + 1
     with PdfPages(path) as pdf:
-        for numero, fig in enumerate([_cover_page(patient_name, tipo_informe, fecha), *paginas], start=1):
+        for numero, fig in enumerate(
+            [_cover_page(patient_name, tipo_informe, fecha), *paginas], start=1
+        ):
             if isinstance(fig, list):
                 fig = _flow_page(fig)
             _add_footer(fig, tipo_informe, numero, total)
@@ -461,3 +596,324 @@ def export_pages_pdf(patient_name: str, fecha: str, paginas: list[Figure], path:
             if on_progress:
                 on_progress(numero, total)
     return total
+
+
+def export_report_detail_csv(
+    comparison_rows: list[dict[str, Any]], path: Path, is_comparison: bool = True
+) -> None:
+    """Exporta los resultados del detalle de analítica o comparativa delta a un fichero CSV."""
+    filas = []
+    for r in comparison_rows:
+        if is_comparison:
+            filas.append(
+                {
+                    "Sección": r.get("section") or "",
+                    "Prueba / Parámetro": r.get("raw_name") or "",
+                    "Valor Anterior": r.get("prev_value_raw") or "",
+                    "Valor Actual": r.get("value_raw") or "",
+                    "Variación": format_diff(r.get("diff_num"), r.get("diff_pct")),
+                    "Tendencia": r.get("trend") or "",
+                    "Estado Actual": r.get("status") or "",
+                    "Alerta Rango": r.get("range_alert") or "",
+                    "Valores Referencia": r.get("ref_text") or "",
+                    "Unidades": r.get("unit") or "",
+                }
+            )
+        else:
+            filas.append(
+                {
+                    "Sección": r.get("section") or "",
+                    "Prueba / Parámetro": r.get("raw_name") or "",
+                    "Resultado": r.get("value_raw") or "",
+                    "Estado": r.get("status") or "",
+                    "Valores Referencia": r.get("ref_text") or "",
+                    "Unidades": r.get("unit") or "",
+                }
+            )
+    export_csv(filas, path)
+
+
+def export_report_detail_excel(
+    comparison_rows: list[dict[str, Any]],
+    path: Path,
+    is_comparison: bool = True,
+    sheet_name: str = "Detalle Analítica",
+) -> None:
+    """Exporta los resultados del detalle de analítica o comparativa delta a un libro Excel."""
+    filas = []
+    for r in comparison_rows:
+        if is_comparison:
+            filas.append(
+                {
+                    "Sección": r.get("section") or "",
+                    "Prueba / Parámetro": r.get("raw_name") or "",
+                    "Valor Anterior": r.get("prev_value_raw") or "",
+                    "Valor Actual": r.get("value_raw") or "",
+                    "Variación": format_diff(r.get("diff_num"), r.get("diff_pct")),
+                    "Tendencia": r.get("trend") or "",
+                    "Estado Actual": r.get("status") or "",
+                    "Alerta Rango": r.get("range_alert") or "",
+                    "Valores Referencia": r.get("ref_text") or "",
+                    "Unidades": r.get("unit") or "",
+                }
+            )
+        else:
+            filas.append(
+                {
+                    "Sección": r.get("section") or "",
+                    "Prueba / Parámetro": r.get("raw_name") or "",
+                    "Resultado": r.get("value_raw") or "",
+                    "Estado": r.get("status") or "",
+                    "Valores Referencia": r.get("ref_text") or "",
+                    "Unidades": r.get("unit") or "",
+                }
+            )
+    export_excel(filas, path, sheet_name=sheet_name)
+
+
+def _report_detail_table_page(
+    titulo: str, subtitulo: str, filas: list[dict[str, Any]], is_comparison: bool = True
+) -> Figure:
+    """Página A4 de tabla para el informe detallado cotejable o comparativa delta."""
+    fig = Figure(figsize=(8.27, 11.69), dpi=100)  # A4 vertical
+    fig.text(0.06, 0.95, titulo, fontsize=13, weight="bold")
+    fig.text(0.06, 0.925, subtitulo, fontsize=8.5, color="#555555")
+
+    ax = fig.add_axes((0.05, 0.08, 0.90, 0.82))
+    ax.axis("off")
+
+    if not filas:
+        ax.text(
+            0.5,
+            0.95,
+            "Sin parámetros en este informe.",
+            ha="center",
+            va="top",
+            fontsize=10,
+            transform=ax.transAxes,
+        )
+        return fig
+
+    if is_comparison:
+        columnas = [
+            "Parámetro",
+            "Ant.",
+            "Act.",
+            "Variación",
+            "Tend.",
+            "Estado",
+            "Referencia",
+            "Unidades",
+        ]
+        col_widths = [0.30, 0.08, 0.08, 0.15, 0.04, 0.11, 0.11, 0.13]
+        col_idx_var = 3
+        col_idx_estado = 5
+    else:
+        columnas = ["Parámetro", "Resultado", "Estado", "Referencia", "Unidades"]
+        col_widths = [0.43, 0.13, 0.14, 0.16, 0.14]
+        col_idx_var = None
+        col_idx_estado = 2
+
+    filas_texto = []
+    section_rows = set()
+    for row_i, f in enumerate(filas):
+        if f.get("is_section_header"):
+            section_rows.add(row_i + 1)
+            sec_title = str(f.get("section") or "").upper()
+            filas_texto.append([sec_title] + [""] * (len(columnas) - 1))
+        elif is_comparison:
+            nom = f.get("raw_name") or ""
+            if len(nom) > 40:
+                nom = nom[:39] + "…"
+            u = f.get("unit") or "—"
+            if len(u) > 14:
+                u = u[:13] + "…"
+            # Truncar Ant./Act. para que no desborden la columna estrecha (8%)
+            ant = str(f.get("prev_value_raw") or "—")
+            if len(ant) > 9:
+                ant = ant[:8] + "…"
+            act = str(f.get("value_raw") or "—")
+            if len(act) > 9:
+                act = act[:8] + "…"
+            filas_texto.append(
+                [
+                    nom,
+                    ant,
+                    act,
+                    format_diff(f.get("diff_num"), f.get("diff_pct")),
+                    f.get("trend") or "—",
+                    f.get("status") or "Normal",
+                    f.get("ref_text") or "—",
+                    u,
+                ]
+            )
+        else:
+            nom = f.get("raw_name") or ""
+            if len(nom) > 50:
+                nom = nom[:49] + "…"
+            u = f.get("unit") or "—"
+            if len(u) > 18:
+                u = u[:17] + "…"
+            filas_texto.append(
+                [
+                    nom,
+                    str(f.get("value_raw") or "—"),
+                    f.get("status") or "Normal",
+                    f.get("ref_text") or "—",
+                    u,
+                ]
+            )
+
+    tabla = ax.table(
+        cellText=filas_texto,
+        colLabels=columnas,
+        loc="upper center",
+        cellLoc="left",
+        colWidths=col_widths,
+    )
+    tabla.auto_set_font_size(False)
+    tabla.set_fontsize(7.5)
+    tabla.scale(1, 1.35)
+
+    # Estilizar encabezados de columna
+    for col_idx in range(len(columnas)):
+        cell = tabla[(0, col_idx)]
+        cell.set_facecolor("#f3f4f6")
+        cell.set_edgecolor("#9ca3af")
+        cell.get_text().set_weight("bold")
+        cell.get_text().set_color("#111827")
+
+    for row_idx, f in enumerate(filas, start=1):
+        if row_idx in section_rows:
+            for col_idx in range(len(columnas)):
+                cell = tabla[(row_idx, col_idx)]
+                cell.set_facecolor("#e5e7eb")
+                cell.set_edgecolor("#9ca3af")
+                cell.get_text().set_weight("bold")
+                cell.get_text().set_fontsize(8.0)
+                cell.get_text().set_color("#1f2937")
+            continue
+
+        # Estilo de columna Estado
+        st = f.get("status")
+        estado_cell = tabla[(row_idx, col_idx_estado)]
+        if st == "↑ Alto":
+            estado_cell.get_text().set_color(COLOR_ALTO)
+            estado_cell.get_text().set_weight("bold")
+        elif st == "↓ Bajo":
+            estado_cell.get_text().set_color(COLOR_BAJO)
+            estado_cell.get_text().set_weight("bold")
+        elif st == "⚠ Fuera de rango":
+            estado_cell.get_text().set_color(COLOR_BRUSCO)
+            estado_cell.get_text().set_weight("bold")
+        else:
+            estado_cell.get_text().set_color("#2e7d32")
+
+        # Estilo de columna Variación con marcadores de color
+        if is_comparison and col_idx_var is not None:
+            diff_pct = f.get("diff_pct")
+            var_cell = tabla[(row_idx, col_idx_var)]
+            if diff_pct is not None:
+                pct_abs = abs(diff_pct)
+                if pct_abs >= 25.0:
+                    var_cell.get_text().set_color(COLOR_ALTO)
+                    var_cell.get_text().set_weight("bold")
+                    var_cell.set_facecolor("#fef2f2")
+                elif pct_abs >= 10.0:
+                    var_cell.get_text().set_color("#b45309")
+                    var_cell.get_text().set_weight("bold")
+                    var_cell.set_facecolor("#fffbeb")
+                else:
+                    var_cell.get_text().set_color("#2e7d32")
+                    var_cell.set_facecolor("#f0fdf4")
+
+    return fig
+
+
+def export_report_detail_pdf(
+    patient_name: str,
+    report_meta: dict[str, Any],
+    comparison_rows: list[dict[str, Any]],
+    path: Path,
+    prev_report_meta: dict[str, Any] | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> int:
+    """Exporta el detalle de la analítica como documento PDF A4 independiente."""
+    is_comparison = prev_report_meta is not None
+    tipo = (
+        "Detalle de analítica y comparativa delta"
+        if is_comparison
+        else "Detalle de analítica (cotejo con informe original)"
+    )
+    fecha = report_meta.get("fecha") or "—"
+    subtitulo = report_detail_subtitle(report_meta, prev_report_meta)
+
+    paginas = report_detail_pages(tipo, subtitulo, comparison_rows, is_comparison)
+    total_paginas = 1 + len(paginas)
+
+    with PdfPages(path) as pdf:
+        for num_pag, fig in enumerate([_cover_page(patient_name, tipo, fecha), *paginas], start=1):
+            _add_footer(fig, tipo, num_pag, total_paginas)
+            pdf.savefig(fig)
+            if on_progress:
+                on_progress(num_pag, total_paginas)
+
+    return total_paginas
+
+
+_DETAIL_ROWS_PER_PAGE = 26
+
+
+def report_detail_subtitle(
+    report_meta: dict[str, Any], prev_report_meta: dict[str, Any] | None = None
+) -> str:
+    """Subtítulo de las páginas de detalle: informe, laboratorio y fecha, y
+    con qué analítica anterior se compara (si se compara)."""
+    fecha = report_meta.get("fecha") or "—"
+    subtitulo = (
+        f"Informe: {report_meta.get('report_number') or '—'} · "
+        f"Laboratorio: {report_meta.get('lab') or '—'} · Fecha: {fecha[:10]}"
+    )
+    if prev_report_meta is not None:
+        fecha_prev = prev_report_meta.get("fecha") or "—"
+        subtitulo += (
+            f"\nComparado con analítica anterior: {prev_report_meta.get('report_number') or '—'} "
+            f"({fecha_prev[:10]}, {prev_report_meta.get('lab') or '—'})"
+        )
+    return subtitulo
+
+
+def report_detail_pages(
+    titulo: str,
+    subtitulo: str,
+    rows: list[dict[str, Any]],
+    is_comparison: bool,
+) -> list[Figure]:
+    """Páginas A4 de la tabla de detalle (cotejo o comparativa delta) de una
+    analítica, con las filas agrupadas por sección (una fila de cabecera por
+    sección, no una columna) y repartidas en páginas de
+    `_DETAIL_ROWS_PER_PAGE` filas. Las usan el detalle exportado por sí solo
+    (`export_report_detail_pdf`) y la comparativa de los informes completo y
+    personalizado."""
+    filas_con_seccion: list[dict[str, Any]] = []
+    sec_actual = None
+    for r in rows:
+        sec = r.get("section") or "General"
+        if sec != sec_actual:
+            sec_actual = sec
+            filas_con_seccion.append({"is_section_header": True, "section": sec})
+        filas_con_seccion.append(r)
+
+    chunks = [
+        filas_con_seccion[i : i + _DETAIL_ROWS_PER_PAGE]
+        for i in range(0, max(len(filas_con_seccion), 1), _DETAIL_ROWS_PER_PAGE)
+    ]
+    return [
+        _report_detail_table_page(
+            titulo,
+            f"{subtitulo} (parte {i} de {len(chunks)})" if len(chunks) > 1 else subtitulo,
+            chunk,
+            is_comparison,
+        )
+        for i, chunk in enumerate(chunks, start=1)
+    ]

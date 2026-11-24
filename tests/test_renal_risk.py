@@ -2,13 +2,13 @@ import pytest
 
 from analitix.renal_risk import (
     _acr_mg_g,
-    _ml_min,
     _mg_dl,
+    _ml_min,
     acr_category,
     aki_ratio,
-    gfr_category,
     get_latest_renal_summary,
     get_renal_index_series,
+    gfr_category,
     kdigo_risk,
     urea_creatinina_ratio,
 )
@@ -17,8 +17,21 @@ from analitix.repository import get_or_create_patient, insert_result, upsert_rep
 
 @pytest.mark.parametrize(
     ("value", "expected"),
-    [(95, "G1"), (90, "G1"), (89, "G2"), (60, "G2"), (59, "G3a"), (45, "G3a"),
-     (44, "G3b"), (30, "G3b"), (29, "G4"), (15, "G4"), (14, "G5"), (0, "G5"), (None, None)],
+    [
+        (95, "G1"),
+        (90, "G1"),
+        (89, "G2"),
+        (60, "G2"),
+        (59, "G3a"),
+        (45, "G3a"),
+        (44, "G3b"),
+        (30, "G3b"),
+        (29, "G4"),
+        (15, "G4"),
+        (14, "G5"),
+        (0, "G5"),
+        (None, None),
+    ],
 )
 def test_gfr_category(value, expected):
     assert gfr_category(value) == expected
@@ -35,10 +48,14 @@ def test_acr_category(value, expected):
 @pytest.mark.parametrize(
     ("g", "a", "expected"),
     [
-        ("G1", "A1", "verde"), ("G1", "A3", "naranja"),
-        ("G3a", "A1", "amarillo"), ("G3a", "A3", "rojo"),
-        ("G4", "A3", "rojo_oscuro"), ("G5", "A1", "rojo_oscuro"),
-        (None, "A1", None), ("G1", None, None),
+        ("G1", "A1", "verde"),
+        ("G1", "A3", "naranja"),
+        ("G3a", "A1", "amarillo"),
+        ("G3a", "A3", "rojo"),
+        ("G4", "A3", "rojo_oscuro"),
+        ("G5", "A1", "rojo_oscuro"),
+        (None, "A1", None),
+        ("G1", None, None),
     ],
 )
 def test_kdigo_risk(g, a, expected):
@@ -57,7 +74,10 @@ def test_aki_ratio_uses_median_of_8_to_365_day_window():
     previas = [
         ("2023-01-01", 0.8),
         ("2023-06-01", 1.0),
-        ("2023-12-20", 5.0),  # fuera de ventana (solo 11 días antes de la fecha actual, < 8 no... calculemos)
+        (
+            "2023-12-20",
+            5.0,
+        ),  # fuera de ventana (solo 11 días antes de la fecha actual, < 8 no... calculemos)
     ]
     # Fecha actual bien separada de todas salvo la primera comprobación manual.
     ratio = aki_ratio(1.5, previas[:2], "2024-01-01")
@@ -86,7 +106,9 @@ def test_unit_guards():
     assert _acr_mg_g({"value_num": 2.4, "unit": "mg/L"}) is None
 
 
-def _insert_renal_report(con, patient_id, report_number, fecha, fg=None, urea=None, creatinina=None, acr=None):
+def _insert_renal_report(
+    con, patient_id, report_number, fecha, fg=None, urea=None, creatinina=None, acr=None
+):
     report_id = upsert_report(con, patient_id, report_number, fecha, None, "synthetic.pdf")
     values = []
     if fg is not None:
@@ -99,10 +121,24 @@ def _insert_renal_report(con, patient_id, report_number, fecha, fg=None, urea=No
         values.append(("Albumina/Creatinina", "albumina_creatinina", acr, "mg/g_creat"))
     for raw_name, cid, value, unit in values:
         insert_result(
-            con, report_id,
-            dict(section=None, test_group=None, loinc_code=None, raw_name=raw_name,
-                 canonical_id=cid, value_raw=str(value), value_num=value, unit=unit,
-                 ref_low=None, ref_high=None, ref_text=None, flag_pdf=None, flag_calc=None, sample_date=None),
+            con,
+            report_id,
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name=raw_name,
+                canonical_id=cid,
+                value_raw=str(value),
+                value_num=value,
+                unit=unit,
+                ref_low=None,
+                ref_high=None,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=None,
+                sample_date=None,
+            ),
         )
     con.commit()
 

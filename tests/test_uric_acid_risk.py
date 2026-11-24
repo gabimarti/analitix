@@ -1,12 +1,10 @@
-import pytest
-
+from analitix.repository import get_or_create_patient, insert_result, upsert_report
 from analitix.uric_acid_risk import (
     HYPERURICEMIA_HIGH,
     _mg_dl,
     get_latest_uric_acid_summary,
     get_uric_acid_series,
 )
-from analitix.repository import get_or_create_patient, insert_result, upsert_report
 
 
 def test_unit_guard():
@@ -20,11 +18,24 @@ def _insert_report(con, patient_id, report_number, fecha, urat=None, urat_cid="u
     report_id = upsert_report(con, patient_id, report_number, fecha, None, "synthetic.pdf")
     if urat is not None:
         insert_result(
-            con, report_id,
-            dict(section=None, test_group=None, loinc_code=None, raw_name="Urat",
-                 canonical_id=urat_cid, value_raw=str(urat), value_num=urat, unit="mg/dl",
-                 ref_low=None, ref_high=None, ref_text=None, flag_pdf=None, flag_calc=None,
-                 sample_date=None),
+            con,
+            report_id,
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name="Urat",
+                canonical_id=urat_cid,
+                value_raw=str(urat),
+                value_num=urat,
+                unit="mg/dl",
+                ref_low=None,
+                ref_high=None,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=None,
+                sample_date=None,
+            ),
         )
     con.commit()
 

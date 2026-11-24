@@ -77,10 +77,22 @@ def _insert_hepatic_report(con, patient_id, report_number, fecha, ast, alt, plaq
         insert_result(
             con,
             report_id,
-            dict(section=None, test_group=None, loinc_code=None, raw_name=raw_name,
-                 canonical_id=canonical_id, value_raw=str(value), value_num=value,
-                 unit=unit, ref_low=None, ref_high=None, ref_text=None,
-                 flag_pdf=None, flag_calc=None, sample_date=None),
+            dict(
+                section=None,
+                test_group=None,
+                loinc_code=None,
+                raw_name=raw_name,
+                canonical_id=canonical_id,
+                value_raw=str(value),
+                value_num=value,
+                unit=unit,
+                ref_low=None,
+                ref_high=None,
+                ref_text=None,
+                flag_pdf=None,
+                flag_calc=None,
+                sample_date=None,
+            ),
         )
     con.commit()
 

@@ -25,8 +25,13 @@ def test_known_pdf_filenames_sees_other_subfolders(tmp_path, monkeypatch):
 def _fake_manual_review_result(pdf_path: Path) -> dict:
     return {
         "header": {
-            "full_name": None, "dni": None, "nhc": None, "report_number": None,
-            "birth_date": None, "request_date": None, "validation_date": None,
+            "full_name": None,
+            "dni": None,
+            "nhc": None,
+            "report_number": None,
+            "birth_date": None,
+            "request_date": None,
+            "validation_date": None,
         },
         "results": [],
         "source_file": pdf_path.name,
@@ -64,16 +69,28 @@ def _fake_no_birth_date_result(pdf_path: Path) -> dict:
     # cabecera (p. ej. HUGTIP, que solo trae la edad en años).
     return {
         "header": {
-            "full_name": "GARCIA LOPEZ, MARIA", "dni": None, "nhc": "999",
-            "report_number": "1", "birth_date": None, "request_date": None,
+            "full_name": "GARCIA LOPEZ, MARIA",
+            "dni": None,
+            "nhc": "999",
+            "report_number": "1",
+            "birth_date": None,
+            "request_date": None,
             "validation_date": None,
         },
         "results": [
             {
-                "raw_name": "Glucosa", "loinc_code": None, "value_raw": "100",
-                "value_num": 100.0, "unit": "mg/dL", "ref_low": 70.0, "ref_high": 100.0,
-                "ref_text": "70 - 100", "flag_pdf": None, "section": None,
-                "test_group": None, "sample_date": None,
+                "raw_name": "Glucosa",
+                "loinc_code": None,
+                "value_raw": "100",
+                "value_num": 100.0,
+                "unit": "mg/dL",
+                "ref_low": 70.0,
+                "ref_high": 100.0,
+                "ref_text": "70 - 100",
+                "flag_pdf": None,
+                "section": None,
+                "test_group": None,
+                "sample_date": None,
             }
         ],
         "source_file": pdf_path.name,
@@ -89,9 +106,18 @@ def test_new_patient_without_birth_date_flagged_as_possible_duplicate(db, monkey
     # fecha de nacimiento nunca podrá emparejar por nombre+fecha con ese
     # paciente aunque el nombre coincida, así que crea uno nuevo — debe
     # quedar marcado para revisar como posible duplicado en vez de colarse
-    # en silencio.
+    # en silencio. Es el comportamiento de una BD con varios pacientes
+    # (anterior a «una BD por paciente»); con uno solo, ver
+    # test_one_patient_per_db.py.
     get_or_create_patient(
-        db, full_name="GARCIA LOPEZ, MARIA", birth_date="1980-01-01", dni=None, nhc=None,
+        db,
+        full_name="GARCIA LOPEZ, MARIA",
+        birth_date="1980-01-01",
+        dni=None,
+        nhc=None,
+    )
+    get_or_create_patient(
+        db, full_name="PEREZ RUIZ, ANA", birth_date="1990-02-02", dni=None, nhc=None
     )
     db.commit()
 
@@ -103,7 +129,7 @@ def test_new_patient_without_birth_date_flagged_as_possible_duplicate(db, monkey
 
     assert "posible duplicado" in reason
     assert format_name == "Hospital Universitari Germans Trias i Pujol (HUGTIP)"
-    assert db.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 2
+    assert db.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 3
     assert db.execute("SELECT COUNT(*) FROM results").fetchone()[0] == 1
     row = db.execute(
         "SELECT status FROM processed_files WHERE filename = ?", (pdf_path.name,)
@@ -114,14 +140,22 @@ def test_new_patient_without_birth_date_flagged_as_possible_duplicate(db, monkey
 def test_age_band_range_resolved_with_stored_birth_date(db, monkeypatch, tmp_path):
     # Synlab trae a veces "F. Nac." vacío: la franja de referencia por edad
     # se elige con la fecha de nacimiento del paciente ya guardado.
-    get_or_create_patient(db, full_name="GARCIA LOPEZ, MARIA", birth_date="1980-01-01", dni=None, nhc="999")
+    get_or_create_patient(
+        db, full_name="GARCIA LOPEZ, MARIA", birth_date="1980-01-01", dni=None, nhc="999"
+    )
     db.commit()
 
     def fake(pdf_path: Path) -> dict:
         parsed = _fake_no_birth_date_result(pdf_path)
         parsed["results"][0].update(
-            raw_name="Tiroxina libre (T4L)", value_raw="0,95", value_num=0.95, unit="ng/dL",
-            ref_low=None, ref_high=None, ref_text=None, sample_date="2024-01-01",
+            raw_name="Tiroxina libre (T4L)",
+            value_raw="0,95",
+            value_num=0.95,
+            unit="ng/dL",
+            ref_low=None,
+            ref_high=None,
+            ref_text=None,
+            sample_date="2024-01-01",
             age_bands=[(0, 0, "0.75-1.49"), (20, 200, "0.61-1.12")],
         )
         return parsed

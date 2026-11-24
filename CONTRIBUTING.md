@@ -41,8 +41,9 @@ programar**. Todo tipo de ayuda suma:
   publicar cada versión (ver la documentación técnica, §8.1). En tu primer
   PR, los checks automáticos esperan a que el mantenedor los apruebe: es
   una medida de seguridad de GitHub, no un rechazo.
-- También me encontrarás en [GitHub](https://github.com/gabimarti) y en
-  [X/Twitter](https://x.com/gmarti).
+- También me encontrarás en [GitHub](https://github.com/gabimarti), en
+  [X/Twitter](https://x.com/gmarti) y en mi página personal,
+  [gabimarti.github.io](https://gabimarti.github.io/).
 
 Si tu cambio añade o modifica una pantalla, una ventana o un cuadro de
 diálogo, sigue la [guía de diseño de la interfaz](docs/GUIA_INTERFAZ.md) para que toda la

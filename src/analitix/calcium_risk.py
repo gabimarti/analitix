@@ -25,19 +25,23 @@ calcio en el 38% de los casos (Byrnes CK, et al. Am J Surg.
 2005;189(3):310-314) — con datos ambulatorios como los de Analitix el
 riesgo es menor, pero debe advertirse igual.
 """
+
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from analitix.pdf_parser import compute_flag
 from analitix.repository import get_merged_series
 
 CALCI_IDS = ("calci_serum", "calci")
 ALBUMINA_IDS = (
-    "albumina_serum", "albumina_g_dl",
+    "albumina_serum",
+    "albumina_g_dl",
     # Albúmina sérica en g/L (Synlab, HUGTIP, Echevarne): se convierte a
     # g/dL (÷10, exacto) en `_g_dl`.
-    "albumina_g_l", "srm_albumina_c_massa", "seroalbumina",
+    "albumina_g_l",
+    "srm_albumina_c_massa",
+    "seroalbumina",
 )
 
 # Payne RB, Little AJ, Williams RB, Milner JR. "Interpretation of serum
@@ -51,7 +55,7 @@ ALBUMINA_REFERENCIA = 4.0
 FACTOR_PAYNE = 0.8
 
 
-def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _mg_dl(row: dict[str, Any] | None) -> float | None:
     """Valor numérico del calcio si su unidad es mg/dL (mismo criterio que
     `lipid_risk._mg_dl`)."""
     if row is None:
@@ -62,7 +66,7 @@ def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
     return row.get("value_num")
 
 
-def _g_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _g_dl(row: dict[str, Any] | None) -> float | None:
     """Valor numérico de la albúmina si su unidad es g/dL."""
     if row is None:
         return None
@@ -75,7 +79,7 @@ def _g_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
     return value
 
 
-def corrected_calcium(calci: Optional[float], albumina: Optional[float]) -> Optional[float]:
+def corrected_calcium(calci: float | None, albumina: float | None) -> float | None:
     """Calcio corregido (Payne et al. 1973): calcio medido + 0.8 × (4.0 −
     albúmina)."""
     if calci is None or albumina is None:
@@ -114,7 +118,10 @@ def get_calcium_index_series(con, patient_id: int) -> dict[str, list[dict[str, A
         if corregido is not None:
             points.append(
                 _index_point(
-                    fecha, corregido, calci_row.get("ref_low"), calci_row.get("ref_high"),
+                    fecha,
+                    corregido,
+                    calci_row.get("ref_low"),
+                    calci_row.get("ref_high"),
                     "Calcio corregido por albúmina",
                 )
             )
@@ -124,7 +131,7 @@ def get_calcium_index_series(con, patient_id: int) -> dict[str, list[dict[str, A
 INDEX_LABELS = {"idx_calcio_corregido": "Calcio corregido por albúmina"}
 
 
-def get_latest_calcium_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
+def get_latest_calcium_summary(con, patient_id: int) -> dict[str, Any] | None:
     """Último valor de calcio corregido disponible, con el calcio y la
     albúmina medidos ese día. `None` si el paciente no tiene ningún
     informe con ambos valores el mismo día."""

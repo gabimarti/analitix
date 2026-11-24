@@ -16,8 +16,10 @@ Analitix es una aplicación de escritorio (Python + Tkinter) que:
 3. Permite analizar la evolución de cada prueba en el tiempo, comparar
    pruebas entre sí y exportar los resultados a Excel/CSV.
 
-No hay servidor: todo el procesamiento es local y el único fichero de estado
-persistente es `data/analitix.db`. La **única conexión a internet** es la
+No hay servidor: todo el procesamiento es local y el estado persistente está
+en `data/`: una base de datos cifrada por paciente en `data/pacientes/*.db`,
+la lista de bases de datos (`data/bases_de_datos.json`, sin cifrar y sin
+datos médicos) y la configuración (`data/config.json`). La **única conexión a internet** es la
 comprobación de versiones nuevas (`updates.py`): una petición GET anónima a
 la API pública de GitHub que solo lee el número de la última versión; no
 envía ningún dato del usuario ni de la base de datos. Solo se hace cuando el
@@ -56,7 +58,7 @@ plantilla de antemano).
 | `tkinter` (stdlib) | Interfaz gráfica. |
 | `sqlite3`/`hashlib`/`csv`/`unicodedata` (stdlib) | Utilidades varias. |
 
-Python 3.11+ (probado en 3.14, Windows, `sqlcipher3` con wheel precompilado
+Python 3.14+ (Windows, `sqlcipher3` con wheel precompilado
 `cp314-win_amd64`). Ver `requirements.txt` para versiones mínimas.
 
 ## 3. Estructura de carpetas
@@ -64,7 +66,11 @@ Python 3.11+ (probado en 3.14, Windows, `sqlcipher3` con wheel precompilado
 ```
 Analitix/
   informes_analiticas/      PDF de entrada (el usuario los deja aquí)
-  data/                     analitix.db + analitix.log (creados en el primer arranque)
+  data/                     datos locales (creados en el primer arranque)
+    pacientes/                una base de datos cifrada (.db) por paciente
+    bases_de_datos.json       lista de bases de datos (sin cifrar, sin datos médicos)
+    config.json               configuración (carpeta de copias, fechas de la última copia...)
+    analitix.log              registro de la aplicación
   tests/                     suite automatizada aislada de la aplicación
   docs/                      esta documentación
     referencias_medicas/      fuentes científicas de los cálculos clínicos (implementados y pendientes)
@@ -220,6 +226,13 @@ Esquema completo en `db.SCHEMA` (SQLite). Tablas:
   para que una evolución sea representativa: agrupa la lista de
   Evolución/Comparativa y es el umbral del control de pocos datos de todos
   los gráficos de evolución, ver §5, `charts.data_sufficiency`).
+- **`patient_aliases`** — identidades alternativas de un paciente
+  confirmadas por el usuario («Es este paciente» al importar un informe que
+  no encajaba): `patient_id`, `name_key`, `birth_date`, `dni`, `cip`, `nhc`
+  (la cabecera de ese informe). `repository.find_patient` las consulta para
+  que el siguiente informe igual encaje solo. Coherente con
+  `merge_patients`, `delete_patient`, `delete_reports` y `delete_all_data`,
+  y visible en el Explorador BD. Ver `ingest.py` («Una BD = un paciente»).
 - **`bp_readings`** — mediciones de tensión arterial: `patient_id`,
   `measured_at` (`AAAA-MM-DD HH:MM`), `systolic`, `diastolic`, `pulse`
   (opcional), `place` (`casa`/`consulta`), `note`, `source`
@@ -989,6 +1002,21 @@ sentencias SQL a mano). Funciones relevantes:
   de texto separada por comas sin duplicarlo (o la deja igual si `value` es
   falsy o ya está). Helper compartido por `get_or_create_patient` y
   `merge_patients` para acumular NHC en `nhc_alt` sin repetir.
+- `find_patient(con, full_name, birth_date, dni, nhc, cip=None) -> (patient_id | None, matched_by | None)`:
+  busca sin crear nada (la usan `get_or_create_patient` y la importación
+  en una BD de un paciente). Orden: `name_key + birth_date` del paciente o
+  de una identidad confirmada (`patient_aliases`, `"alias"`); DNI, CIP,
+  NHC del paciente; mismas palabras del nombre en otro orden
+  (`textutils.name_words_key`) **con la misma fecha de nacimiento, presente
+  en los dos** (`"name_words"`); DNI/CIP/NHC de una identidad confirmada.
+- `add_patient_alias(con, patient_id, full_name, birth_date, dni, nhc, cip=None)`:
+  guarda la cabecera de un informe confirmado («Es este paciente») como
+  identidad alternativa del paciente (tabla `patient_aliases`). `merge_patients`
+  pasa los alias al destino; `delete_patient` los borra.
+- `list_files_other_patient(con)` / `discard_other_patient_file(con, filename)`:
+  informes con `processed_files.status = STATUS_OTHER_PATIENT`
+  (`"otro_paciente"`) y descartarlos (`STATUS_DISCARDED`, `"descartado"`,
+  que `already_processed` salta mientras la huella del fichero no cambie).
 - `get_or_create_patient(con, full_name, birth_date, dni, nhc, fallback_name=None) -> (patient_id, matched_by)`:
   empareja primero por `name_key + birth_date`; si `full_name` viene vacío
   (plantilla no reconocida) pero el DNI o el NHC coinciden con los de un
@@ -1253,6 +1281,24 @@ aparezca un laboratorio nuevo.
   partir del nombre del fichero; `clear_previous_import`, al reintentarlo,
   borra cualquier paciente fantasma que se hubiera quedado sin ningún
   informe (ver su comentario).
+  **Una BD = un paciente:** si la BD tiene exactamente un paciente
+  (`_single_patient`), el informe solo se importa si `find_patient` lo
+  empareja con él **y** no hay una contradicción fuerte
+  (`_strong_mismatches`: fecha de nacimiento, DNI o CIP presentes en los dos
+  y distintos; no se aplica si encaja por una identidad ya confirmada). Si
+  no, se guarda `record_processed_file(status=STATUS_OTHER_PATIENT,
+  error_message=<motivo>)` y se lanza `OtherPatientError(motivo)`
+  (`_other_patient_reason`: señales fuertes primero, con «PROBABLEMENTE OTRA
+  PERSONA»); `ingest_folder` lo recoge en `IngestResult.other_patient` y al
+  log solo va la huella del fichero (el motivo lleva el nombre).
+  `confirm_same_patient(con, pdf_path, patient_id)` («Es este paciente»)
+  guarda la cabecera como alias y reimporta con `confirmed_patient_id`;
+  `find_pdf` localiza el PDF por nombre. Una BD vacía (el primer informe
+  fija el paciente) o una antigua con varios pacientes importan como
+  antes. `clear_previous_import` ya no borra un paciente que, sin informes,
+  aún tiene objetivos, tensión o alias (reimportar su único informe).
+  Interfaz: `gui._review_other_patient_reports` (al terminar de importar y
+  con el botón «Informes que no encajan...» de Importar).
   Si el perfil sí tiene motor de parseo, continúa con `get_or_create_patient`
   (con `full_name=header.get("full_name")`, es decir `None` si no se
   reconoció — no se sustituye ya aquí por el nombre del fichero, para darle
@@ -1351,7 +1397,8 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
      "Informe de seguimiento", `tipo_informe`, paciente, fecha del
      último informe, fecha de generación, "Generado con Analitix X.Y.Z
      (AAAA-MM-DD)" (`_ANALITIX_VERSION`, de `__version__` y
-     `__version_date__`), `updates.REPO_URL` y aviso legal.
+     `__version_date__`), `updates.REPO_URL`, autor con `updates.AUTHOR_URL`
+     (página personal) y aviso legal.
   2. **Tabla de fuera de rango** (`_table_page`, título "Parámetros
      alterados en la última analítica"): solo `flag_calc in
      ("alto","bajo")`.
@@ -1386,6 +1433,25 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
     fuera de rango a la vez, esa página de tabla concreta podría seguir
     sin caber entera (sin paginación automática dentro de una misma
     categoría).
+
+**Comparativa con la analítica anterior** en los informes completo y
+personalizado:
+
+- `report_detail.DELTA_MODES`: `delta` (todas las filas con variación),
+  `alterados` (`filter_rows_for_mode`: estado fuera de rango o
+  `range_alert` distinto de normal, incluidas las normalizadas) y `ultima`
+  (sin comparar; `delta_mode_compares` es falso).
+- `gui._delta_pages(modo)`: última analítica de
+  `get_latest_report_summary` (con el filtro de laboratorios; devuelve
+  también `report_id`), anterior con `get_previous_report`, filas de
+  `match_and_compare_results` filtradas por modo, y páginas con
+  `export.report_detail_pages` (las mismas del detalle exportado por sí
+  solo, `report_detail_subtitle` para el subtítulo). Sin filas, una
+  `text_page` lo indica.
+- Informe completo: `gui._ask_delta_mode` (casilla + tres modos; `False` =
+  cancelar) y `export_pdf(..., extra_pages=...)`, que las pone tras las dos
+  tablas y antes de los gráficos. Informe personalizado: sección con
+  desplegable de modo.
 
 **Informe PDF personalizado** (Exportar → "Informe PDF personalizado..."):
 
@@ -1457,13 +1523,19 @@ al abrirlo). El Excel ajusta el ancho de columna al contenido.
   casillas dentro de `_scrollable_frame`, no una `Listbox` con Ctrl+clic
   (igual que Comparativa);
   "Marcar alterados" y "Desmarcar todo", con `_same_width` en cada grupo
-  de botones:
+  de botones. La ⚠ y "Marcar alterados" usan `charts.altered_in_period`
+  con el corte común `_period_cutoff()` (periodo de las gráficas contado
+  desde el informe más reciente, `charts.period_cutoff`), el mismo que el
+  informe de alterados de `_export_pdf` usa para decidir qué parámetros
+  llevan gráfica (con `n_recent` = últimas 2/3 analíticas del periodo, o 0)
+  y que `charts.heatmap_window` usa en el mapa de calor:
   - secciones (tabla, "Qué ha cambiado" vía `_changes_rows`, compartido
     con la pestaña Resumen, y mapa de calor de `HEATMAP_OUT_OF_RANGE`);
   - casillas con las pruebas de 2 o más analíticas;
   - un desplegable para el conjunto del mapa de calor (los mismos de la
-    pantalla: alguna vez fuera de rango, todos o un panel de
-    `HEATMAP_SETS`);
+    pantalla: fuera de rango en el periodo, todos o un panel de
+    `HEATMAP_SETS`; mismo recorte por periodo que en pantalla, vía
+    `_heatmap_rows_and_hidden`);
   - "Qué ha cambiado" (ordenado por magnitud de cambio antes de partirlo)
     y el mapa de calor se reparten en páginas de `PDF_ROWS_PER_PAGE` (25)
     filas con `_pages_of` (título "(n/total)"), y `_same_size` da a todas
@@ -2308,13 +2380,26 @@ parámetros excluidos a propósito.
   en la barra inferior y en la cabecera de los paneles, y a `tipo_informe`
   en `_export_pdf` (portada y pie de página).
 - Pestaña "Mapa de calor" (menú Análisis, requiere paciente):
-  `_build_tab_mapa_calor` / `_heatmap_rows` / `_show_heatmap`. Conjuntos:
-  alguna vez fuera de rango (por defecto), todos, o uno por panel
+  `_build_tab_mapa_calor` / `_heatmap_rows_and_hidden` / `_show_heatmap`.
+  Las filas se recortan al periodo de las gráficas (`chart_years`, vía
+  `_effective_chart_years`) con `charts.heatmap_window`: un único corte
+  para todas las filas, contado desde la analítica más reciente del
+  conjunto (columnas alineadas), sin las filas que quedan vacías; las
+  fechas ocultas se avisan con `_mark_window(..., arriba=True)` (arriba
+  a la derecha: la leyenda ocupa el pie). Conjuntos:
+  fuera de rango en el periodo (por defecto; `heatmap_out_of_range` sobre
+  la serie ya recortada), todos, o uno por panel
   (`HEATMAP_SETS`: pares (etiqueta legible, tupla `*_IDS` del panel),
   fusionados con `get_merged_series`, así el mapa enseña exactamente los
-  datos con los que calcula cada panel). Con más de `HEATMAP_SCROLL_ROWS`
-  filas, `fig.analitix_scroll = True` hace que `_embed_figure` use la
-  variante con desplazamiento vertical en vez de comprimir las casillas.
+  datos con los que calcula cada panel). En pantalla el mapa se reparte en
+  páginas equilibradas de como mucho `HEATMAP_PAGE_ROWS` filas
+  (`_heatmap_pages`, sobre `_pages_of`), con botones ◀ ▶ y «Página n de m»;
+  todas las páginas usan las mismas columnas (`heatmap_dates` de todas las
+  filas, pasadas a `heatmap_figure(..., dates)`) para poder compararlas. Si
+  una página tiene más de `HEATMAP_SCROLL_ROWS` filas,
+  `fig.analitix_scroll = True` hace que `_embed_figure` use la variante con
+  desplazamiento vertical en vez de comprimir las casillas. El PDF sigue
+  repartiendo el mapa en páginas de `PDF_ROWS_PER_PAGE`.
 
 `AnalitixApp(ttkbootstrap.Window)`, tema `"flatly"`. **Navegación por menú**,
 no por pestañas: un único `self.content`
@@ -2916,10 +3001,11 @@ estándar (`urllib.request`, `json`), sin dependencias nuevas.
   `api.github.com/repos/gabimarti/analitix/releases?per_page=1` (timeout
   `TIMEOUT_S` = 5 s) y devuelve `(versión, html_url)` de la Release más
   reciente, o `None` si no hay ninguna. No usa `/releases/latest` porque
-  esa ruta excluye las *pre-release*, y todas las `0.x` lo son (§8.1).
-  Con el repositorio privado la API responde 404 a peticiones anónimas:
-  la excepción llega a la GUI como "no se pudo comprobar", y funciona
-  sin cambios en cuanto el repositorio sea público.
+  esa ruta excluye las *pre-release* (las `0.x` lo fueron, §8.1): así una
+  instalación antigua también ve la 1.0.0 y las siguientes, y seguiría
+  funcionando si alguna vez se publicara otra *pre-release*. Si la
+  consulta falla (sin conexión, error de la API), la excepción llega a la
+  GUI como "no se pudo comprobar".
 - `is_newer(latest, current=__version__)`: compara por tuplas de enteros
   ("0.10.0" > "0.9.0"; §8.2), aceptando el prefijo `v` de la etiqueta.
 - En `gui.py`, `_check_updates(manual)` hace la petición en un
@@ -2969,17 +3055,14 @@ indicador: crea widgets, así que tiene que ir en el hilo principal.
 
 `scripts/doc_screenshots.py` (Windows, con el entorno `venv`:
 `venv\Scripts\python.exe scripts\doc_screenshots.py`) regenera todas las
-imágenes de `docs/images/` cuando cambia la interfaz. Nunca toca
-`data/analitix.db` ni ningún PDF: crea una BD cifrada temporal con
-"PACIENTE FICTICIO" (ficha, tabaquismo y 14 analíticas sintéticas de tres
-laboratorios, con los `canonical_id` de todos los paneles y nombres de
-prueba distintos por laboratorio). Los valores los genera `oscillate`:
-suben y bajan alrededor de un centro, casi siempre alternando el lado, con
-altos y bajos y sin tendencia marcada; semilla fija por parámetro, así cada
-ejecución da las mismas capturas. Captura primero el arranque
-(`capture_startup`: aviso legal, ventana de carga y los dos diálogos de
-creación de contraseña, con `main.DB_PATH` apuntando a una BD inexistente),
-después abre `AnalitixApp` sobre la BD de ejemplo, recorre todas las
+imágenes de `docs/images/` cuando cambia la interfaz. Nunca toca `data/`
+ni ningún PDF: redirige `config.PATIENTS_DIR`, `config.DB_LIST_PATH` y
+`config.APP_CONFIG_PATH` a una carpeta temporal y crea en ella la misma BD
+cifrada que el botón «Base de datos de ejemplo...» (`demo.build_demo_db`:
+paciente ficticio y analíticas sintéticas de tres laboratorios). Captura
+primero el arranque (`capture_startup`: aviso legal, ventana de carga,
+lista de bases de datos, «Nueva base de datos» y la contraseña de una base
+de datos nueva), después abre `AnalitixApp` sobre la BD de ejemplo, recorre todas las
 pantallas, los paneles clínicos y los diálogos (ficha, Acerca de) y captura
 cada una con `PIL.ImageGrab` (la ventana se trae al frente con `lift()` +
 `-topmost` justo antes de cada captura; no hay que tocar el ratón mientras
@@ -2987,8 +3070,10 @@ dura, ~1 minuto). Por último exporta el informe de parámetros alterados a
 `docs/ejemplos/informe_alterados_ficticio.pdf` (el único PDF permitido en
 el repositorio, en `PERMITIDOS` de `scripts/check_privacy.py`) e imágenes
 de su portada, su tabla y un gráfico. Las figuras técnicas se generan
-directamente con matplotlib. Las capturas se guardan en paleta de 256
-colores para que pesen poco. Si se añade una pestaña, añadir su captura en
+directamente con matplotlib (a 120 ppp). Las capturas se guardan en RGB de
+24 bits optimizado (sin reducir a 256 colores, para no degradar el texto ni
+los gráficos), incluida la barra de menús de Windows; el PDF de ejemplo se
+renderiza a 150 ppp. Si se añade una pestaña, añadir su captura en
 `capture_app`. Revisar siempre las imágenes resultantes antes de
 publicarlas.
 
@@ -3008,7 +3093,7 @@ python -m pytest
 
 GitHub Actions ejecuta automáticamente el mismo comando en
 `.github/workflows/tests.yml` para cada `push` y pull request. El workflow
-usa `windows-latest` y Python 3.11, igual que el entorno de desarrollo
+usa `windows-latest` y Python 3.14, igual que el entorno de desarrollo
 principal de Analitix, porque `sqlcipher3` es una dependencia crítica de la
 suite. Después de los tests, `pip-audit` comprueba que ninguna dependencia
 instalada tenga vulnerabilidades conocidas; el workflow se ejecuta además
@@ -3323,7 +3408,8 @@ Pasos para publicar una versión:
    (huella SHA-256 del instalador) y, como notas, la
    sección `## [X.Y.Z]` de `CHANGELOG.md` (si no existe, falla sin publicar;
    se pueden editar después en la web). Las
-   versiones `0.x` se marcan como *pre-release*. También genera una
+   versiones `0.x` se marcaban como *pre-release*; desde la **1.0.0** son
+   Releases normales y GitHub marca la más reciente como «Latest». También genera una
    atestación de procedencia del instalador (`actions/attest-build-provenance`),
    que prueba que el `.exe` lo compiló este workflow desde este repositorio:
    se verifica con `gh attestation verify Analitix-Setup-X.Y.Z.exe --repo gabimarti/analitix`.
@@ -3339,8 +3425,8 @@ corrige publicando la siguiente versión de parche.
    `git checkout develop && git merge --ff-only origin/main && git push`.
 
 La página de descargas es `…/releases`, no `…/releases/latest`: GitHub excluye de
-`latest` las *pre-release*, y todas las 0.x lo son (mismo motivo por el que
-`updates.py` no usa ese endpoint). `scripts\update_main.bat`
+`latest` las *pre-release*, como lo fueron todas las 0.x (mismo motivo por el
+que `updates.py` no usa ese endpoint). `scripts\update_main.bat`
 sigue actualizando el checkout local de `main`, es decir, a la última
 versión publicada.
 
@@ -3360,8 +3446,10 @@ decimales: después de 0.9.0 viene 0.10.0, no 1.0.0.
 
 - **MAYOR = 0** indica desarrollo inicial: la aplicación puede cambiar sin
   garantías de compatibilidad (SemVer, regla 4). Por eso el workflow publica
-  las versiones `0.x` como *pre-release*. **1.0.0** se reserva para cuando se
-  considere estable para otros usuarios.
+  las versiones `0.x` como *pre-release* (de la 0.9.0 a la 0.12.0).
+- **1.0.0 es la primera versión estable**: la primera que no es
+  *pre-release* y que GitHub muestra como «Latest». A partir de ella se
+  aplican las reglas de la tabla (un cambio incompatible sube MAYOR).
 - **Primera versión publicada: 0.9.0**, y no 0.1.0 ni 0.0.1, porque la
   aplicación ya estaba casi completa al empaquetarse por primera vez (parser
   multiperfil, base de datos cifrada, paneles clínicos, exportación,

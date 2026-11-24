@@ -26,9 +26,10 @@ mínimo, el patrón clínico de los criterios ACR/EULAR 2015), ninguno de
 los cuales vive en una analítica de sangre — mostrar siempre como
 "hiperuricemia", nunca como "gota" ni "riesgo de gota".
 """
+
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from analitix.pdf_parser import compute_flag
 from analitix.repository import get_merged_series
@@ -51,7 +52,7 @@ HYPERURICEMIA_HIGH = 6.8
 URATE_LOWERING_TARGET = 6.0
 
 
-def _mg_dl(row: Optional[dict[str, Any]]) -> Optional[float]:
+def _mg_dl(row: dict[str, Any] | None) -> float | None:
     """Valor numérico del ácido úrico si su unidad es mg/dL (mismo criterio
     que `lipid_risk._mg_dl`)."""
     if row is None:
@@ -91,7 +92,7 @@ def get_uric_acid_series(con, patient_id: int) -> dict[str, list[dict[str, Any]]
 INDEX_LABELS = {"idx_acido_urico": "Ácido úrico"}
 
 
-def get_latest_uric_acid_summary(con, patient_id: int) -> Optional[dict[str, Any]]:
+def get_latest_uric_acid_summary(con, patient_id: int) -> dict[str, Any] | None:
     """Último valor de ácido úrico disponible, con su clasificación.
     `None` si el paciente no tiene ninguno guardado."""
     series = get_uric_acid_series(con, patient_id)

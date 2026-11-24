@@ -1,15 +1,17 @@
-import pytest
 from pathlib import Path
 
 import openpyxl
 import pdfplumber
+import pytest
 
 from analitix import __version__, __version_date__
 from analitix.export import export_csv, export_excel, export_pdf, to_dataframe
 
 
 def test_export_defuses_formula_like_text_but_not_numeric_columns(tmp_path: Path):
-    rows = [{"raw_name": "=HYPERLINK(\"x\")", "unit": "+unsafe", "value_raw": "-1.5", "value_num": -1.5}]
+    rows = [
+        {"raw_name": '=HYPERLINK("x")', "unit": "+unsafe", "value_raw": "-1.5", "value_num": -1.5}
+    ]
     frame = to_dataframe(rows)
     assert frame.loc[0, "raw_name"].startswith("'=")
     assert frame.loc[0, "unit"] == "'+unsafe"
@@ -37,20 +39,44 @@ def test_export_defuses_formula_in_value_raw(tmp_path: Path):
 def _filas_prueba():
     return [
         {
-            "raw_name": "Glucosa", "canonical_id": "glucosa_serum", "value_num": 150.0, "unit": "mg/dL",
-            "ref_low": 70.0, "ref_high": 100.0, "flag_calc": "alto", "valor_anterior": 90.0,
-            "pct": 66.7, "brusco": True, "orden": 0,
+            "raw_name": "Glucosa",
+            "canonical_id": "glucosa_serum",
+            "value_num": 150.0,
+            "unit": "mg/dL",
+            "ref_low": 70.0,
+            "ref_high": 100.0,
+            "flag_calc": "alto",
+            "valor_anterior": 90.0,
+            "pct": 66.7,
+            "brusco": True,
+            "orden": 0,
         },
         {
-            "raw_name": "Sodi", "canonical_id": "sodi", "value_num": 140.0, "unit": "mEq/L",
-            "ref_low": 135.0, "ref_high": 145.0, "flag_calc": "normal", "valor_anterior": None,
-            "pct": None, "brusco": False, "orden": 2,
+            "raw_name": "Sodi",
+            "canonical_id": "sodi",
+            "value_num": 140.0,
+            "unit": "mEq/L",
+            "ref_low": 135.0,
+            "ref_high": 145.0,
+            "flag_calc": "normal",
+            "valor_anterior": None,
+            "pct": None,
+            "brusco": False,
+            "orden": 2,
         },
         {
             # Un solo valor registrado: entra en la tabla pero no debe generar página de gráfico.
-            "raw_name": "Potassi", "canonical_id": "potassi", "value_num": 4.0, "unit": "mEq/L",
-            "ref_low": 3.5, "ref_high": 5.1, "flag_calc": "normal", "valor_anterior": None,
-            "pct": None, "brusco": False, "orden": 2,
+            "raw_name": "Potassi",
+            "canonical_id": "potassi",
+            "value_num": 4.0,
+            "unit": "mEq/L",
+            "ref_low": 3.5,
+            "ref_high": 5.1,
+            "flag_calc": "normal",
+            "valor_anterior": None,
+            "pct": None,
+            "brusco": False,
+            "orden": 2,
         },
     ]
 
@@ -58,14 +84,35 @@ def _filas_prueba():
 def _series_prueba():
     return {
         "glucosa_serum": [
-            {"fecha": "2024-01-01", "value_num": 90.0, "unit": "mg/dL", "ref_low": 70.0, "ref_high": 100.0,
-             "flag_calc": "normal", "raw_name": "Glucosa"},
-            {"fecha": "2024-06-01", "value_num": 150.0, "unit": "mg/dL", "ref_low": 70.0, "ref_high": 100.0,
-             "flag_calc": "alto", "raw_name": "Glucosa"},
+            {
+                "fecha": "2024-01-01",
+                "value_num": 90.0,
+                "unit": "mg/dL",
+                "ref_low": 70.0,
+                "ref_high": 100.0,
+                "flag_calc": "normal",
+                "raw_name": "Glucosa",
+            },
+            {
+                "fecha": "2024-06-01",
+                "value_num": 150.0,
+                "unit": "mg/dL",
+                "ref_low": 70.0,
+                "ref_high": 100.0,
+                "flag_calc": "alto",
+                "raw_name": "Glucosa",
+            },
         ],
         "potassi": [
-            {"fecha": "2024-06-01", "value_num": 4.0, "unit": "mEq/L", "ref_low": 3.5, "ref_high": 5.1,
-             "flag_calc": "normal", "raw_name": "Potassi"},
+            {
+                "fecha": "2024-06-01",
+                "value_num": 4.0,
+                "unit": "mEq/L",
+                "ref_low": 3.5,
+                "ref_high": 5.1,
+                "flag_calc": "normal",
+                "raw_name": "Potassi",
+            },
         ],
         # "sodi" deliberadamente sin serie.
     }
@@ -74,11 +121,18 @@ def _series_prueba():
 def test_export_pdf_fixed_page_structure(tmp_path: Path):
     path = tmp_path / "informe.pdf"
     paginas = export_pdf(
-        "Paciente de Prueba", "2024-06-01", _filas_prueba(), _series_prueba(),
-        {"glucosa_serum": "Glucosa", "potassi": "Potassi"}, 30.0, path,
+        "Paciente de Prueba",
+        "2024-06-01",
+        _filas_prueba(),
+        _series_prueba(),
+        {"glucosa_serum": "Glucosa", "potassi": "Potassi"},
+        30.0,
+        path,
         tipo_informe="Informe completo",
+        min_chart_points=2,
     )
-    # Solo Glucosa (2 puntos) genera gráfico; Potassi (1 punto) y Sodi (sin serie) no.
+    # Con mínimo 2, solo Glucosa (2 puntos) genera gráfico; Potassi (1 punto) y Sodi (sin
+    # serie) no.
     assert paginas == 1
     with pdfplumber.open(path) as pdf:
         assert len(pdf.pages) == 4  # portada + fuera de rango + resto + 1 gráfico
@@ -88,13 +142,16 @@ def test_export_pdf_fixed_page_structure(tmp_path: Path):
         assert "Página 1 de 4" in portada
         assert f"Analitix {__version__} ({__version_date__})" in portada
         assert "github.com/gabimarti/analitix" in portada
+        assert "gabimarti.github.io" in portada
 
         pagina_fuera_rango = pdf.pages[1].extract_text()
         assert "Glucosa" in pagina_fuera_rango and "Sodi" not in pagina_fuera_rango
         assert "Página 2" in pagina_fuera_rango and "Informe completo" in pagina_fuera_rango
 
         pagina_resto = pdf.pages[2].extract_text()
-        assert "Sodi" in pagina_resto and "Potassi" in pagina_resto and "Glucosa" not in pagina_resto
+        assert (
+            "Sodi" in pagina_resto and "Potassi" in pagina_resto and "Glucosa" not in pagina_resto
+        )
         assert "Página 3" in pagina_resto
 
         pagina_grafico = pdf.pages[3].extract_text()
@@ -112,12 +169,29 @@ def test_custom_pdf_flows_texts_and_charts_on_portrait_pages(tmp_path: Path):
         fig.add_subplot().plot([1, 2], [1, 2])
         return fig
 
-    paginas = [text_page("Panel", "Resumen"), grafico(), grafico(), grafico(), text_page("Otro", "Texto"), grafico()]
+    paginas = [
+        text_page("Panel", "Resumen"),
+        grafico(),
+        grafico(),
+        grafico(),
+        text_page("Otro", "Texto"),
+        grafico(),
+    ]
     path = tmp_path / "agrupado.pdf"
     avances = []
     # Dos por página: portada + (texto, 2 gráficos) + (gráfico, texto, gráfico).
-    assert export_pages_pdf("Paciente de Prueba", "2024-06-01", paginas, path, tipo_informe="Informe personalizado",
-                            graficos_por_pagina=2, on_progress=lambda n, total: avances.append((n, total))) == 3
+    assert (
+        export_pages_pdf(
+            "Paciente de Prueba",
+            "2024-06-01",
+            paginas,
+            path,
+            tipo_informe="Informe personalizado",
+            graficos_por_pagina=2,
+            on_progress=lambda n, total: avances.append((n, total)),
+        )
+        == 3
+    )
     assert avances == [(n, 3) for n in range(1, 4)]
     with pdfplumber.open(path) as pdf:
         assert len(pdf.pages) == 3
@@ -141,7 +215,7 @@ def test_custom_pdf_pages_fit_a4_with_footer_room(tmp_path: Path):
     leyenda = fig.legend(handles=[], loc="lower center")
     _fit_page_a4(fig)
     assert tuple(round(v, 2) for v in fig.get_size_inches()) == (11.69, 8.27)
-    assert ax.get_position().y0 == pytest.approx(0.4 / 8.27)
+    assert ax.get_position().y0 == pytest.approx(0.5 / 8.27)
     assert leyenda.get_bbox_to_anchor().y0 > 0
     # Uno más alto que ancho pasa a A4 vertical.
     alta = Figure(figsize=(9, 15))
@@ -154,11 +228,18 @@ def test_custom_pdf_pages_fit_a4_with_footer_room(tmp_path: Path):
     assert [t.get_position() for t in a4.texts] == posiciones
 
     path = tmp_path / "personalizado.pdf"
-    total = export_pages_pdf("PACIENTE FICTICIO", "2024-01-01", [a4, Figure(figsize=(8, 4))], path,
-                             tipo_informe="Informe personalizado")
+    total = export_pages_pdf(
+        "PACIENTE FICTICIO",
+        "2024-01-01",
+        [a4, Figure(figsize=(8, 4))],
+        path,
+        tipo_informe="Informe personalizado",
+    )
     assert total == 3
     with pdfplumber.open(path) as pdf:
-        tamanos = {tuple(sorted((round(p.width / 72, 2), round(p.height / 72, 2)))) for p in pdf.pages}
+        tamanos = {
+            tuple(sorted((round(p.width / 72, 2), round(p.height / 72, 2)))) for p in pdf.pages
+        }
         assert tamanos == {(8.27, 11.69)}  # todas las páginas son A4
         assert "Último informe de laboratorio" in pdf.pages[0].extract_text()
 
@@ -168,11 +249,229 @@ def test_variable_height_charts_are_relaid_out_on_a4():
     from analitix.export import _fit_page_a4
 
     nombre = "Parámetro sintético con un nombre bastante largo (sèrum)"
-    filas = [(f"{nombre} {i}", [dict(fecha="2024-01-01", value_num=1.0, ref_low=0.0, ref_high=2.0, flag_calc="normal")])
-             for i in range(20)]
+    filas = [
+        (
+            f"{nombre} {i}",
+            [
+                dict(
+                    fecha="2024-01-01", value_num=1.0, ref_low=0.0, ref_high=2.0, flag_calc="normal"
+                )
+            ],
+        )
+        for i in range(20)
+    ]
     fig = heatmap_figure(filas, "Prueba")
     _fit_page_a4(fig)
     fig.canvas.draw()
     ancho_px = fig.get_size_inches()[0] * fig.dpi
     etiquetas = [t.get_window_extent() for t in fig.axes[0].get_yticklabels() if t.get_text()]
-    assert min(e.x0 for e in etiquetas) >= 0 and max(e.x1 for e in etiquetas) <= ancho_px  # nada cortado
+    assert (
+        min(e.x0 for e in etiquetas) >= 0 and max(e.x1 for e in etiquetas) <= ancho_px
+    )  # nada cortado
+
+
+def test_export_pdf_altered_report_discriminated_charts(tmp_path: Path):
+    from analitix.charts import is_recently_altered
+
+    path = tmp_path / "informe_alterados.pdf"
+    filas = [
+        dict(
+            canonical_id="glucosa",
+            raw_name="Glucosa",
+            value_num=130.0,
+            unit="mg/dL",
+            ref_low=70.0,
+            ref_high=100.0,
+            flag_calc="alto",
+            valor_anterior=95.0,
+            pct=36.8,
+            brusco=True,
+            orden=0,
+        ),
+        dict(
+            canonical_id="colesterol",
+            raw_name="Colesterol",
+            value_num=190.0,
+            unit="mg/dL",
+            ref_low=120.0,
+            ref_high=200.0,
+            flag_calc="normal",
+            valor_anterior=185.0,
+            pct=2.7,
+            brusco=False,
+            orden=2,
+        ),
+    ]
+    series_glucosa = [
+        dict(fecha="2020-01-01", value_num=125.0, ref_low=70.0, ref_high=100.0, flag_calc="alto"),
+        dict(fecha="2024-01-01", value_num=130.0, ref_low=70.0, ref_high=100.0, flag_calc="alto"),
+    ]
+    series_colesterol = [
+        dict(fecha="2020-01-01", value_num=240.0, ref_low=120.0, ref_high=200.0, flag_calc="alto"),
+        dict(
+            fecha="2022-01-01", value_num=185.0, ref_low=120.0, ref_high=200.0, flag_calc="normal"
+        ),
+        dict(
+            fecha="2024-01-01", value_num=190.0, ref_low=120.0, ref_high=200.0, flag_calc="normal"
+        ),
+    ]
+
+    # Glucosa: alterada en las últimas 2 analíticas
+    assert is_recently_altered(series_glucosa, n_recent=2) is True
+    # Colesterol: normalizado en las últimas 2 analíticas
+    assert is_recently_altered(series_colesterol, n_recent=2) is False
+
+    # Filtrar series_by_canonical_id según is_recently_altered
+    todas_series = {"glucosa": series_glucosa, "colesterol": series_colesterol}
+    series_filtradas = {
+        cid: s for cid, s in todas_series.items() if is_recently_altered(s, n_recent=2)
+    }
+
+    paginas = export_pdf(
+        "Paciente de Prueba",
+        "2024-01-01",
+        filas,
+        series_filtradas,
+        {"glucosa": "Glucosa", "colesterol": "Colesterol"},
+        30.0,
+        path,
+        tipo_informe="Informe de parámetros alterados · Gráficas: últimas 2 analíticas",
+        min_chart_points=2,
+    )
+    # Solo glucosa tiene gráfica (1 página de gráfica)
+    assert paginas == 1
+
+    with pdfplumber.open(path) as pdf:
+        assert len(pdf.pages) == 4  # Portada + Fuera de rango + Resto + 1 Gráfico (glucosa)
+        portada = pdf.pages[0].extract_text()
+        assert "Gráficas: últimas 2 analíticas" in portada
+        # En la página de fuera de rango está Glucosa
+        p2 = pdf.pages[1].extract_text()
+        assert "Glucosa" in p2
+        # En la página de resto está Colesterol (normal en la última analítica)
+        p3 = pdf.pages[2].extract_text()
+        assert "Colesterol" in p3
+        # La página de gráfico es de Glucosa
+        p4 = pdf.pages[3].extract_text()
+        assert "Glucosa" in p4 and "Colesterol" not in p4
+
+
+def test_export_pdf_min_chart_points_counts_distinct_dates(tmp_path: Path):
+    """Con el mínimo por defecto (3) una serie de 2 analíticas no tiene
+    gráfica, y dos valores del mismo día cuentan como una sola analítica."""
+    filas, series = _filas_prueba(), _series_prueba()
+    labels = {"glucosa_serum": "Glucosa", "potassi": "Potassi"}
+    assert (
+        export_pdf(
+            "Paciente de Prueba",
+            "2024-06-01",
+            filas,
+            series,
+            labels,
+            30.0,
+            tmp_path / "a.pdf",
+            tipo_informe="Informe completo",
+        )
+        == 0
+    )
+    mismo_dia = {**series, "potassi": series["potassi"] * 2}
+    assert (
+        export_pdf(
+            "Paciente de Prueba",
+            "2024-06-01",
+            filas,
+            mismo_dia,
+            labels,
+            30.0,
+            tmp_path / "b.pdf",
+            tipo_informe="Informe completo",
+            min_chart_points=2,
+        )
+        == 1  # solo Glucosa
+    )
+
+
+def test_long_report_type_fits_cover_and_footer(tmp_path: Path):
+    """Un tipo de informe largo (periodo + filtro de laboratorios) se parte
+    en varias líneas en la portada y en el pie, y el número de página va en
+    su propia línea, sin solaparse."""
+    tipo = (
+        "Informe de parámetros alterados · Gráficas: últimas 3 analíticas · Periodo: últimos "
+        "5 años · Datos solo de: Laboratorio Ficticio Uno, Laboratorio Ficticio Dos"
+    )
+    path = tmp_path / "informe.pdf"
+    export_pdf(
+        "Paciente de Prueba",
+        "2024-06-01",
+        _filas_prueba(),
+        _series_prueba(),
+        {"glucosa_serum": "Glucosa", "potassi": "Potassi"},
+        30.0,
+        path,
+        tipo_informe=tipo,
+    )
+    with pdfplumber.open(path) as pdf:
+        for page in pdf.pages:
+            ancho = page.width
+            palabras = page.extract_words()
+            assert all(0 <= w["x0"] and w["x1"] <= ancho for w in palabras)
+            numero = [w for w in palabras if w["text"] == "Página"]
+            assert len(numero) == 1
+            misma_linea = " ".join(
+                w["text"]
+                for w in palabras
+                if abs(w["bottom"] - numero[0]["bottom"]) < 3 and w["x1"] < numero[0]["x0"]
+            )
+            # En la línea del número de página solo está la versión, centrada.
+            assert misma_linea == f"Analitix {__version__} ({__version_date__})"
+        portada = pdf.pages[0].extract_text()
+        assert "Informe de parámetros alterados" in portada
+        assert "Laboratorio Ficticio Dos" in portada
+
+
+def test_report_detail_pages_and_extra_pages_in_full_report(tmp_path: Path):
+    """La comparativa con la analítica anterior (páginas de detalle) va en
+    el informe completo después de las dos tablas y antes de los gráficos."""
+    from analitix.export import report_detail_pages, report_detail_subtitle
+
+    filas = [
+        {
+            "section": f"Sección {i // 30}",
+            "raw_name": f"Parámetro {i}",
+            "value_raw": "10",
+            "prev_value_raw": "8",
+            "diff_num": 2.0,
+            "diff_pct": 25.0,
+            "trend": "↑",
+            "status": "Normal",
+            "ref_text": "5 - 15",
+            "unit": "u",
+        }
+        for i in range(40)
+    ]
+    subtitulo = report_detail_subtitle(
+        {"fecha": "2024-06-01", "report_number": "R2", "lab": "Lab ficticio"},
+        {"fecha": "2023-06-01", "report_number": "R1", "lab": "Lab ficticio"},
+    )
+    assert "Comparado con analítica anterior: R1 (2023-06-01" in subtitulo
+    paginas = report_detail_pages("Comparativa con la analítica anterior", subtitulo, filas, True)
+    assert len(paginas) == 2  # 40 filas + 2 cabeceras de sección, 26 por página
+    path = tmp_path / "completo.pdf"
+    export_pdf(
+        "Paciente de Prueba",
+        "2024-06-01",
+        _filas_prueba(),
+        _series_prueba(),
+        {"glucosa_serum": "Glucosa", "potassi": "Potassi"},
+        30.0,
+        path,
+        tipo_informe="Informe completo",
+        min_chart_points=2,
+        extra_pages=paginas,
+    )
+    with pdfplumber.open(path) as pdf:
+        textos = [p.extract_text() for p in pdf.pages]
+    assert len(textos) == 6  # portada + 2 tablas + 2 de comparativa + 1 gráfico
+    assert "Resto de parámetros" in textos[2]
+    assert "Comparativa con la analítica anterior" in textos[3]
+    assert "(parte 2 de 2)" in textos[4] and "Página 5 de 6" in textos[4]

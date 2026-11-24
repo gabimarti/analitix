@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/gabimarti/analitix/actions/workflows/tests.yml"><img src="https://github.com/gabimarti/analitix/actions/workflows/tests.yml/badge.svg" alt="Estado de los tests"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Versión de Python"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.14%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Versión de Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square" alt="Licencia"></a>
   <img src="https://img.shields.io/badge/plataforma-Windows-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Plataforma">
   <img src="https://img.shields.io/badge/datos-100%25%20locales-2ea44f?style=flat-square" alt="Datos 100% locales">
@@ -33,16 +33,24 @@ Novedades de cada versión en el [registro de cambios](CHANGELOG.md).
 **Qué hace:**
 - Extrae automáticamente los resultados de los PDF de laboratorio soportados
   (ver [«Formatos de informe soportados»](#formatos-de-informe-soportados))
-  y los guarda cifrados en local.
+  y los guarda cifrados en local, en una base de datos por paciente con su
+  propia contraseña, con copias de seguridad y aviso para hacerlas.
 - Muestra gráficos de evolución y comparativas de cada prueba frente a su
   rango de referencia, con el último valor destacado y colores aptos para
   daltonismo (el estado se indica también con ▲/▼, nunca solo con color).
 - Calcula índices y paneles clínicos informativos (p. ej. riesgo
   cardiovascular, función renal, función hepática) a partir de fórmulas y
   umbrales publicados, citando siempre su fuente.
-- Exporta a Excel/CSV/PDF para llevarte tus propios datos (ver un
+- Muestra el detalle de cada analítica tal como se ha leído (para cotejarlo
+  con el PDF) y la compara con la anterior: variación, tendencia y entradas
+  o salidas del rango.
+- Registra la tensión arterial medida en casa y la resume siguiendo la guía
+  europea de medición.
+- Genera informes PDF de seguimiento para llevar a la consulta: completo,
+  solo los parámetros alterados o personalizado (eliges qué incluir); ver un
   [informe PDF de ejemplo](docs/ejemplos/informe_alterados_ficticio.pdf)
-  con datos ficticios).
+  con datos ficticios.
+- Exporta a Excel/CSV para llevarte tus propios datos.
 
 **Qué NO hace:**
 - No emite diagnósticos ni sustituye la valoración de un profesional
@@ -98,9 +106,9 @@ No necesitas conocimientos técnicos ni instalar nada más (tampoco Python).
 
 1. **Descarga el instalador.** Entra en la
    [página de versiones](https://github.com/gabimarti/analitix/releases).
-   La primera de la lista es la más reciente (que ponga «Pre-release» es
-   normal). En su apartado **Assets**, haz clic en
-   `Analitix-Setup-<versión>.exe` (por ejemplo `Analitix-Setup-0.12.0.exe`)
+   La primera de la lista es la más reciente (marcada como «Latest»). En su
+   apartado **Assets**, haz clic en
+   `Analitix-Setup-<versión>.exe` (por ejemplo `Analitix-Setup-1.0.0.exe`)
    y se guardará en tu carpeta **Descargas**. No descargues los ficheros
    «Source code»: son el código fuente, no el programa.
 2. **Ábrelo con doble clic.** No hace falta ser administrador. Si Windows
@@ -109,11 +117,14 @@ No necesitas conocimientos técnicos ni instalar nada más (tampoco Python).
    digital de pago, no porque sea peligroso).
 3. **Sigue el asistente.** Te preguntará dónde guardar tus datos (por
    defecto, Documentos) y creará ahí una carpeta `Analitix` con dos
-   subcarpetas: `informes_analiticas` (para tus PDF) y `data` (tu base de
-   datos cifrada).
-4. **Abre Analitix** desde el menú Inicio. Acepta el aviso de uso y **crea
-   tu contraseña**: guárdala bien, porque si la olvidas no hay forma de
-   recuperar los datos.
+   subcarpetas: `informes_analiticas` (para tus PDF) y `data` (tus bases
+   de datos cifradas).
+4. **Abre Analitix** desde el menú Inicio. Acepta el aviso de uso y, en la
+   lista de bases de datos (vacía la primera vez), pulsa **Nueva base de
+   datos...** para crear la del paciente con **su contraseña**: guárdala
+   bien, porque si la olvidas no hay forma de recuperar los datos. Si
+   prefieres probar antes la aplicación, **Base de datos de ejemplo...** crea
+   una con un paciente ficticio.
 5. **Importa tus analíticas.** Copia los PDF de tus informes en la carpeta
    `informes_analiticas` y, en Analitix, usa **Archivo → Importar**.
 
@@ -135,9 +146,10 @@ scripts\install_windows.bat
 scripts\run_windows.bat
 ```
 
-La primera vez se pide crear una contraseña maestra que cifra toda la base
-de datos (`data\analitix.db`); sin ella los datos no son legibles y no hay
-forma de recuperarla si se olvida. Detalles completos en el manual de
+La primera vez se abre la lista de bases de datos, vacía: se crea una por
+paciente, cada una cifrada con su propia contraseña (ficheros en
+`data\pacientes\`); sin ella los datos no son legibles y no hay forma de
+recuperarla si se olvida. Detalles completos en el manual de
 usuario enlazado arriba.
 
 ## Contribuir
@@ -153,6 +165,8 @@ compartir un PDF de ejemplo) y la
 de seguridad, privacidad e integridad que debe cumplir toda aportación.
 Para cualquier consulta sobre la aplicación, escribe a
 [contact@analitix.slmail.me](mailto:contact@analitix.slmail.me).
+
+Autor: Gabriel Marti — [gabimarti.github.io](https://gabimarti.github.io/).
 
 ## Apoya el proyecto
 
